@@ -127,7 +127,7 @@ var CAT = {
   pdf: {name: 'PDF', ic: 'pdf', c: 'var(--c-pdf)'},
   image: {name: '圖片', ic: 'image', c: 'var(--c-image)'},
   video: {name: '影片', ic: 'video', c: 'var(--c-video)'},
-  audio: {name: '音訊', ic: 'audio', c: 'var(--c-audio)'},
+  audio: {name: '音樂', ic: 'audio', c: 'var(--c-audio)'},
   zip: {name: '壓縮檔', ic: 'zip', c: 'var(--c-zip)'},
   other: {name: '其他', ic: 'other', c: 'var(--c-other)'}
 };

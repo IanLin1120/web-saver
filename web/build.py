@@ -6,7 +6,7 @@ root = os.path.join(here, '..')
 ver = os.environ.get('VER') or open(os.path.join(root, 'VERSION')).read().strip()
 R = lambda *p: open(os.path.join(here, *p), encoding='utf-8').read()
 
-order = ['a_core', 'b_cfg', 'c_browser', 'd_capture', 'e_media', 'f_library', 'g_viewer', 'h_settings', 'i_update', 'z_boot']
+order = ['a_core', 'b_cfg', 'c_browser', 'd_capture', 'e_media', 'f_library', 'g_viewer', 'h_settings', 'i_update', 'j_audio', 'k_youtube', 'l_folders_music', 'z_boot']
 app = '\n'.join(R('parts', n + '.js') for n in order).replace('__VER__', ver)
 
 hosts = [l.strip().lower() for l in R('inject', 'adhosts.txt').splitlines() if l.strip() and not l.startswith('#') and '/' not in l]
@@ -16,7 +16,7 @@ ad_js = 'window.WS_AD=' + json.dumps({'hosts': hosts, 'css': css}, ensure_ascii=
 def inline(src):            # 避免 </script> 提早結束標籤
     return src.replace('</script', '<\\/script')
 
-vend = ''.join('<script>' + inline(R('vendor', n + '.js')) + '</script>\n' for n in ['jszip', 'pdf'])
+vend = ''.join('<script>' + inline(R('vendor', n + '.js')) + '</script>\n' for n in ['jszip', 'pdf', 'lame.min'])
 worker = json.dumps(R('vendor', 'pdf.worker.js')).replace('</', '<\\/')
 inject = ''.join('<script>' + inline(R('inject', n + '.js')) + '</script>\n' for n in ['capture', 'reader', 'media'])
 shell = R('shell.html')
@@ -37,7 +37,7 @@ for ic in ['icon-192.png', 'icon-512.png']:
 assets = os.path.join(root, 'app', 'src', 'main', 'assets')
 os.makedirs(os.path.join(assets, 'inject'), exist_ok=True)
 shutil.copy(os.path.join(out, 'index.html'), os.path.join(assets, 'index.html'))
-for n in ['page', 'capture', 'reader', 'media']:
+for n in ['page', 'capture', 'reader', 'media', 'yt']:
     shutil.copy(os.path.join(here, 'inject', n + '.js'), os.path.join(assets, 'inject', n + '.js'))
 for n in ['adhosts.txt', 'adcss.txt']:
     shutil.copy(os.path.join(here, 'inject', n), os.path.join(assets, n))

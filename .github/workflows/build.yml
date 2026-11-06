@@ -78,7 +78,7 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "actions@users.noreply.github.com"
-          git add apk apks.json version.json index.html icon-*.png
+          git add apk apks.json version.json index.html icon-*.png yt.json
           git commit -m "release: v$(cat VERSION | tr -d '[:space:]') [skip ci]" || echo "沒有變更"
           git push
 

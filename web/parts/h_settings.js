@@ -72,9 +72,21 @@ function renderSettings(){
     rangeRow('圖片品質（JPG／WEBP）', 'media.imgQ', 50, 100, 5, function(v){ return v + '%'; }),
     h('div', {class: 'field'}, h('div', {class: 'lbl'}, '影片輸出'), segRow([['mp4', 'MP4'], ['orig', '原始格式'], ['m4a', '只要音訊']], 'media.vidOut')),
     selRow('串流影片畫質', [['max', '最高畫質'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['min', '最低（省空間）']], 'media.vidQ'),
+    h('div', {class: 'field'}, h('div', {class: 'lbl'}, '音訊格式'), segRow([['orig', '原始'], ['mp3', 'MP3'], ['flac', 'FLAC'], ['wav', 'WAV']], 'media.audFmt')),
     swRow('多個檔案打包成 ZIP', null, 'media.zip'),
+    h('div', {class: 'field'}, h('div', {class: 'lbl'}, '檔名用'), segRow([['orig', '原始檔名'], ['title', '網頁標題'], ['custom', '自訂']], 'media.nameMode')),
+    swRow('檔名後面加流水號', '依網頁上的順序編號（第一張圖＝001）', 'media.seqOn'),
+    h('div', {class: 'two'}, selRow('流水號位數', [[1, '1、2、3'], [2, '01、02'], [3, '001、002'], [4, '0001']], 'media.seqDigits'), selRow('編號方式', [['page', '依網頁位置'], ['sel', '依選取重新編號']], 'media.seqMode')),
     rangeRow('偵測時忽略小於這個尺寸的圖片', 'media.minPx', 0, 400, 20, function(v){ return v ? v + 'px' : '不忽略'; }),
     h('div', {class: 'note', html: '影片會原封不動下載，或在手機上「重新封裝」成 MP4／M4A（不重新壓縮，畫質不變）。可選的畫質取決於網站提供的版本。受 DRM 保護的串流（例如 Netflix）無法下載。'})
+  ]));
+
+  /* YouTube */
+  P.appendChild(card('video', 'YouTube', [
+    swRow('YouTube 去廣告', '移除影片前後與中間的廣告、首頁與搜尋結果的贊助內容；漏網的廣告會自動靜音快轉並略過（重新整理 YouTube 後生效）', 'ytAds'),
+    h('div', {class: 'sub', style: {margin: '6px 0', lineHeight: '1.7'}, html: '在瀏覽頁開啟任何 YouTube 影片（含 Shorts），按「媒體」就能選：<br>・影片：144p～4K，影像與聲音分開下載後在手機上合併（不重新壓縮）<br>・音樂：MP3 128／192／320kbps、M4A、OPUS 原始音軌、FLAC／WAV 無損格式（附歌名、歌手、封面）'}),
+    h('div', {class: 'btn-row'}, h('button', {class: 'btn sm', html: icon('update', 'sm') + '更新解析設定', onclick: async function(){ await YT.loadCfg(); YT.cache = {}; toast('解析設定：' + YT.cfg.clients.map(function(c){ return c.name; }).join('、')); }})),
+    h('div', {class: 'note', text: '下載的影片與音樂僅供個人離線觀看收聽，請尊重創作者著作權。會員專屬、付費或有 DRM 保護的內容無法下載。'})
   ]));
 
   /* 儲存與匯出 */

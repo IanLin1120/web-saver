@@ -94,6 +94,95 @@ final class Fetcher {
         } finally { c.disconnect(); }
     }
 
+    /** 分段下載（每段 10MB 的 Range 請求，避免影片伺服器限速）。ua 可為 null。 */
+    static String chunked(String url, String ua, String referer, boolean cookies, File out, Progress p, boolean[] cancel) throws Exception {
+        final long CH = 10L << 20;
+        long got = 0, total = -1;
+        String mime = "";
+        OutputStream os = new FileOutputStream(out);
+        try {
+            while (total < 0 || got < total) {
+                if (cancel != null && cancel[0]) throw new Exception("已取消");
+                long end = got + CH - 1;
+                if (total > 0) end = Math.min(end, total - 1);
+                HttpURLConnection c = null;
+                Exception last = null;
+                for (int attempt = 0; attempt < 4; attempt++) {
+                    try {
+                        c = (HttpURLConnection) new URL(url).openConnection();
+                        c.setConnectTimeout(20000);
+                        c.setReadTimeout(45000);
+                        c.setRequestProperty("User-Agent", ua == null || ua.isEmpty() ? UA : ua);
+                        c.setRequestProperty("Accept", "*/*");
+                        c.setRequestProperty("Range", "bytes=" + got + "-" + end);
+                        if (referer != null && referer.startsWith("http")) c.setRequestProperty("Referer", referer);
+                        if (cookies) { try { String ck = CookieManager.getInstance().getCookie(url); if (ck != null) c.setRequestProperty("Cookie", ck); } catch (Throwable t) { /* ignore */ } }
+                        int code = c.getResponseCode();
+                        if (code == 416 && total > 0) return mime;
+                        if (code != 206 && code != 200) throw new Exception("HTTP " + code);
+                        String ct = c.getContentType();
+                        if (ct != null) mime = ct.split(";")[0].trim().toLowerCase();
+                        String cr = c.getHeaderField("Content-Range");
+                        if (code == 206 && cr != null && cr.contains("/")) {
+                            String t = cr.substring(cr.lastIndexOf('/') + 1).trim();
+                            if (!t.equals("*")) total = Long.parseLong(t);
+                        } else if (code == 200) {
+                            total = c.getContentLengthLong();
+                            if (got > 0) throw new Exception("伺服器不支援分段");
+                        }
+                        InputStream in = c.getInputStream();
+                        byte[] buf = new byte[131072];
+                        int n;
+                        long lastT = 0;
+                        while ((n = in.read(buf)) > 0) {
+                            os.write(buf, 0, n);
+                            got += n;
+                            long now = System.currentTimeMillis();
+                            if (p != null && now - lastT > 300) { lastT = now; p.on(got, total); }
+                            if (cancel != null && cancel[0]) break;
+                        }
+                        in.close();
+                        last = null;
+                        break;
+                    } catch (Exception e) {
+                        last = e;
+                        if (c != null) c.disconnect();
+                        Thread.sleep(700L * (attempt + 1));
+                    }
+                }
+                if (last != null) throw last;
+                if (c != null) c.disconnect();
+                if (total < 0) total = got;
+                if (p != null) p.on(got, total);
+            }
+        } finally { os.close(); }
+        return mime;
+    }
+
+    /** 一般 HTTP 請求（給介面用，例如 YouTube 解析）。回傳 [狀態碼, 內容]。 */
+    static String[] request(String method, String url, java.util.Map<String, String> headers, String body, boolean cookies) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        try {
+            c.setRequestMethod(method);
+            c.setConnectTimeout(20000);
+            c.setReadTimeout(30000);
+            c.setRequestProperty("User-Agent", UA);
+            if (headers != null) for (java.util.Map.Entry<String, String> e : headers.entrySet()) c.setRequestProperty(e.getKey(), e.getValue());
+            if (cookies) { try { String ck = CookieManager.getInstance().getCookie(url); if (ck != null) c.setRequestProperty("Cookie", ck); } catch (Throwable t) { /* ignore */ } }
+            if (body != null) {
+                c.setDoOutput(true);
+                byte[] b = body.getBytes("UTF-8");
+                c.setFixedLengthStreamingMode(b.length);
+                OutputStream os = c.getOutputStream();
+                os.write(b);
+                os.close();
+            }
+            int code = c.getResponseCode();
+            InputStream in = code >= 200 && code < 400 ? c.getInputStream() : c.getErrorStream();
+            return new String[] {String.valueOf(code), in == null ? "" : new String(Util.readAllBytes(in, 32L << 20), "UTF-8")};
+        } finally { c.disconnect(); }
+    }
+
     static String text(String url, String referer) throws Exception {
         Res r = get(url, referer, "*/*", 8 << 20);
         String cs = r.charset.isEmpty() ? "UTF-8" : r.charset;

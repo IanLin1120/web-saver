@@ -8,7 +8,8 @@ function pxUrl(u){
   if(/^data:/.test(u)) return u;
   return isApp ? 'https://wslib.local/px?u=' + encodeURIComponent(u) + '&r=' + encodeURIComponent(BR.url) : u;
 }
-function openMedia(){
+function openMedia(force){
+  if(force !== true && isApp){ var yid = YT.idOf(BR.url); if(yid){ openYt(yid); return; } }
   var body = h('div', {html: '<div class="ringBox"><div class="spin"></div><div class="sub">正在偵測頁面上的圖片與影片…</div></div>'});
   var dlBtn = h('button', {class: 'btn pri lg', html: icon('download', 'sm') + '下載', disabled: true});
   var selAll = h('button', {class: 'btn', html: icon('checks', 'sm') + '全選'});
@@ -25,7 +26,7 @@ function openMedia(){
   if(isApp) NAT.call('brMedia', CFG.media.minPx);
   else setTimeout(function(){ fire('media', {items: WEB.doc ? WSMedia.scan(WEB.doc, {minPx: CFG.media.minPx, live: false}) : [], page: WEB.url, title: BR.title}); }, 50);
 }
-$('bMedia').addEventListener('click', openMedia);
+$('bMedia').addEventListener('click', function(){ openMedia(); });
 on('media', function(d){
   MEDIA.items = (d && d.items || []).filter(function(m){ return m.url; });
   MEDIA.page = d.page || BR.url; MEDIA.title = d.title || BR.title;
@@ -111,7 +112,21 @@ function drawMedia(){
   if(mo.imgFmt === 'jpg' || mo.imgFmt === 'webp' || (mo.imgFmt === 'orig' && mo.imgMax)) opt.appendChild(rangeRow('圖片品質', 'media.imgQ', 50, 100, 5, function(v){ return v + '%'; }));
   opt.appendChild(h('div', {class: 'field'}, h('div', {class: 'lbl'}, '影片輸出'), segRow([['mp4', 'MP4'], ['orig', '原始格式'], ['m4a', '只要音訊 M4A']], 'media.vidOut')));
   opt.appendChild(selRow('影片畫質（串流影片可選）', [['max', '最高畫質'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['min', '最低（省空間）']], 'media.vidQ'));
-  opt.appendChild(swRow('打包成一個 ZIP', '選了多個檔案時，合併成一個壓縮檔存進檔案庫', 'media.zip'));
+  opt.appendChild(h('div', {class: 'field'}, h('div', {class: 'lbl'}, '音訊格式（音訊檔與「只要音訊」）'), segRow([['orig', '原始'], ['mp3', 'MP3'], ['flac', 'FLAC'], ['wav', 'WAV']], 'media.audFmt')));
+  opt.appendChild(swRow('打包成一個 ZIP', '選了多個檔案時，合併成一個壓縮檔存進檔案庫（需要轉成 MP3／FLAC／WAV 的音訊不打包）', 'media.zip'));
+  /* 檔名與流水號 */
+  var nm = h('div', {class: 'card glass', style: {marginTop: '12px'}}, h('h3', {html: icon('edit') + '檔名'}));
+  nm.appendChild(h('div', {class: 'field'}, h('div', {class: 'lbl'}, '檔名用'), segRow([['orig', '原始檔名'], ['title', '網頁標題'], ['custom', '自訂']], 'media.nameMode', function(){ drawMedia(); })));
+  if(mo.nameMode === 'custom'){ var ci = h('input', {type: 'text', value: mo.customName || '', placeholder: '例如：旅遊照片'}); ci.onchange = function(){ setCfg('media.customName', ci.value.trim()); drawMedia(); }; nm.appendChild(h('div', {class: 'field'}, ci)); }
+  nm.appendChild(swRow('檔名後面加流水號', '依網頁上的順序：第一張圖是 001，往下依序編號', 'media.seqOn', function(){ drawMedia(); }));
+  if(mo.seqOn){
+    nm.appendChild(h('div', {class: 'field'}, h('div', {class: 'lbl'}, '編號方式'), segRow([['page', '依網頁中的位置'], ['sel', '依選取的檔案重新編號']], 'media.seqMode', function(){ drawMedia(); })));
+    nm.appendChild(h('div', {class: 'two'}, selRow('位數', [[1, '1、2、3'], [2, '01、02'], [3, '001、002'], [4, '0001']], 'media.seqDigits', function(){ drawMedia(); }),
+      selRow('連接符號', [['_', '底線 _'], ['-', '連字號 -'], [' ', '空格'], ['(', '括號 (1)']], 'media.seqSep', function(){ drawMedia(); })));
+  }
+  var ex = MEDIA.items.filter(function(m){ return MEDIA.sel.has(m.url); })[0] || MEDIA.items[0];
+  if(ex) nm.appendChild(h('div', {class: 'note', html: '範例：<b>' + esc(mediaName(ex, 0)) + '</b>'}));
+  opt.appendChild(nm);
   opt.appendChild(rangeRow('忽略小於這個尺寸的圖片', 'media.minPx', 0, 400, 20, function(v){ return v ? v + 'px' : '不忽略'; }));
   if(!isApp) opt.appendChild(h('div', {class: 'note', text: '網頁版：圖片可轉格式與解析度；影片只能下載直連的 mp4／webm（HLS 串流、轉 M4A 需 APK 版）。'}));
   body.appendChild(opt);
@@ -143,19 +158,38 @@ function startMediaDl(){
   if(!pick.length) return;
   var mo = CFG.media;
   var req = {page: MEDIA.page, title: MEDIA.title,
-    items: pick.map(function(m, i){ return {url: m.url, kind: m.kind, name: mediaName(m, i), variant: m.variant || '', referer: MEDIA.page}; }),
-    opts: {imgFmt: mo.imgFmt, imgMax: +mo.imgMax || 0, imgQ: +mo.imgQ || 90, vidOut: mo.vidOut, vidQ: mo.vidQ, zip: !!mo.zip, zipName: (MEDIA.title || '媒體').slice(0, 60) + '_媒體'}};
+    items: pick.map(function(m, i){
+      var it = {url: m.url, kind: m.kind, name: mediaName(m, i), variant: m.variant || '', referer: MEDIA.page, seq: m.seq || i + 1};
+      var aud = m.kind === 'audio' || ((m.kind === 'video' || m.kind === 'hls') && mo.vidOut === 'm4a');
+      if(aud && mo.audFmt && mo.audFmt !== 'orig') it.convert = mo.audFmt + (mo.audFmt === 'mp3' ? ':320' : '');
+      return it;
+    }),
+    opts: {imgFmt: mo.imgFmt, imgMax: +mo.imgMax || 0, imgQ: +mo.imgQ || 90, vidOut: mo.vidOut, vidQ: mo.vidQ, zip: !!mo.zip && !(mo.audFmt && mo.audFmt !== 'orig' && pick.some(function(m){ return m.kind === 'audio' || mo.vidOut === 'm4a'; })), zipName: (MEDIA.title || '媒體').slice(0, 60) + '_媒體'}};
   if(MEDIA.sheet) MEDIA.sheet.close();
   dlCard(0, pick.length, '準備下載…', 0);
   if(isApp) NAT.call('dlStart', JSON.stringify(req)); else webMediaDl(req);
 }
 function mediaName(m, i){
-  var n = (m.name || '').replace(/\?.*$/, '');
-  if(!n || n.length < 3 || /^(index|master|playlist|video|image|img)\.?/i.test(n)){
-    var base = (MEDIA.title || hostOf(MEDIA.page) || 'media').replace(/[\\\/:*?"<>|]/g, '_').slice(0, 40);
-    n = base + '_' + (i + 1) + (n ? '_' + n : '');
+  var mo = CFG.media, clean = function(x){ return String(x || '').replace(/[\\\/:*?"<>|]/g, '_').trim(); };
+  var orig = (m.name || '').replace(/\?.*$/, ''), ext = (orig.match(/\.[a-z0-9]{2,5}$/i) || [''])[0];
+  var stem = orig.replace(/\.[a-z0-9]{2,5}$/i, '');
+  var base;
+  if(mo.nameMode === 'title') base = clean(MEDIA.title || hostOf(MEDIA.page) || '媒體').slice(0, 60);
+  else if(mo.nameMode === 'custom') base = clean(mo.customName) || '媒體';
+  else base = (!stem || stem.length < 2 || /^(index|master|playlist|video|image|img|default|large|original)$/i.test(stem)) ? clean(MEDIA.title || hostOf(MEDIA.page) || 'media').slice(0, 40) : clean(stem).slice(0, 80);
+  var needSeq = mo.seqOn || (mo.nameMode !== 'orig');
+  if(needSeq){
+    var num;
+    if(mo.seqMode === 'sel'){
+      var g = m.kind === 'image' ? 'image' : m.kind === 'audio' ? 'audio' : 'video';
+      var sel = MEDIA.items.filter(function(x){ return MEDIA.sel.has(x.url) && (x.kind === 'image' ? 'image' : x.kind === 'audio' ? 'audio' : 'video') === g; });
+      num = sel.indexOf(m) + 1 || i + 1;
+    } else num = m.seq || i + 1;
+    var d = +mo.seqDigits || 3, s = String(num); while(s.length < d) s = '0' + s;
+    var sep = mo.seqSep == null ? '_' : mo.seqSep;
+    base += sep === '(' ? ' (' + s + ')' : sep + s;
   }
-  return n;
+  return base + ext;
 }
 var DL = {n: 0};
 function dlCard(i, n, name, pct){
@@ -208,7 +242,7 @@ async function webMediaDl(req){
       var ext = extOfType(b.type) || (it.url.split('?')[0].match(/\.([a-z0-9]{2,4})$/i) || [, 'bin'])[1];
       var nm = it.name.replace(/\.[a-z0-9]{2,5}$/i, '') + '.' + ext;
       var k = 2; while(used[nm.toLowerCase()]) nm = nm.replace(/(\.\w+)$/, ' (' + (k++) + ')$1'); used[nm.toLowerCase()] = 1;
-      out.push({name: nm, blob: b}); ok++;
+      out.push({name: nm, blob: b, convert: it.convert}); ok++;
     }catch(e){ fail++; errs.push(it.name + '：' + e.message); }
   }
   var items = [];
@@ -218,7 +252,11 @@ async function webMediaDl(req){
       var z = new JSZip(); out.forEach(function(o){ z.file(o.name, o.blob); });
       var zb = await z.generateAsync({type: 'blob', compression: 'STORE'});
       items.push(await Lib.addBlob(zb, req.opts.zipName + '.zip', {src: req.page, title: req.title}));
-    } else for(var j = 0; j < out.length; j++) items.push(await Lib.addBlob(out[j].blob, out[j].name, {src: req.page, title: req.title}));
+    } else for(var j = 0; j < out.length; j++){
+      var sv = await Lib.addBlob(out[j].blob, out[j].name, {src: req.page, title: req.title});
+      if(out[j].convert){ var cp = String(out[j].convert).split(':'); Conv.add(sv, cp[0], {kbps: +cp[1] || 320}); }
+      items.push(sv);
+    }
   }catch(e){ errs.push('儲存：' + e.message); }
   fire('dl', {state: 'done', ok: ok, fail: fail, msg: errs.join('\n'), items: items, cancel: DL.cancel});
 }

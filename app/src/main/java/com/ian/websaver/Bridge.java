@@ -130,7 +130,69 @@ public class Bridge {
 
     @JavascriptInterface public void hlsInfo(String url, String ref) { MediaDl.hlsInfo(url, ref); }
 
+    /* ---------- 通用 HTTP（介面的 YouTube 解析等，不受 CORS 限制） ---------- */
+    @JavascriptInterface public void http(final String id, final String method, final String url, final String headersJson, final String body, final boolean cookies) {
+        Util.IO.execute(new Runnable() {
+            @Override public void run() {
+                JSONObject o = new JSONObject();
+                try {
+                    java.util.Map<String, String> hd = new java.util.HashMap<>();
+                    if (headersJson != null && !headersJson.isEmpty()) {
+                        JSONObject h = new JSONObject(headersJson);
+                        java.util.Iterator<String> it = h.keys();
+                        while (it.hasNext()) { String k = it.next(); hd.put(k, h.getString(k)); }
+                    }
+                    String[] r = Fetcher.request(method, url, hd, body == null || body.isEmpty() ? null : body, cookies);
+                    o.put("id", id).put("status", Integer.parseInt(r[0])).put("body", r[1]);
+                } catch (Throwable t) {
+                    try { o.put("id", id).put("status", 0).put("err", String.valueOf(t.getMessage())); } catch (Throwable x) { /* ignore */ }
+                }
+                MainActivity.emit("http", o.toString());
+            }
+        });
+    }
+
     /* ---------- 檔案庫 ---------- */
+    private final java.util.Map<String, File> chunks = new java.util.HashMap<>();
+
+    /** 分段寫入大檔（介面轉檔後的 WAV／FLAC／MP3），最後一段才加入檔案庫 */
+    @JavascriptInterface public String libSaveChunk(String token, String b64, boolean last, String name, String mime, String metaJson) {
+        try {
+            File f;
+            synchronized (chunks) {
+                f = chunks.get(token);
+                if (f == null) { f = Lib.get(a).tmpFile(Util.extOf(name)); chunks.put(token, f); }
+            }
+            java.io.FileOutputStream os = new java.io.FileOutputStream(f, true);
+            os.write(Base64.decode(b64, Base64.DEFAULT));
+            os.close();
+            if (!last) return "{\"ok\":true}";
+            synchronized (chunks) { chunks.remove(token); }
+            JSONObject m = metaJson == null || metaJson.isEmpty() ? new JSONObject() : new JSONObject(metaJson);
+            android.graphics.Bitmap tb = null;
+            String thumbFrom = m.optString("thumbFrom", "");
+            if (!thumbFrom.isEmpty()) {
+                File tf = new File(Lib.get(a).thumbs, thumbFrom + ".jpg");
+                if (tf.exists()) tb = android.graphics.BitmapFactory.decodeFile(tf.getPath());
+            }
+            JSONObject o = Lib.get(a).add(f, name, mime, m.optString("src"), m.optString("title"), tb);
+            java.util.Iterator<String> it = m.keys();
+            while (it.hasNext()) {
+                String k = it.next();
+                if (k.equals("artist") || k.equals("album") || k.equals("folder") || k.equals("seq")) { Lib.get(a).touch(o.getString("id"), k, m.get(k)); o.put(k, m.get(k)); }
+            }
+            return new JSONObject().put("ok", true).put("item", o).toString();
+        } catch (Throwable t) { return err(t); }
+    }
+
+    @JavascriptInterface public void libMeta(String id, String json) {
+        try {
+            JSONObject m = new JSONObject(json);
+            java.util.Iterator<String> it = m.keys();
+            while (it.hasNext()) { String k = it.next(); if (!k.equals("id") && !k.equals("file") && !k.equals("path")) Lib.get(a).touch(id, k, m.get(k)); }
+        } catch (Throwable t) { /* ignore */ }
+    }
+
     @JavascriptInterface public String libList() { return Lib.get(a).listJson(); }
 
     @JavascriptInterface public String libStats() { return Lib.get(a).stats(a); }

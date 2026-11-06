@@ -401,3 +401,21 @@ input[type=range]{width:100%;accent-color:var(--accent);padding:0;border:0;backg
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px}
 .kv span:nth-child(odd){color:var(--text-muted)}
 .kv span:nth-child(even){word-break:break-all}
+
+/* 檔案庫資料夾 */
+.folderHead{display:flex;align-items:center;gap:6px;margin:0 0 10px}
+.crumbs{flex:1;min-width:0;display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none;white-space:nowrap}
+.crumb{border:0;background:none;font:inherit;font-size:13.5px;font-weight:700;color:var(--text-muted);padding:6px 8px;border-radius:10px;display:inline-flex;align-items:center;gap:4px;cursor:pointer;flex:none}
+.crumb.on{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.crumbs .sep{color:var(--text-muted);flex:none}
+.fgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
+@media (min-width:560px){.fgrid{grid-template-columns:repeat(3,1fr)}}
+.ftile{display:flex;align-items:center;gap:8px;padding:9px 4px 9px 10px;border-radius:16px;background:var(--surface-3);border:1.5px solid var(--edge);box-shadow:0 3px 10px var(--sh);cursor:pointer;min-width:0;transition:transform .12s}
+.ftile:active{transform:scale(.97)}
+.ftile .fi{font-size:24px;flex:none}
+.ftile .t{flex:1;min-width:0}
+.ftile b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ftile .sub{font-size:11px}
+.ftile .ib{width:30px;height:30px}
+.selMode .ftile{border-style:dashed;border-color:var(--accent)}
+.lrow.playing{border-color:var(--accent)}.lrow.playing b{color:var(--accent)}

@@ -58,7 +58,7 @@ final class Browser {
 
     /* 設定（由網頁介面 br_config 傳入） */
     String mode = "mobile", popups = "smart";
-    boolean ads = true, pw = true, autoReader = false;
+    boolean ads = true, pw = true, autoReader = false, ytAds = true;
     int textZoom = 100;
 
     /* 擷取 */
@@ -80,7 +80,59 @@ final class Browser {
     static final Pattern MEDIA_RE = Pattern.compile("(?i)\\.(m3u8|mpd|mp4|m4v|webm|mov|mp3|m4a|aac|ogg|oga|opus|wav|flac)(\\?|#|$)");
     static final Pattern SEG_RE = Pattern.compile("(?i)(\\.(ts|m4s|cmfv|cmfa)(\\?|#|$))|([/_-](seg|segment|chunk|frag)[-_]?\\d+)|(init\\.mp4)|(/range/)|([?&](range|bytes)=)");
 
-    private String injectBase, injectCapture, injectMedia, injectReader;
+    private String injectBase, injectCapture, injectMedia, injectReader, injectYt;
+
+    static boolean isYt(String host) {
+        if (host == null) return false;
+        String h = host.toLowerCase();
+        return h.equals("youtube.com") || h.endsWith(".youtube.com") || h.equals("youtube-nocookie.com") || h.endsWith(".youtube-nocookie.com");
+    }
+
+    /** YouTube 去廣告：自己抓主頁面 HTML，在 <head> 最前面插入去廣告腳本（比網站程式更早執行），並移除 CSP 標頭。 */
+    private WebResourceResponse ytPage(String url, Map<String, String> reqH) {
+        java.net.HttpURLConnection c = null;
+        try {
+            c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+            c.setInstanceFollowRedirects(false);
+            c.setConnectTimeout(15000);
+            c.setReadTimeout(30000);
+            if (reqH != null) for (Map.Entry<String, String> e : reqH.entrySet()) {
+                String k = e.getKey();
+                if (k == null || k.equalsIgnoreCase("Accept-Encoding") || k.equalsIgnoreCase("Cookie")) continue;
+                c.setRequestProperty(k, e.getValue());
+            }
+            c.setRequestProperty("User-Agent", wv.getSettings().getUserAgentString());
+            String ck = CookieManager.getInstance().getCookie(url);
+            if (ck != null && !ck.isEmpty()) c.setRequestProperty("Cookie", ck);
+            int code = c.getResponseCode();
+            java.util.List<String> sc = c.getHeaderFields().get("Set-Cookie");
+            if (sc == null) sc = c.getHeaderFields().get("set-cookie");
+            if (sc != null) for (String v : sc) CookieManager.getInstance().setCookie(url, v);
+            String ct = c.getContentType();
+            if (code != 200 || ct == null || !ct.toLowerCase().contains("text/html")) { c.disconnect(); return null; }
+            String cs = "UTF-8";
+            int ci = ct.toLowerCase().indexOf("charset=");
+            if (ci >= 0) cs = ct.substring(ci + 8).replace("\"", "").trim();
+            String html = new String(Util.readAllBytes(c.getInputStream(), 20L << 20), cs);
+            String tag = "<script>" + cfgJs() + injectYt + "</script>";
+            int hi = html.toLowerCase().indexOf("<head");
+            int he = hi >= 0 ? html.indexOf('>', hi) : -1;
+            html = he > 0 ? html.substring(0, he + 1) + tag + html.substring(he + 1) : tag + html;
+            Map<String, String> h = new HashMap<>();
+            for (Map.Entry<String, java.util.List<String>> e : c.getHeaderFields().entrySet()) {
+                String k = e.getKey();
+                if (k == null || e.getValue() == null || e.getValue().isEmpty()) continue;
+                String kl = k.toLowerCase();
+                if (kl.startsWith("content-security-policy") || kl.equals("content-length") || kl.equals("content-encoding") || kl.equals("set-cookie") || kl.equals("content-type") || kl.equals("transfer-encoding")) continue;
+                h.put(k, e.getValue().get(0));
+            }
+            c.disconnect();
+            return new WebResourceResponse("text/html", "utf-8", 200, "OK", h, new ByteArrayInputStream(html.getBytes("UTF-8")));
+        } catch (Throwable t) {
+            if (c != null) try { c.disconnect(); } catch (Throwable x) { /* ignore */ }
+            return null;
+        }
+    }
 
     Browser(MainActivity act) {
         a = act;
@@ -95,6 +147,8 @@ final class Browser {
         injectCapture = Util.asset(a, "inject/capture.js");
         injectMedia = Util.asset(a, "inject/media.js");
         injectReader = Util.asset(a, "inject/reader.js");
+        injectYt = Util.asset(a, "inject/yt.js");
+        ytAds = p.getBoolean("ytAds", true);
         wv = makeWebView(false);
         wv.setVisibility(View.GONE);
         final float rad = Util.dp(a, 16);
@@ -160,6 +214,10 @@ final class Browser {
             String scheme = u.getScheme();
             if (scheme == null || !scheme.startsWith("http")) return null;
             String host = u.getHost();
+            if (ytAds && !isPopup && r.isForMainFrame() && "GET".equalsIgnoreCase(r.getMethod()) && isYt(host)) {
+                WebResourceResponse x = ytPage(u.toString(), r.getRequestHeaders());
+                if (x != null) return x;
+            }
             if (ads && !r.isForMainFrame() && !AdBlock.allowed(curHost) && AdBlock.match(host)) {
                 AdBlock.blockedPage.incrementAndGet();
                 AdBlock.blockedTotal.incrementAndGet();
@@ -213,7 +271,7 @@ final class Browser {
             emitMediaCount();
         }
 
-        @Override public void onPageCommitVisible(WebView v, String url) { if (!isPopup) inject(v, null); }
+        @Override public void onPageCommitVisible(WebView v, String url) { if (!isPopup) inject(v, ytAds && isYt(hostOf(url)) ? injectYt : null); }
 
         @Override public void onPageFinished(WebView v, String url) {
             if (isPopup) return;
@@ -426,9 +484,10 @@ final class Browser {
         mode = c.optString("mode", mode);
         popups = c.optString("popups", popups);
         ads = c.optBoolean("ads", ads);
+        ytAds = c.optBoolean("ytAds", ytAds);
         pw = c.optBoolean("pw", pw);
         textZoom = c.optInt("textZoom", textZoom);
-        a.prefs.edit().putString("brMode", mode).putString("brPopups", popups).putBoolean("brAds", ads).putBoolean("brPw", pw).putInt("brZoom", textZoom)
+        a.prefs.edit().putString("brMode", mode).putString("brPopups", popups).putBoolean("brAds", ads).putBoolean("ytAds", ytAds).putBoolean("brPw", pw).putInt("brZoom", textZoom)
             .putString("adHosts", c.optString("adHosts", a.prefs.getString("adHosts", "")))
             .putString("adCss", c.optString("adCss", a.prefs.getString("adCss", "")))
             .putString("adAllow", c.optString("adAllow", a.prefs.getString("adAllow", ""))).apply();

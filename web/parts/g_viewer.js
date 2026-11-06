@@ -6,6 +6,7 @@ var Viewer = {cur: null, list: [], kind: '', cleanup: null,
   isOpen: function(){ return $('viewer').classList.contains('on'); }};
 Viewer.open = async function(it, list){
   if(!it) return;
+  if(it.cat === 'audio'){ Music.playItem(it); return; }
   var V = $('viewer'), body = $('vwBody');
   if(this.cleanup){ try{ this.cleanup(); }catch(e){} this.cleanup = null; }
   if(isApp && this.kind === 'html') NAT.call('vwClose');

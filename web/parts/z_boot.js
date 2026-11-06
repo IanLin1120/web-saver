@@ -39,5 +39,6 @@ document.addEventListener('keydown', function(e){
   var v = lsGet('ws.view', 'browse'); if(v !== 'browse') showView(v);
   $('bView').innerHTML = icon(CFG.lib.view === 'grid' ? 'list' : 'grid');
   Upd.boot();
+  YT.loadCfg();
   if(navigator.storage && navigator.storage.persist && !isApp) try{ navigator.storage.persist(); }catch(e){}
 })();

@@ -122,7 +122,7 @@ async function makeThumb(blob, it){
 }
 
 /* ---------- 檔案庫畫面 ---------- */
-var LV = {sel: new Set(), selMode: false, q: ''};
+var LV = {sel: new Set(), selMode: false, q: '', folder: lsGet('ws.lvFolder', {})};
 function libVisible(){
   var c = CFG.lib, q = LV.q.toLowerCase();
   var L = Lib.items.filter(function(it){ return (c.cat === 'all' || it.cat === c.cat) && (!q || (it.name + ' ' + (it.title || '') + ' ' + (it.src || '')).toLowerCase().indexOf(q) >= 0); });
@@ -160,6 +160,11 @@ async function renderStor(){
       h('div', {class: 'prog', html: '<i style="width:' + (100 * used / all).toFixed(1) + '%"></i>'}),
       h('div', {class: 'row'}, h('span', {html: label}), h('span', {text: '本 App ' + (total / all * 100 < 0.1 ? '<0.1' : (total / all * 100).toFixed(1)) + '%'}))));
   }
+  var mus = musicItems();
+  card.appendChild(h('div', {class: 'setRow', style: {borderTop: '1px solid var(--border-soft)', marginTop: '10px'}, onclick: function(){ setCfg('lib.cat', 'audio'); LV.folder.audio = ''; renderLib(); }},
+    h('span', {class: 'ic', html: icon('audio'), style: {background: 'color-mix(in srgb,var(--c-audio) 18%,var(--surface-3))', color: 'var(--c-audio)'}}),
+    h('div', {class: 'grow'}, h('b', {text: '音樂庫'}), h('div', {class: 'sub', text: mus.length ? mus.length + ' 首・點這裡瀏覽與播放' : '從 YouTube 或網頁下載的音樂會放在這裡'})),
+    mus.length ? h('button', {class: 'btn pri sm', html: '<svg class="i sm fill" viewBox="0 0 24 24">' + IC.play + '</svg>全部播放', onclick: function(e){ e.stopPropagation(); Music.playList(mus, 0); Music.openPlayer(); }}) : h('span', {class: 'chev', text: '›'})));
   if(isApp && s.cache > 20 * 1048576) card.appendChild(h('div', {class: 'note', html: '瀏覽器快取 ' + fmtSize(s.cache) + '・<a href="#" id="clrCache">清除</a>'}));
   var cc = $('clrCache'); if(cc) cc.onclick = function(e){ e.preventDefault(); NAT.call('clearData', 'cache'); setTimeout(renderStor, 600); };
   paintIcons(card);
@@ -170,7 +175,7 @@ function renderCats(){
   Lib.items.forEach(function(it){ cnt[it.cat] = (cnt[it.cat] || 0) + 1; });
   [['all', '全部', 'layers']].concat(Object.keys(CAT).map(function(k){ return [k, CAT[k].name, CAT[k].ic]; })).forEach(function(c){
     if(c[0] !== 'all' && !cnt[c[0]]) return;
-    bar.appendChild(h('button', {class: 'fchip' + (CFG.lib.cat === c[0] ? ' on' : ''), html: icon(c[2], 'sm') + c[1] + ' <span class="c">' + (cnt[c[0]] || 0) + '</span>', onclick: function(){ setCfg('lib.cat', c[0]); renderLibList(); renderCats(); }}));
+    bar.appendChild(h('button', {class: 'fchip' + (CFG.lib.cat === c[0] ? ' on' : ''), html: icon(c[2], 'sm') + (c[0] === 'audio' ? '音樂庫' : c[1]) + ' <span class="c">' + (cnt[c[0]] || 0) + '</span>', onclick: function(){ setCfg('lib.cat', c[0]); renderLibList(); renderCats(); }}));
   });
   if(CFG.lib.cat !== 'all' && !cnt[CFG.lib.cat]){ CFG.lib.cat = 'all'; saveCfg(); }
 }
@@ -183,14 +188,55 @@ function thumbEl(it, cls){
 }
 function renderLibList(){
   var box = $('libList'); box.textContent = '';
+  var cat = CFG.lib.cat, inFolders = cat !== 'all' && !LV.q;
+  var cur = inFolders ? (LV.folder[cat] || '') : '';
+  if(cur && !LF.get(cur)){ cur = ''; LV.folder[cat] = ''; }
+  lsSet('ws.lvFolder', LV.folder);
   var L = libVisible();
+  if(cat === 'audio') renderMusicHead(box, inFolders ? L.filter(function(it){ return LF.descendants(cur || '__none').indexOf(LF.folderOf(it.id)) >= 0 || (!cur); }) : L);
+  if(inFolders) L = L.filter(function(it){ return LF.folderOf(it.id) === cur; });
   $('libScroll').classList.toggle('selMode', LV.selMode);
-  if(!L.length){
+  if(inFolders){
+    var redraw = function(){ renderLibList(); };
+    var crumbs = h('div', {class: 'crumbs'});
+    crumbs.appendChild(h('button', {class: 'crumb' + (cur ? '' : ' on'), html: icon((CAT[cat] || CAT.other).ic, 'sm') + (cat === 'audio' ? '音樂庫' : (CAT[cat] || CAT.other).name), onclick: function(){ LV.folder[cat] = ''; redraw(); }}));
+    LF.path(cur).forEach(function(f, i, arr){
+      crumbs.appendChild(h('span', {class: 'sep', text: '›'}));
+      crumbs.appendChild(h('button', {class: 'crumb' + (i === arr.length - 1 ? ' on' : ''), text: f.icon + ' ' + f.name, onclick: function(){ LV.folder[cat] = f.id; redraw(); }}));
+    });
+    var bar = h('div', {class: 'folderHead'}, crumbs,
+      h('button', {class: 'ib', title: '資料夾排序', html: icon('sort'), onclick: function(){
+        menu('資料夾排序', [['sort', '依名稱' + ((CFG.lib.fsort || 'manual') === 'name' ? '　✓' : ''), function(){ setCfg('lib.fsort', 'name'); redraw(); }],
+          ['edit', '自訂順序' + ((CFG.lib.fsort || 'manual') === 'manual' ? '　✓' : ''), function(){ setCfg('lib.fsort', 'manual'); redraw(); }, false, '在資料夾的 ⋯ 選「往前排／往後排」']]);
+      }}),
+      h('button', {class: 'btn sm', html: icon('plus', 'sm') + '資料夾', onclick: async function(){ var n = await promptDlg('新增資料夾', '', '例如：工作、旅遊、2026'); if(n){ LF.add(cat, cur, n); redraw(); } }}));
+    box.appendChild(bar);
+    var subs = LF.children(cat, cur);
+    if(subs.length){
+      var fg = h('div', {class: 'fgrid'});
+      subs.forEach(function(f){
+        var n = LF.count(f.id), press = 0;
+        var el = h('div', {class: 'ftile'}, h('span', {class: 'fi', text: f.icon || '📁'}), h('div', {class: 't'}, h('b', {text: f.name}), h('div', {class: 'sub', text: n + ' 個檔案' + (LF.children(cat, f.id).length ? '・' + LF.children(cat, f.id).length + ' 個資料夾' : '')})),
+          h('button', {class: 'ib', html: icon('more'), onclick: function(e){ e.stopPropagation(); folderMenu(f, redraw); }}));
+        el.addEventListener('pointerdown', function(){ press = setTimeout(function(){ press = -1; folderMenu(f, redraw); }, 500); });
+        el.addEventListener('pointerup', function(){ if(press === -1){ press = 0; return; } clearTimeout(press); press = 0; });
+        el.addEventListener('pointercancel', function(){ clearTimeout(press); press = 0; });
+        el.addEventListener('click', function(){ if(LV.selMode && LV.sel.size){ var ids = Array.from(LV.sel); LF.setItems(ids, f.id); LV.sel.clear(); LV.selMode = false; toast('已移到「' + f.name + '」'); renderLib(); return; } LV.folder[cat] = f.id; redraw(); });
+        fg.appendChild(el);
+      });
+      box.appendChild(fg);
+    }
+    if(!L.length){
+      box.appendChild(h('div', {class: 'empty', html: Lib.items.length ? (subs.length ? '' : '<div class="big">📂</div>這裡還沒有檔案<br><span class="sub">在檔案上長按→選取→按「移到資料夾」，就能整理到這裡</span>') : '<div class="big">📂</div>檔案庫還是空的'}));
+      paintIcons(box);
+      return;
+    }
+  } else if(!L.length){
     box.appendChild(h('div', {class: 'empty', html: Lib.items.length ? '<div class="big">🔍</div>沒有符合的檔案' :
       '<div class="big">📂</div>檔案庫還是空的<br><span class="sub">到「瀏覽」開啟網頁，按「擷取」存成離線 HTML／PDF，<br>或按「媒體」下載圖片與影片</span>'}));
     return;
   }
-  var grid = CFG.lib.view === 'grid';
+  var grid = CFG.lib.view === 'grid' && cat !== 'audio';
   var wrap = h('div', {class: grid ? 'grid' : 'list'});
   var frag = document.createDocumentFragment();
   L.forEach(function(it){
@@ -205,7 +251,8 @@ function renderLibList(){
       el = h('div', {class: 'fcard' + (on ? ' on' : '')}, th, h('div', {class: 'inf'}, h('b', {text: it.title && it.cat === 'html' ? it.title : it.name}), h('div', {class: 'sub', html: '<span>' + fmtSize(it.size) + '</span><span>' + fmtDate(it.time) + '</span>'})),
         h('span', {class: 'ck', html: icon('check')}));
     } else {
-      el = h('div', {class: 'lrow' + (on ? ' on' : '')}, thumbEl(it), h('div', {class: 't'}, h('b', {text: it.name}), h('div', {class: 'sub', text: c.name + '・' + sub + (it.src ? '・' + hostOf(it.src) : '')})),
+      el = h('div', {class: 'lrow' + (on ? ' on' : '') + (Music.cur() && Music.cur().id === it.id ? ' playing' : '')}, thumbEl(it), h('div', {class: 't'}, h('b', {text: it.cat === 'audio' ? songTitle(it) : it.name}),
+          h('div', {class: 'sub', text: it.cat === 'audio' ? [it.artist, (it.name.split('.').pop() || '').toUpperCase(), it.dur ? fmtDur(it.dur) : '', fmtSize(it.size)].filter(Boolean).join('・') : c.name + '・' + sub + (it.src ? '・' + hostOf(it.src) : '')})),
         h('span', {class: 'ck', html: icon('check')}));
     }
     var press = 0, moved = false, sx = 0, sy = 0;
@@ -215,6 +262,7 @@ function renderLibList(){
       if(press === -1 || moved){ press = 0; return; }
       clearTimeout(press); press = 0;
       if(LV.selMode){ if(LV.sel.has(it.id)) LV.sel.delete(it.id); else LV.sel.add(it.id); el.classList.toggle('on'); renderSelBar(); }
+      else if(it.cat === 'audio') Music.playItem(it);
       else Viewer.open(it, L);
     });
     el.addEventListener('pointercancel', function(){ clearTimeout(press); press = 0; });
@@ -236,6 +284,12 @@ function renderSelBar(){
   bar.appendChild(h('b', {text: n ? '已選 ' + n + ' 個' : '點選檔案'}));
   bar.appendChild(h('button', {class: 'ib', html: icon('checks'), title: '全選', onclick: function(){ var L = libVisible(); var all = L.every(function(it){ return LV.sel.has(it.id); }); L.forEach(function(it){ if(all) LV.sel.delete(it.id); else LV.sel.add(it.id); }); renderLib(); }}));
   if(allHtml && isApp) bar.appendChild(h('button', {class: 'ib', html: icon('pdf'), title: '轉成 PDF', onclick: function(){ picked.forEach(function(it){ toPdf(it); }); }}));
+  var cats = {}; picked.forEach(function(it){ cats[it.cat] = 1; });
+  var oneCat = Object.keys(cats).length === 1 ? Object.keys(cats)[0] : '';
+  bar.appendChild(h('button', {class: 'ib', html: icon('folder'), title: '移到資料夾', disabled: !n, onclick: function(){
+    if(!oneCat){ toast('資料夾是依種類分開的，請只選同一種類的檔案', true); return; }
+    folderPicker(oneCat, '移到資料夾', function(fid){ LF.setItems(picked.map(function(x){ return x.id; }), fid); LV.sel.clear(); LV.selMode = false; toast('已移動'); renderLib(); }, {cur: LV.folder[oneCat] || ''});
+  }}));
   bar.appendChild(h('button', {class: 'ib', html: icon('share'), title: '匯出', disabled: !n, onclick: function(){ exportSheet(picked); }}));
   bar.appendChild(h('button', {class: 'ib', html: icon('trash'), title: '刪除', disabled: !n, style: {color: 'var(--danger)'}, onclick: async function(){
     if(!(await confirmDlg('刪除 ' + n + ' 個檔案？', '共 ' + fmtSize(picked.reduce(function(s, x){ return s + (x.size || 0); }, 0)) + '，刪除後無法復原。', '刪除', true))) return;

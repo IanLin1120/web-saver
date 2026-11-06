@@ -36,12 +36,11 @@
     function adHost(u) { return G.WSCapture && G.WS_AD && G.WSCapture.isAdHost((function () { try { return new URL(u).hostname; } catch (e) { return ''; } })()); }
     function push(o) {
       if (o.el && inAd(o.el)) return;
-      delete o.el;
       if (adHost(o.url)) return;
       if (!o.url || /^(javascript|about):/i.test(o.url)) return;
       if (/^data:/.test(o.url) && o.url.length < 3000) return;
       var key = o.url.replace(/#.*$/, '');
-      if (seen[key]) { var x = seen[key]; if (!x.w && o.w) { x.w = o.w; x.h = o.h; } if (!x.alt && o.alt) x.alt = o.alt; return; }
+      if (seen[key]) { var x = seen[key]; if (!x.w && o.w) { x.w = o.w; x.h = o.h; } if (!x.alt && o.alt) x.alt = o.alt; if (!x.el && o.el) x.el = o.el; return; }
       o.name = o.name || nameOf(o.url);
       seen[key] = o; out.push(o);
     }
@@ -60,7 +59,7 @@
       if (w && h && w < minPx && h < minPx && !ss) return;
       push({url: u, kind: 'image', w: w, h: h, alt: (img.alt || img.title || '').trim().slice(0, 100), el: img});
     });
-    doc.querySelectorAll('picture source[srcset]').forEach(function (s) { var u = bestSS(s.getAttribute('srcset'), base); if (u) push({url: u, kind: 'image'}); });
+    doc.querySelectorAll('picture source[srcset]').forEach(function (s) { var u = bestSS(s.getAttribute('srcset'), base); if (u) push({url: u, kind: 'image', el: s}); });
     doc.querySelectorAll('video').forEach(function (v) {
       var srcs = [];
       if (v.currentSrc) srcs.push(v.currentSrc);
@@ -70,13 +69,13 @@
       var any = false;
       srcs.forEach(function (u) {
         if (/^blob:/.test(u)) { push({url: u, kind: 'stream', w: v.videoWidth, h: v.videoHeight, poster: poster, note: '串流影片（MSE），請看下方偵測到的 m3u8／mp4'}); any = true; return; }
-        push({url: u, kind: kindOf(u, 'video'), w: v.videoWidth || 0, h: v.videoHeight || 0, poster: poster, dur: isFinite(v.duration) ? Math.round(v.duration) : 0}); any = true;
+        push({url: u, kind: kindOf(u, 'video'), w: v.videoWidth || 0, h: v.videoHeight || 0, poster: poster, dur: isFinite(v.duration) ? Math.round(v.duration) : 0, el: v}); any = true;
       });
-      if (poster) push({url: poster, kind: 'image', alt: '影片封面'});
+      if (poster) push({url: poster, kind: 'image', alt: '影片封面', el: v});
     });
     doc.querySelectorAll('audio').forEach(function (a) {
       var u = a.currentSrc || (a.getAttribute('src') ? abs(a.getAttribute('src'), base) : '');
-      if (u) push({url: u, kind: kindOf(u, 'audio'), dur: isFinite(a.duration) ? Math.round(a.duration) : 0});
+      if (u) push({url: u, kind: kindOf(u, 'audio'), dur: isFinite(a.duration) ? Math.round(a.duration) : 0, el: a});
       a.querySelectorAll('source[src]').forEach(function (s) { push({url: abs(s.getAttribute('src'), base), kind: 'audio'}); });
     });
     [['meta[property="og:image"],meta[property="og:image:url"],meta[name="twitter:image"],link[rel="image_src"]', 'image'],
@@ -86,7 +85,7 @@
     });
     doc.querySelectorAll('a[href]').forEach(function (a) {
       var u = abs(a.getAttribute('href'), base), k = kindOf(u, '');
-      if (k) push({url: u, kind: k, alt: (a.textContent || '').trim().slice(0, 60)});
+      if (k) push({url: u, kind: k, alt: (a.textContent || '').trim().slice(0, 60), el: a});
     });
     /* CSS 背景圖（只看夠大的元素） */
     if (opts.live !== false && doc.body && G.getComputedStyle) {
@@ -97,7 +96,7 @@
         var bg = G.getComputedStyle(el).backgroundImage;
         if (!bg || bg === 'none') continue;
         var m, re = /url\(\s*['"]?([^'")]+)['"]?\s*\)/g;
-        while ((m = re.exec(bg))) { var u2 = abs(m[1], base); if (!/^data:/.test(u2) || u2.length > 3000) push({url: u2, kind: 'image', w: Math.round(r.width), h: Math.round(r.height), alt: '背景圖'}); }
+        while ((m = re.exec(bg))) { var u2 = abs(m[1], base); if (!/^data:/.test(u2) || u2.length > 3000) push({url: u2, kind: 'image', w: Math.round(r.width), h: Math.round(r.height), alt: '背景圖', el: el}); }
       }
     }
     /* 腳本或 JSON 裡出現的 m3u8／mp4 網址（很多播放器把來源寫在設定物件裡） */
@@ -105,6 +104,16 @@
     doc.querySelectorAll('script:not([src])').forEach(function (s) { if (txt.length < 2e6) txt += s.textContent + '\n'; });
     var mm, urlRe = /https?:\\?\/\\?\/[^"'\s<>()]+?\.(?:m3u8|mp4|webm|mp3|m4a)(?:\?[^"'\s<>()]*)?/gi;
     while ((mm = urlRe.exec(txt))) { var uu = mm[0].replace(/\\\//g, '/').replace(/\\u0026/g, '&'); push({url: uu, kind: kindOf(uu, 'video'), alt: '頁面設定'}); }
+    /* 依照在網頁中出現的順序排列，並編上流水號（圖片、影片、音訊各自從 1 開始） */
+    out.forEach(function (o, i) { o._i = i; });
+    out.sort(function (a, b) {
+      if (a.el && b.el && a.el !== b.el) { var p = a.el.compareDocumentPosition(b.el); if (p & 4) return -1; if (p & 2) return 1; }
+      if (a.el && !b.el) return -1;
+      if (!a.el && b.el) return 1;
+      return a._i - b._i;
+    });
+    var cnt = {};
+    out.forEach(function (o) { var g = o.kind === 'image' ? 'image' : o.kind === 'audio' ? 'audio' : 'video'; o.seq = cnt[g] = (cnt[g] || 0) + 1; delete o.el; delete o._i; });
     return out;
   }
 

@@ -110,6 +110,9 @@ final class MediaDl {
                     if (pref.isEmpty()) pref = o.optString("vidQ", "max");
                     Object[] r = hls(lib, url, ref, base, pref, o.optString("vidOut", "mp4"), idx, n, shown);
                     f = (File) r[0]; name = (String) r[1]; mime = (String) r[2];
+                } else if (kind.equals("merge") || (kind.equals("audio") && it.has("audioOut"))) {
+                    Object[] r = yt(lib, it, ref, base, idx, n, shown);
+                    f = (File) r[0]; name = (String) r[1]; mime = (String) r[2];
                 } else if (kind.equals("video") || kind.equals("audio")) {
                     Object[] r = direct(lib, url, ref, base, kind, o.optString("vidOut", "mp4"), idx, n, shown);
                     f = (File) r[0]; name = (String) r[1]; mime = (String) r[2];
@@ -126,7 +129,17 @@ final class MediaDl {
                     uniq = (e.isEmpty() ? name : name.substring(0, name.length() - e.length() - 1)) + " (" + (k++) + ")" + (e.isEmpty() ? "" : "." + e);
                 }
                 if (zip) { outFiles.add(f); outNames.add(uniq); outMimes.add(mime); }
-                else saved.put(lib.add(f, uniq, mime, url, title, null));
+                else {
+                    Bitmap tb = null;
+                    String tu = it.optString("thumbUrl", "");
+                    if (!tu.isEmpty()) {
+                        try { byte[] tbb = Fetcher.get(tu, ref, "image/*", 8L << 20).bytes; tb = BitmapFactory.decodeByteArray(tbb, 0, tbb.length); } catch (Throwable x) { /* ignore */ }
+                    }
+                    JSONObject so = lib.add(f, uniq, mime, it.optString("src", url), it.optString("title", title), tb);
+                    String[] extra = {"artist", "album", "convert", "folder", "seq"};
+                    for (String k2 : extra) if (it.has(k2)) { lib.touch(so.getString("id"), k2, it.opt(k2)); so.put(k2, it.opt(k2)); }
+                    saved.put(so);
+                }
                 ok++;
                 emit(new JSONObject().put("state", "itemDone").put("i", i).put("n", n).put("name", uniq).put("ok", true));
             } catch (Throwable e) {
@@ -224,6 +237,53 @@ final class MediaDl {
         bm.compress(cf, q, os);
         os.close();
         return new Object[] {f, stem + "." + ext, om};
+    }
+
+    /* ---------- 分離串流（YouTube 等）：影像＋音訊分開下載再合併，或只取音訊 ---------- */
+    private static Object[] yt(Lib lib, JSONObject it, String ref, String base, final int i, final int n, final String shown) throws Exception {
+        String ua = it.optString("ua", "");
+        boolean ck = !it.optBoolean("noCookie", false);
+        String stem = base.replaceAll("\\.[A-Za-z0-9]{2,5}$", "");
+        if (it.optString("kind").equals("audio")) {
+            String au = it.optString("url");
+            String srcExt = it.optString("ext", "m4a");
+            File a = lib.tmpFile(srcExt);
+            Fetcher.chunked(au, ua, ref, ck, a, prog(i, n, shown, 0, 1), cancel);
+            String out = it.optString("audioOut", "orig");
+            if (out.equals("opus") && srcExt.equals("webm") && android.os.Build.VERSION.SDK_INT >= 29) {
+                File o = lib.tmpFile("opus");
+                try { Mux.mux(null, a, o, true, 4); a.delete(); return new Object[] {o, stem + ".opus", "audio/ogg"}; }
+                catch (Throwable e) { o.delete(); }
+            }
+            if (out.equals("m4a") && srcExt.equals("mp4")) {
+                File o = lib.tmpFile("m4a");
+                try { Mux.mux(null, a, o, true); a.delete(); return new Object[] {o, stem + ".m4a", "audio/mp4"}; }
+                catch (Throwable e) { o.delete(); }
+            }
+            String mime = srcExt.equals("webm") ? "audio/webm" : "audio/mp4";
+            return new Object[] {a, stem + "." + (srcExt.equals("webm") ? "webm" : "m4a"), mime};
+        }
+        String vu = it.optString("url"), au = it.optString("audioUrl", "");
+        String cont = it.optString("container", "mp4");
+        File v = lib.tmpFile(cont);
+        Fetcher.chunked(vu, ua, ref, ck, v, prog(i, n, shown + "（影像）", 0, au.isEmpty() ? 1 : 0.85), cancel);
+        if (au.isEmpty()) return new Object[] {v, stem + "." + cont, cont.equals("webm") ? "video/webm" : "video/mp4"};
+        File a = lib.tmpFile("aud");
+        Fetcher.chunked(au, ua, ref, ck, a, prog(i, n, shown + "（音訊）", 0.85, 0.15), cancel);
+        try { emit(new JSONObject().put("state", "item").put("i", i).put("n", n).put("name", shown + "（合併影像與聲音）").put("pct", 1)); } catch (Throwable x) { /* ignore */ }
+        File out = lib.tmpFile(cont);
+        Mux.mux(v, a, out, false, cont.equals("webm") ? android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_WEBM : android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+        v.delete();
+        a.delete();
+        return new Object[] {out, stem + "." + cont, cont.equals("webm") ? "video/webm" : "video/mp4"};
+    }
+
+    private static Fetcher.Progress prog(final int i, final int n, final String name, final double base, final double span) {
+        return new Fetcher.Progress() {
+            @Override public void on(long got, long total) {
+                try { emit(new JSONObject().put("state", "item").put("i", i).put("n", n).put("name", name).put("got", got).put("total", total).put("pct", total > 0 ? base + span * got / total : -1)); } catch (Throwable x) { /* ignore */ }
+            }
+        };
     }
 
     /* ---------- 直連影片／音訊 ---------- */

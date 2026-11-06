@@ -22,9 +22,12 @@ final class Mux {
     }
 
     /** video 可以為 null（只處理音訊）；audioOnly = true 時只輸出音軌。 */
-    static void mux(File video, File audio, File out, boolean audioOnly) throws Exception {
+    static void mux(File video, File audio, File out, boolean audioOnly) throws Exception { mux(video, audio, out, audioOnly, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4); }
+
+    /** fmt：MUXER_OUTPUT_MPEG_4（H.264/HEVC/AAC）、MUXER_OUTPUT_WEBM（VP9/Opus）、4＝OGG（Opus，Android 10 以上） */
+    static void mux(File video, File audio, File out, boolean audioOnly, int fmt) throws Exception {
         List<Src> srcs = new ArrayList<>();
-        MediaMuxer m = new MediaMuxer(out.getPath(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+        MediaMuxer m = new MediaMuxer(out.getPath(), fmt);
         int tracks = 0;
         boolean haveAudio = false;
         try {
