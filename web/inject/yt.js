@@ -724,13 +724,18 @@
     }
     /* 影像初始化片段裡的畫面高度 */
     function initHeight(u8) {
-      for (var i = 0; i + 3 < u8.length; i++) {
+      var ebml = u8[0] === 0x1A && u8[1] === 0x45 && u8[2] === 0xDF && u8[3] === 0xA3;
+      /* WebM：只在 Video 區塊（0xE0）之後找 PixelHeight，避免把 MP4 的資料誤判成高度 */
+      var vs = -1;
+      if (ebml) for (var q = 0; q + 1 < u8.length; q++) { if (u8[q] === 0xE0 && (u8[q + 1] & 0x80)) { vs = q; break; } }
+      for (var i = vs < 0 ? u8.length : vs; i + 3 < u8.length && i < vs + 64; i++) {
         if (u8[i] === 0xBA && (u8[i + 1] & 0x80) && i > 0) {
           var l = u8[i + 1] & 0x7F; if (l < 1 || l > 2) continue;
           var v = l === 1 ? u8[i + 2] : u8[i + 2] * 256 + u8[i + 3];
           if (v >= 90 && v <= 4400 && u8[i - 1] !== 0xBA) { for (var j = Math.max(0, i - 24); j < i; j++) if (u8[j] === 0xB0) return v; }
         }
       }
+      if (ebml) return 0;
       var mv = boxes(u8, 0, u8.length, 'moov'); if (!mv) return 0;
       for (var p = mv[0]; p < mv[1];) {
         var tk = boxes(u8, p, mv[1], 'trak'); if (!tk) break;
@@ -790,7 +795,7 @@
       for (var i = 0; i < b.length; i++) if (b.start(i) <= t + 0.3 && b.end(i) >= t) return b.end(i);
       return t;
     }
-    var stuck = 0, lastBe = -1, qSet = 0, ending = false;
+    var stuck = 0, lastBe = -1, qSet = 0, ending = false, maxPct = 0;
     setInterval(function () {
       if (finished || ending) return;
       var v = vid(), p = ytp(), now = Date.now();
@@ -808,7 +813,7 @@
           /* 播放器一開始不是要的畫質：重新載入（最多兩次），讓它直接用指定畫質開始 */
           var lv = []; try { lv = p.getAvailableQualityLevels(); } catch (e) {}
           var can = lv.some(function (q) { return (HQ[q] || 0) >= GR.h; });
-          if (can && reloads < 2) { sessionStorage.setItem('__wsGrabR', reloads + 1); finished = true; location.reload(); return; }
+          if (can && reloads < 1) { B.grabProg(0, '重新載入以取得 ' + GR.h + 'p'); sessionStorage.setItem('__wsGrabR', reloads + 1); finished = true; location.reload(); return; }
         }
         /* 必須從開頭收：播放器如果不是從 0 秒開始（例如接續上次觀看位置），清掉重收並跳回開頭 */
         ['v', 'a'].forEach(function (k) {
@@ -818,15 +823,17 @@
         phase = 'run'; try { v.currentTime = 0; } catch (e) {}
       }
       var be = bufEnd(v);
-      B.grabProg(Math.min(0.99, be / d), GR.audio ? '背景錄製音軌' : '背景錄製 ' + (T.v.h ? T.v.h + 'p' : ''));
+      maxPct = Math.max(maxPct, Math.min(0.99, be / d));
+      B.grabProg(maxPct, (GR.audio ? '錄製音軌 ' : '錄製 ' + (T.v.h ? T.v.h + 'p ' : '')) + fmt(be) + ' / ' + fmt(d));
       /* 結束：緩衝到尾端、影片播完，或已到最後幾秒且 3 秒沒有新資料（避免卡在 99%） */
       if (be >= d - 0.6 || v.ended || (d - be < 4 && now - lastData > 3000)) { if (!ending) { ending = true; setTimeout(function () { done(''); }, 1200); } return; }
-      /* 加速：16 倍速靜音播放，並一直跳到緩衝的最前端，讓播放器不停地抓下一段 */
-      try { if (v.playbackRate !== 16) v.playbackRate = 16; } catch (e) {}
-      if (be - v.currentTime > 1.2) { try { v.currentTime = Math.max(v.currentTime, be - 0.4); } catch (e) {} }
+      /* 加速：2 倍速靜音播放，並跳到緩衝的最前端，讓播放器不停地抓下一段
+         （太快會讓播放器判定掉格而自動降畫質、重新載入，反而變慢） */
+      try { if (v.playbackRate !== 2) v.playbackRate = 2; } catch (e) {}
+      if (be - v.currentTime > 2.5) { try { v.currentTime = Math.max(v.currentTime, be - 0.8); } catch (e) {} }
       if (Math.abs(be - lastBe) < 0.01) stuck++; else stuck = 0;
       lastBe = be;
       if (stuck > 24) { stuck = 0; try { v.currentTime = Math.min(d - 0.2, be + 0.05); } catch (e) {} }
-    }, 250);
+    }, 300);
   })();
 })();

@@ -13,23 +13,22 @@ import android.widget.TextView;
 final class Fab {
     final MainActivity a;
     final FrameLayout box;
-    final TextView btn, badge;
+    final View btn;
+    final TextView badge;
     private boolean want = false, covered = false;
 
     Fab(MainActivity act) {
         a = act;
-        int s = Util.dp(a, 54);
+        int s = Util.dp(a, 52);
         box = new FrameLayout(a);
-        btn = new TextView(a);
-        btn.setText("⬇");
-        btn.setTextSize(24);
-        btn.setTypeface(Typeface.DEFAULT_BOLD);
-        btn.setTextColor(Color.WHITE);
-        btn.setGravity(Gravity.CENTER);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setShape(GradientDrawable.OVAL);
-        bg.setColor(Color.parseColor(a.prefs.getString("accent", "#a2613a")));
-        btn.setBackground(bg);
+        int accent;
+        try { accent = Color.parseColor(a.prefs.getString("accent", "#a2613a")); } catch (Throwable t) { accent = Color.parseColor("#a2613a"); }
+        btn = new FabIcon(a, accent);
+        btn.setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);
+        GradientDrawable sh = new GradientDrawable();
+        sh.setShape(GradientDrawable.OVAL);
+        sh.setColor(Color.TRANSPARENT);
+        btn.setBackground(sh);
         btn.setElevation(Util.dp(a, 8));
         box.addView(btn, new FrameLayout.LayoutParams(s, s, Gravity.BOTTOM | Gravity.END));
         badge = new TextView(a);

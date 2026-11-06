@@ -134,6 +134,7 @@ final class MediaDl {
                 }
                 if (zip) { outFiles.add(f); outNames.add(uniq); outMimes.add(mime); }
                 else {
+                    try { emit(new JSONObject().put("state", "item").put("i", idx).put("n", n).put("name", "存入檔案庫…・" + shown).put("pct", 1)); } catch (Throwable x) { /* ignore */ }
                     Bitmap tb = null;
                     String tu = it.optString("thumbUrl", "");
                     if (!tu.isEmpty()) {
@@ -313,6 +314,7 @@ final class MediaDl {
             } catch (Throwable e) { m.delete(); /* 保留原檔 */ }
         }
         if (out.equals("mp4") && ext.equals("ts")) {
+            try { emit(new JSONObject().put("state", "item").put("i", i).put("n", n).put("name", "轉成 MP4…・" + shown).put("pct", 1)); } catch (Throwable x) { /* ignore */ }
             File m = lib.tmpFile("mp4");
             try {
                 Mux.mux(t, null, m, false);
@@ -345,7 +347,7 @@ final class MediaDl {
         String stem = base.replaceAll("\\.(m3u8|[A-Za-z0-9]{2,4})$", "");
         if (stem.isEmpty() || stem.equalsIgnoreCase("index") || stem.equalsIgnoreCase("master") || stem.equalsIgnoreCase("playlist")) stem = "影片";
         if (p.chosen != null && p.chosen.h > 0) stem += "_" + p.chosen.h + "p";
-        try { emit(new JSONObject().put("state", "item").put("i", i).put("n", n).put("name", shown + "（轉成 MP4）").put("pct", 1)); } catch (Throwable x) { /* ignore */ }
+        try { emit(new JSONObject().put("state", "item").put("i", i).put("n", n).put("name", "合併、轉成 MP4…・" + shown).put("pct", 1)); } catch (Throwable x) { /* ignore */ }
         if (out.equals("m4a")) {
             File m = lib.tmpFile("m4a");
             Mux.mux(a != null ? a : v, null, m, true);

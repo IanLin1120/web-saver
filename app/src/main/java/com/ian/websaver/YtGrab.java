@@ -63,7 +63,7 @@ final class YtGrab {
                     throw new Exception(j.vBytes + j.aBytes == 0 ? "背景播放器 60 秒內沒有開始播放（可能需要登入、影片有年齡限制或地區限制）" : "背景播放器超過 90 秒沒有收到新資料（網路中斷？）");
                 if (j.pct != lastPct) {
                     lastPct = j.pct;
-                    String msg = shown + (j.note.isEmpty() ? "" : "（" + j.note + "）");
+                    String msg = (j.note.isEmpty() ? "" : j.note + "・") + shown;
                     emit(i, n, msg, j.pct, j.vBytes + j.aBytes);
                 }
                 if (now - start > 3 * 3600_000L) throw new Exception("下載時間過長");
@@ -101,7 +101,7 @@ final class YtGrab {
                 return new Object[] {j.a, stem + (aw ? ".webm" : ".m4a"), aw ? "audio/webm" : "audio/mp4"};
             }
         }
-        emit(i, n, shown + "（合併影像與聲音）", 1, j.vBytes + j.aBytes);
+        emit(i, n, "合併影像與聲音…・" + shown, 1, j.vBytes + j.aBytes);
         String cont = vw ? "webm" : "mp4";
         File out = lib.tmpFile(cont);
         try {

@@ -95,7 +95,16 @@ final class Lib {
         o.put("title", title == null ? "" : title);
         boolean th = false;
         try {
-            Bitmap b = thumb != null ? thumb : makeThumb(dst, o.getString("cat"), o);
+            Bitmap b = thumb;
+            if (b == null) {
+                /* 縮圖最多等 8 秒（有些沒有索引的大影片讀取很久，之前會看起來卡在 100%） */
+                final File fd = dst; final String cat = o.getString("cat"); final JSONObject meta = new JSONObject();
+                java.util.concurrent.FutureTask<Bitmap> ft = new java.util.concurrent.FutureTask<>(new java.util.concurrent.Callable<Bitmap>() { @Override public Bitmap call() throws Exception { return makeThumb(fd, cat, meta); } });
+                Thread th0 = new Thread(ft); th0.setDaemon(true); th0.start();
+                try { b = ft.get(8, java.util.concurrent.TimeUnit.SECONDS); } catch (Throwable x) { b = null; }
+                java.util.Iterator<String> ks = meta.keys();
+                while (ks.hasNext()) { String k = ks.next(); o.put(k, meta.get(k)); }
+            }
             if (b != null) { writeThumb(b, new File(thumbs, id + ".jpg")); th = true; }
         } catch (Throwable t) { /* ignore */ }
         o.put("thumb", th ? new File(thumbs, id + ".jpg").getAbsolutePath() : "");

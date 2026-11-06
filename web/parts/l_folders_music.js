@@ -101,7 +101,9 @@ Music.playItem = function(it){
   var L = musicItems();
   var i = L.findIndex(function(x){ return x.id === it.id; });
   if(i < 0){ L = [it]; i = 0; }
-  this.playList(L, i); this.openPlayer();
+  this.playList(L, i);
+  /* 等這次點擊結束再開，避免同一下點擊落在面板背景上把它關掉（看起來像閃退） */
+  var self = this; setTimeout(function(){ self.openPlayer(); }, 60);
 };
 Music.load = async function(play){
   var it = this.cur(); if(!it) return;

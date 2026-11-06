@@ -213,7 +213,9 @@ function openSheet(o){
     setTitle: function(t){ qs('h3 span', head).textContent = t; }
   };
   Sheets.stack.push(api);
-  bg.onclick = function(){ if(!o.modal) api.close(); };
+  var openedAt = Date.now();
+  /* 剛打開的 0.4 秒內不理背景點擊（避免同一下點擊把面板關掉） */
+  bg.onclick = function(){ if(!o.modal && Date.now() - openedAt > 400) api.close(); };
   /* 下拉關閉 */
   var y0 = null, dy = 0;
   grab.addEventListener('pointerdown', function(e){ y0 = e.clientY; dy = 0; sh.style.transition = 'none'; grab.setPointerCapture(e.pointerId); });
@@ -244,7 +246,8 @@ function dialog(title, html, btns, opts){
   $('sheets').appendChild(wrap);
   if(!Sheets.stack.length) coverNative(true);
   Sheets.stack.push(api);
-  bg.onclick = function(){ if(!opts.modal) api.close(); };
+  var openedAt2 = Date.now();
+  bg.onclick = function(){ if(!opts.modal && Date.now() - openedAt2 > 400) api.close(); };
   requestAnimationFrame(function(){ requestAnimationFrame(function(){ wrap.classList.add('on'); }); });
   return api;
 }
