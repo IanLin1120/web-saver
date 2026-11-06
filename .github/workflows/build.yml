@@ -35,11 +35,28 @@ jobs:
         env:
           KS_B64: ${{ secrets.KEYSTORE_B64 }}
         run: |
-          if [ -z "$KS_B64" ]; then echo "::error::缺少 KEYSTORE_B64 secret（簽章金鑰），請照 README 設定"; exit 1; fi
-          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
-          echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          if [ -z "$KS_B64" ]; then
+            echo "::notice::沒有設定簽章金鑰 secrets：這次只更新網頁介面（APK 請用儲存庫裡已上傳的版本）"
+            echo "HAS_KEY=0" >> "$GITHUB_ENV"
+          else
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "HAS_KEY=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: 只更新網頁介面（沒有金鑰時）
+        if: env.HAS_KEY == '0'
+        run: |
+          cp web/dist/index.html index.html
+          cp web/dist/icon-*.png . 2>/dev/null || true
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add index.html icon-*.png
+          git commit -m "web: 更新網頁介面 [skip ci]" || echo "沒有變更"
+          git push
 
       - name: 建置並簽章 APK
+        if: env.HAS_KEY == '1'
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -47,6 +64,7 @@ jobs:
         run: gradle --no-daemon assembleRelease
 
       - name: 發布到 GitHub Pages 內容
+        if: env.HAS_KEY == '1'
         run: |
           VER=$(cat VERSION | tr -d '[:space:]')
           SRC=$(ls app/build/outputs/apk/release/*.apk | head -n1)
@@ -75,6 +93,7 @@ jobs:
           PY
 
       - name: 提交結果
+        if: env.HAS_KEY == '1'
         run: |
           git config user.name "github-actions"
           git config user.email "actions@users.noreply.github.com"
@@ -83,6 +102,7 @@ jobs:
           git push
 
       - uses: actions/upload-artifact@v4
+        if: env.HAS_KEY == '1'
         with:
           name: apk
           path: apk/*.apk

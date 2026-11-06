@@ -27,6 +27,14 @@ public class PageBridge {
         Util.ui(new Runnable() { @Override public void run() { b.pwOffer(host, user, pass); } });
     }
 
+    @JavascriptInterface public void video(final boolean playing, final int w, final int h) { Util.ui(new Runnable() { @Override public void run() { b.videoState(playing, w, h); } }); }
+
+    @JavascriptInterface public void ytDl(String id) { MainActivity.emit("ytdl", id); }
+
+    @JavascriptInterface public void brightness(final float v) { Util.ui(new Runnable() { @Override public void run() { b.brightness(v); } }); }
+
+    @JavascriptInterface public void pip() { Util.ui(new Runnable() { @Override public void run() { b.a.enterPip(true); } }); }
+
     @JavascriptInterface public void zapCount(int n) { MainActivity.emit("zap", "{\"n\":" + n + ",\"on\":true}"); }
 
     @JavascriptInterface public void zapDone(int n) { MainActivity.emit("zap", "{\"n\":" + n + ",\"on\":false}"); }

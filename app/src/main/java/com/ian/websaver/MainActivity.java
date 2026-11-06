@@ -110,6 +110,37 @@ public class MainActivity extends Activity {
         } catch (Throwable t) { /* ignore */ }
     }
 
+    /* ---------- 子母畫面（YouTube 影片播放中按 Home 自動縮小） ---------- */
+    void updatePipParams() {
+        if (Build.VERSION.SDK_INT < 26 || br == null) return;
+        try {
+            android.app.PictureInPictureParams.Builder b = new android.app.PictureInPictureParams.Builder()
+                .setAspectRatio(new android.util.Rational(Math.round(br.videoRatio * 1000), 1000));
+            if (Build.VERSION.SDK_INT >= 31) b.setAutoEnterEnabled(br.wantsPip()).setSeamlessResizeEnabled(true);
+            setPictureInPictureParams(b.build());
+        } catch (Throwable t) { /* ignore */ }
+    }
+
+    boolean enterPip(boolean force) {
+        if (Build.VERSION.SDK_INT < 26 || br == null) return false;
+        if (!force && !br.wantsPip()) return false;
+        try {
+            return enterPictureInPictureMode(new android.app.PictureInPictureParams.Builder()
+                .setAspectRatio(new android.util.Rational(Math.round(br.videoRatio * 1000), 1000)).build());
+        } catch (Throwable t) { return false; }
+    }
+
+    @Override protected void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        if (Build.VERSION.SDK_INT < 31) enterPip(false);
+    }
+
+    @Override public void onPictureInPictureModeChanged(boolean on, android.content.res.Configuration c) {
+        super.onPictureInPictureModeChanged(on, c);
+        if (br != null) br.pipMode(on);
+        emit("pip", on ? "1" : "0");
+    }
+
     @Override protected void onNewIntent(Intent i) {
         super.onNewIntent(i);
         handleIntent(i);

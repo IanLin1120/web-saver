@@ -76,6 +76,8 @@ final class Viewer {
         }
     }
 
+    void toFront() { if (w != null) w.bringToFront(); }
+
     void close() {
         if (w == null) return;
         covered = false;

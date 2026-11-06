@@ -8,6 +8,7 @@ var CFG_DEF = {
   cap: {format: 'html', removeAds: true, reader: false, embedImages: true, imgQ: 'orig', embedFonts: true, removeHidden: true, autoScroll: true, banner: true, nameTpl: '{title}', paper: 'a4', landscape: false, margin: 10},
   media: {imgFmt: 'orig', imgMax: 0, imgQ: 90, minPx: 120, vidQ: 'max', vidOut: 'mp4', zip: true, audFmt: 'orig', nameMode: 'orig', customName: '', seqOn: true, seqMode: 'page', seqDigits: 3, seqSep: '_'},
   ytAds: true,
+  yt: {bg: true, pip: true, sb: true, q: 'max', gest: true, bar: true, speed: true},
   lib: {sort: 'time', dir: 'desc', view: 'grid', cat: 'all'},
   autoExport: false,
   proxies: 'https://corsproxy.io/?url={url}\nhttps://api.allorigins.win/raw?url={url}\nhttps://api.codetabs.com/v1/proxy?quest={url}'
@@ -74,7 +75,7 @@ if(window.matchMedia) try{ matchMedia('(prefers-color-scheme: dark)').addEventLi
 
 function pushNativeCfg(){
   if(!isApp) return;
-  NAT.call('brConfig', JSON.stringify({mode: CFG.mode, textZoom: CFG.textZoom, popups: CFG.popups, ads: CFG.ads, ytAds: CFG.ytAds, pw: CFG.pw, adHosts: CFG.adHosts, adCss: CFG.adCss, adAllow: CFG.adAllow}));
+  NAT.call('brConfig', JSON.stringify({mode: CFG.mode, textZoom: CFG.textZoom, popups: CFG.popups, ads: CFG.ads, ytAds: CFG.ytAds, yt: CFG.yt, pw: CFG.pw, adHosts: CFG.adHosts, adCss: CFG.adCss, adAllow: CFG.adAllow}));
   NAT.call('setPref', 'autoExport', CFG.autoExport ? '1' : '0');
 }
 function setCfg(path, val, opts){
@@ -83,7 +84,7 @@ function setCfg(path, val, opts){
   o[ks[ks.length - 1]] = val;
   saveCfg();
   if(/^(theme|palette|uiScale|motion)$/.test(path)) applyTheme();
-  if(/^(mode|textZoom|popups|ads|ytAds|pw|adHosts|adCss|adAllow|autoExport)$/.test(path) && !(opts && opts.noPush)) pushNativeCfg();
+  if(/^(mode|textZoom|popups|ads|ytAds|yt\..*|pw|adHosts|adCss|adAllow|autoExport)$/.test(path) && !(opts && opts.noPush)) pushNativeCfg();
   fire('cfg', path);
 }
 

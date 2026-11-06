@@ -77,6 +77,7 @@ final class Browser {
     /* 密碼 */
     private final Map<String, String[]> pendingCred = new HashMap<>();
 
+    static final Pattern YT_AD = Pattern.compile("^/(pagead/|api/stats/ads|get_midroll_info|ptracking|pcs/activeview|youtubei/v1/player/ad_break|ad_data_204|generate_204\\?.*ad|sw\\.js_data)");
     static final Pattern MEDIA_RE = Pattern.compile("(?i)\\.(m3u8|mpd|mp4|m4v|webm|mov|mp3|m4a|aac|ogg|oga|opus|wav|flac)(\\?|#|$)");
     static final Pattern SEG_RE = Pattern.compile("(?i)(\\.(ts|m4s|cmfv|cmfa)(\\?|#|$))|([/_-](seg|segment|chunk|frag)[-_]?\\d+)|(init\\.mp4)|(/range/)|([?&](range|bytes)=)");
 
@@ -149,6 +150,7 @@ final class Browser {
         injectReader = Util.asset(a, "inject/reader.js");
         injectYt = Util.asset(a, "inject/yt.js");
         ytAds = p.getBoolean("ytAds", true);
+        try { ytOpts = new JSONObject(p.getString("ytOpts", "{}")); } catch (Throwable t) { ytOpts = new JSONObject(); }
         wv = makeWebView(false);
         wv.setVisibility(View.GONE);
         final float rad = Util.dp(a, 16);
@@ -217,6 +219,12 @@ final class Browser {
             if (ytAds && !isPopup && r.isForMainFrame() && "GET".equalsIgnoreCase(r.getMethod()) && isYt(host)) {
                 WebResourceResponse x = ytPage(u.toString(), r.getRequestHeaders());
                 if (x != null) return x;
+            }
+            if (ytAds && !r.isForMainFrame() && host != null && (isYt(host) || host.endsWith("googlevideo.com")) && YT_AD.matcher(u.getPath() == null ? "" : u.getPath()).find()) {
+                AdBlock.blockedPage.incrementAndGet();
+                Map<String, String> h0 = new HashMap<>();
+                h0.put("Access-Control-Allow-Origin", "*");
+                return new WebResourceResponse("text/plain", "utf-8", 204, "No Content", h0, new ByteArrayInputStream(new byte[0]));
             }
             if (ads && !r.isForMainFrame() && !AdBlock.allowed(curHost) && AdBlock.match(host)) {
                 AdBlock.blockedPage.incrementAndGet();
@@ -372,6 +380,7 @@ final class Browser {
             c.put("ads", ads && !AdBlock.allowed(curHost));
             c.put("css", AdBlock.css);
             c.put("pw", pw);
+            if (ytOpts != null) c.put("yt", ytOpts);
             return "window.__wsCfg=" + c.toString() + ";";
         } catch (Throwable t) { return "window.__wsCfg={};"; }
     }
@@ -449,7 +458,50 @@ final class Browser {
 
     void onResume() { wv.onResume(); }
 
-    void onPause() { /* 讓背景播放的影片停下 */ wv.onPause(); }
+    /** YouTube 背景播放：離開 App 時不暫停瀏覽器（影片聲音繼續）；其他網站照常暫停 */
+    void onPause() {
+        boolean bg = ytOpts != null && ytOpts.optBoolean("bg", true) && isYt(curHost) && videoPlaying;
+        if (!bg) wv.onPause();
+    }
+
+    /* ---------- YouTube 播放器強化（Morphe 風格） ---------- */
+    JSONObject ytOpts;
+    volatile boolean videoPlaying = false;
+    float videoRatio = 16f / 9f;
+    private FrameLayout.LayoutParams savedLp;
+    boolean inPip = false;
+
+    void videoState(boolean playing, int w, int h) {
+        videoPlaying = playing;
+        if (w > 0 && h > 0) videoRatio = Math.max(0.42f, Math.min(2.38f, (float) w / h));
+        a.updatePipParams();
+    }
+
+    boolean wantsPip() { return ytOpts != null && ytOpts.optBoolean("pip", true) && videoPlaying && isShown() && isYt(curHost); }
+
+    void pipMode(boolean on) {
+        inPip = on;
+        if (on) {
+            savedLp = new FrameLayout.LayoutParams((FrameLayout.LayoutParams) wv.getLayoutParams());
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) wv.getLayoutParams();
+            lp.topMargin = lp.bottomMargin = lp.leftMargin = lp.rightMargin = 0;
+            wv.setLayoutParams(lp);
+            wv.setClipToOutline(false);
+            wv.bringToFront();
+            wv.evaluateJavascript("window.__wsYTpip&&__wsYTpip(true)", null);
+        } else {
+            if (savedLp != null) wv.setLayoutParams(savedLp);
+            wv.setClipToOutline(true);
+            wv.evaluateJavascript("window.__wsYTpip&&__wsYTpip(false)", null);
+            if (a.vw != null) a.vw.toFront();
+        }
+    }
+
+    void brightness(float v) {
+        android.view.WindowManager.LayoutParams lp = a.getWindow().getAttributes();
+        lp.screenBrightness = v < 0 ? -1f : Math.max(0.02f, Math.min(1f, v));
+        a.getWindow().setAttributes(lp);
+    }
 
     void emitState() {
         try {
@@ -485,6 +537,7 @@ final class Browser {
         popups = c.optString("popups", popups);
         ads = c.optBoolean("ads", ads);
         ytAds = c.optBoolean("ytAds", ytAds);
+        if (c.has("yt")) { ytOpts = c.optJSONObject("yt"); a.prefs.edit().putString("ytOpts", String.valueOf(ytOpts)).apply(); }
         pw = c.optBoolean("pw", pw);
         textZoom = c.optInt("textZoom", textZoom);
         a.prefs.edit().putString("brMode", mode).putString("brPopups", popups).putBoolean("brAds", ads).putBoolean("ytAds", ytAds).putBoolean("brPw", pw).putInt("brZoom", textZoom)

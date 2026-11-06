@@ -4,7 +4,7 @@
 <script>/* 線上更新開機程式：手機上若已下載比 APK 內建更新的介面版本，就改用新版（存在 IndexedDB）。
    新版連續兩次沒有正常開啟 → 自動退回 APK 內建版本。網址加上 #builtin 也會強制使用內建版本。 */
 (function () {
-  var B = '1.1.0'; if (!window.__OTA) window.APP_BUILTIN = B;
+  var B = '1.2.0'; if (!window.__OTA) window.APP_BUILTIN = B;
   if (window.__OTA || location.hash.indexOf('builtin') >= 0) return;
   var v = null; try { v = JSON.parse(localStorage.getItem('ws.ota') || 'null'); } catch (e) {}
   function gt(a, b) { a = String(a).split('.').map(Number); b = String(b).split('.').map(Number); for (var i = 0; i < Math.max(a.length, b.length); i++) { var p = a[i] || 0, q = b[i] || 0; if (p !== q) return p > q; } return false; }
@@ -460,6 +460,17 @@ input[type=range]{width:100%;accent-color:var(--accent);padding:0;border:0;backg
 .ftile .ib{width:30px;height:30px}
 .selMode .ftile{border-style:dashed;border-color:var(--accent)}
 .lrow.playing{border-color:var(--accent)}.lrow.playing b{color:var(--accent)}
+
+/* 播放器＋同步歌詞 */
+.mpStage{height:min(46vh,380px);display:flex;align-items:center;justify-content:center;border-radius:22px;overflow:hidden;position:relative}
+.mpStage .art{width:min(280px,68vw);aspect-ratio:1;border-radius:26px;background:linear-gradient(140deg,var(--c-audio),var(--accent)) center/cover;box-shadow:0 18px 40px var(--sh);display:grid;place-items:center;color:#fff;cursor:pointer}
+.lyrView{position:relative;width:100%;height:100%;overflow-y:auto;scrollbar-width:none;padding:0 14px;-webkit-mask-image:linear-gradient(transparent,#000 18%,#000 82%,transparent);mask-image:linear-gradient(transparent,#000 18%,#000 82%,transparent)}
+.lyrPad{height:45%}
+.lyrLine{font-size:calc(var(--lyr-size,19px) * .82);line-height:1.45;color:var(--lyr-other,var(--text-muted));padding:7px 4px;transition:color .3s,transform .3s,font-size .25s;cursor:pointer;transform-origin:center}
+.lyrLine.on{color:var(--lyr-cur,var(--accent));font-size:var(--lyr-size,19px);font-weight:var(--lyr-w,800)}
+.lyrLine.past{opacity:.75}
+.mpTools{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:10px 0 2px}
+.mpTools .chip{flex:none;font-size:12.5px;padding:6px 11px}
 </style>
 </head>
 <body>
@@ -1626,7 +1637,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 /* ============================================================
    核心：工具函式、圖示、主題、面板（sheet）、提示、原生橋接、頁面切換
    ============================================================ */
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 var GH = {user: 'IanLin1120', repo: 'web-saver',
   get pages(){ return 'https://' + this.user.toLowerCase() + '.github.io/' + this.repo + '/'; },
   get web(){ return 'https://github.com/' + this.user + '/' + this.repo; }};
@@ -1962,6 +1973,7 @@ var CFG_DEF = {
   cap: {format: 'html', removeAds: true, reader: false, embedImages: true, imgQ: 'orig', embedFonts: true, removeHidden: true, autoScroll: true, banner: true, nameTpl: '{title}', paper: 'a4', landscape: false, margin: 10},
   media: {imgFmt: 'orig', imgMax: 0, imgQ: 90, minPx: 120, vidQ: 'max', vidOut: 'mp4', zip: true, audFmt: 'orig', nameMode: 'orig', customName: '', seqOn: true, seqMode: 'page', seqDigits: 3, seqSep: '_'},
   ytAds: true,
+  yt: {bg: true, pip: true, sb: true, q: 'max', gest: true, bar: true, speed: true},
   lib: {sort: 'time', dir: 'desc', view: 'grid', cat: 'all'},
   autoExport: false,
   proxies: 'https://corsproxy.io/?url={url}\nhttps://api.allorigins.win/raw?url={url}\nhttps://api.codetabs.com/v1/proxy?quest={url}'
@@ -2028,7 +2040,7 @@ if(window.matchMedia) try{ matchMedia('(prefers-color-scheme: dark)').addEventLi
 
 function pushNativeCfg(){
   if(!isApp) return;
-  NAT.call('brConfig', JSON.stringify({mode: CFG.mode, textZoom: CFG.textZoom, popups: CFG.popups, ads: CFG.ads, ytAds: CFG.ytAds, pw: CFG.pw, adHosts: CFG.adHosts, adCss: CFG.adCss, adAllow: CFG.adAllow}));
+  NAT.call('brConfig', JSON.stringify({mode: CFG.mode, textZoom: CFG.textZoom, popups: CFG.popups, ads: CFG.ads, ytAds: CFG.ytAds, yt: CFG.yt, pw: CFG.pw, adHosts: CFG.adHosts, adCss: CFG.adCss, adAllow: CFG.adAllow}));
   NAT.call('setPref', 'autoExport', CFG.autoExport ? '1' : '0');
 }
 function setCfg(path, val, opts){
@@ -2037,7 +2049,7 @@ function setCfg(path, val, opts){
   o[ks[ks.length - 1]] = val;
   saveCfg();
   if(/^(theme|palette|uiScale|motion)$/.test(path)) applyTheme();
-  if(/^(mode|textZoom|popups|ads|ytAds|pw|adHosts|adCss|adAllow|autoExport)$/.test(path) && !(opts && opts.noPush)) pushNativeCfg();
+  if(/^(mode|textZoom|popups|ads|ytAds|yt\..*|pw|adHosts|adCss|adAllow|autoExport)$/.test(path) && !(opts && opts.noPush)) pushNativeCfg();
   fire('cfg', path);
 }
 
@@ -3808,6 +3820,13 @@ function renderSettings(){
   /* YouTube */
   P.appendChild(card('video', 'YouTube', [
     swRow('YouTube 去廣告', '移除影片前後與中間的廣告、首頁與搜尋結果的贊助內容；漏網的廣告會自動靜音快轉並略過（重新整理 YouTube 後生效）', 'ytAds'),
+    h('div', {class: 'sect-h', style: {margin: '12px 0 2px'}}, h('span', {text: '播放器強化（Morphe 風格）'})),
+    swRow('背景播放', '切到其他 App 或關閉螢幕，聲音繼續播放', 'yt.bg'),
+    swRow('子母畫面', '影片播放中按 Home 鍵自動縮成小視窗；也可按播放器上的 ⧉', 'yt.pip'),
+    swRow('SponsorBlock 自動跳過', '自動跳過業配、開場、片尾、提醒訂閱等片段（社群標記資料）', 'yt.sb'),
+    swRow('手勢調整', '在影片右半邊上下滑調音量、左半邊調亮度', 'yt.gest'),
+    swRow('播放器快捷列', '影片右下角的 速度／循環／子母畫面／下載 按鈕', 'yt.bar'),
+    selRow('預設畫質', [['max', '最高畫質'], ['1080', '1080p'], ['720', '720p'], ['480', '480p（省流量）'], ['auto', '讓 YouTube 自動決定']], 'yt.q'),
     h('div', {class: 'sub', style: {margin: '6px 0', lineHeight: '1.7'}, html: '在瀏覽頁開啟任何 YouTube 影片（含 Shorts），按「媒體」就能選：<br>・影片：144p～4K，影像與聲音分開下載後在手機上合併（不重新壓縮）<br>・音樂：MP3 128／192／320kbps、M4A、OPUS 原始音軌、FLAC／WAV 無損格式（附歌名、歌手、封面）'}),
     h('div', {class: 'btn-row'}, h('button', {class: 'btn sm', html: icon('update', 'sm') + '更新解析設定', onclick: async function(){ await YT.loadCfg(); YT.cache = {}; toast('解析設定：' + YT.cfg.clients.map(function(c){ return c.name; }).join('、')); }})),
     h('div', {class: 'note', text: '下載的影片與音樂僅供個人離線觀看收聽，請尊重創作者著作權。會員專屬、付費或有 DRM 保護的內容無法下載。'})
@@ -4081,6 +4100,29 @@ var AudioEnc = (function(){
   function crc8(a, s, e){ var c = 0; for(var i = s; i < e; i++) c = CRC8[c ^ a[i]]; return c; }
   function crc16(a, s, e){ var c = 0; for(var i = s; i < e; i++) c = ((c << 8) ^ CRC16[(c >> 8) ^ a[i]]) & 0xffff; return c; }
 
+  /* FLAC 標籤區塊：VORBIS_COMMENT（歌名、歌手、歌詞）＋ PICTURE（封面） */
+  function flacMeta(tags){
+    tags = tags || {};
+    var blocks = [], vendor = utf8('網頁擷取 FLAC'), cm = [];
+    if(tags.title) cm.push(utf8('TITLE=' + tags.title));
+    if(tags.artist) cm.push(utf8('ARTIST=' + tags.artist));
+    if(tags.album) cm.push(utf8('ALBUM=' + tags.album));
+    if(tags.lrc){ cm.push(utf8('LYRICS=' + tags.lrc)); cm.push(utf8('UNSYNCEDLYRICS=' + String(tags.lrc).replace(/\[[^\]]*\]/g, '').replace(/\n{2,}/g, '\n').trim())); }
+    var vlen = 8 + vendor.length + cm.reduce(function(s, x){ return s + 4 + x.length; }, 0), vb = new Uint8Array(vlen), vdv = new DataView(vb.buffer), o = 0;
+    vdv.setUint32(o, vendor.length, true); o += 4; vb.set(vendor, o); o += vendor.length;
+    vdv.setUint32(o, cm.length, true); o += 4;
+    cm.forEach(function(x){ vdv.setUint32(o, x.length, true); o += 4; vb.set(x, o); o += x.length; });
+    blocks.push({type: 4, data: vb});
+    if(tags.cover){
+      var mime = utf8(tags.coverMime || 'image/jpeg'), pic = tags.cover;
+      var pb = new Uint8Array(32 + mime.length + pic.length), pdv = new DataView(pb.buffer), q2 = 0;
+      pdv.setUint32(q2, 3); q2 += 4; pdv.setUint32(q2, mime.length); q2 += 4; pb.set(mime, q2); q2 += mime.length;
+      pdv.setUint32(q2, 0); q2 += 4; q2 += 16; pdv.setUint32(q2, pic.length); q2 += 4; pb.set(pic, q2);
+      blocks.push({type: 6, data: pb});
+    }
+    return blocks;
+  }
+
   /* ---------- FLAC（固定預測＋Rice 編碼，完全無損） ---------- */
   function residual(x, order, out){
     var n = x.length;
@@ -4182,23 +4224,7 @@ var AudioEnc = (function(){
     si.bits(Math.floor(N / 4294967296), 4); si.bits(N >>> 0, 32);
     for(var m = 0; m < 16; m++) si.bits(0, 8);
     meta.push([0, si.out().slice()]);
-    var vendor = utf8('網頁擷取 FLAC'), cm = [];
-    if(tags && tags.title) cm.push(utf8('TITLE=' + tags.title));
-    if(tags && tags.artist) cm.push(utf8('ARTIST=' + tags.artist));
-    if(tags && tags.album) cm.push(utf8('ALBUM=' + tags.album));
-    if(tags && tags.comment) cm.push(utf8('COMMENT=' + tags.comment));
-    var vlen = 4 + vendor.length + 4 + cm.reduce(function(s, x){ return s + 4 + x.length; }, 0), vb = new Uint8Array(vlen), vdv = new DataView(vb.buffer), o = 0;
-    vdv.setUint32(o, vendor.length, true); o += 4; vb.set(vendor, o); o += vendor.length;
-    vdv.setUint32(o, cm.length, true); o += 4;
-    cm.forEach(function(x){ vdv.setUint32(o, x.length, true); o += 4; vb.set(x, o); o += x.length; });
-    meta.push([4, vb]);
-    if(tags && tags.cover){
-      var mime = utf8(tags.coverMime || 'image/jpeg'), pic = tags.cover;
-      var pb = new Uint8Array(32 + mime.length + pic.length), pdv = new DataView(pb.buffer), q2 = 0;
-      pdv.setUint32(q2, 3); q2 += 4; pdv.setUint32(q2, mime.length); q2 += 4; pb.set(mime, q2); q2 += mime.length;
-      pdv.setUint32(q2, 0); q2 += 4; q2 += 16; pdv.setUint32(q2, pic.length); q2 += 4; pb.set(pic, q2);
-      meta.push([6, pb]);
-    }
+    flacMeta(tags).forEach(function(b){ meta.push([b.type, b.data]); });
     var head = [new Uint8Array([0x66, 0x4c, 0x61, 0x43])];
     meta.forEach(function(mm, i){
       var hb = new Uint8Array(4); hb[0] = (i === meta.length - 1 ? 0x80 : 0) | mm[0];
@@ -4221,6 +4247,17 @@ var AudioEnc = (function(){
       frames.push([id, body]);
     }
     textFrame('TIT2', tags.title); textFrame('TPE1', tags.artist); textFrame('TALB', tags.album);
+    function u16(str, term){ var a = [0xff, 0xfe]; for(var i = 0; i < str.length; i++){ var c = str.charCodeAt(i); a.push(c & 0xff, c >> 8); } if(term) a.push(0, 0); return a; }
+    if(tags.lrc){
+      /* USLT：完整歌詞（含時間軸文字，多數播放器可顯示）；SYLT：逐句同步歌詞 */
+      var us = [1, 0x7a, 0x68, 0x6f].concat(u16('', true), u16(String(tags.lrc), false));
+      frames.push(['USLT', new Uint8Array(us)]);
+      if(typeof Lyrics !== 'undefined' && Lyrics.isSynced(tags.lrc)){
+        var sy = [1, 0x7a, 0x68, 0x6f, 2, 1].concat(u16('', true));
+        Lyrics.parse(tags.lrc).forEach(function(l){ var ms = Math.round(l.t * 1000); sy = sy.concat(u16(l.text || ' ', true), [(ms >>> 24) & 0xff, (ms >> 16) & 0xff, (ms >> 8) & 0xff, ms & 0xff]); });
+        frames.push(['SYLT', new Uint8Array(sy)]);
+      }
+    }
     if(tags.cover){
       var mime = utf8(tags.coverMime || 'image/jpeg'), b = new Uint8Array(1 + mime.length + 1 + 1 + 1 + tags.cover.length), o = 0;
       b[o++] = 0; b.set(mime, o); o += mime.length; b[o++] = 0; b[o++] = 3; b[o++] = 0; b.set(tags.cover, o);
@@ -4252,7 +4289,7 @@ var AudioEnc = (function(){
     if(onp) onp(1);
     return new Blob(out, {type: 'audio/mpeg'});
   }
-  return {wav: wav, flac: flac, mp3: mp3, id3: id3};
+  return {wav: wav, flac: flac, mp3: mp3, id3: id3, flacMeta: flacMeta};
 })();
 
 /* ---------- 轉檔佇列：把檔案庫裡的音訊轉成 MP3／FLAC／WAV ---------- */
@@ -4282,6 +4319,7 @@ Conv.next = async function(){
     var pcm = {sampleRate: buf.sampleRate, channels: []};
     for(var c = 0; c < Math.min(2, buf.numberOfChannels); c++) pcm.channels.push(buf.getChannelData(c));
     var tags = {title: it.title || it.name.replace(/\.[^.]+$/, ''), artist: it.artist || '', album: it.album || ''};
+    if(CFG.lyr && CFG.lyr.auto){ this.card(job, 0, '尋找歌詞…'); it.dur = it.dur || Math.round(buf.duration); try{ var lr = await Lyrics.auto(it); if(lr) tags.lrc = lr; }catch(e){} }
     var th = Lib.thumb(it);
     if(th){ try{ var tb = await (await fetchAny(th)).arrayBuffer(); tags.cover = new Uint8Array(tb); tags.coverMime = 'image/jpeg'; }catch(e){} }
     var self = this, onp = function(p){ self.card(job, p, '編碼中…'); };
@@ -4289,6 +4327,7 @@ Conv.next = async function(){
     this.card(job, 1, '儲存中…');
     var name = it.name.replace(/\.[^.]+$/, '') + '.' + f.ext;
     var meta = {src: it.src || '', title: it.title || '', artist: it.artist || '', album: it.album || '', thumbFrom: it.id};
+    if(tags.lrc){ meta.lrc = tags.lrc; meta.lrcSrc = it.lrcSrc || ''; }
     if(it.folder) meta.folder = it.folder;
     var nu = await saveBigBlob(out, name, meta);
     if(LF.map[it.id]){ LF.map[nu.id] = LF.map[it.id]; LF.save(); }
@@ -4326,10 +4365,14 @@ async function saveBigBlob(blob, name, meta){
    解析設定放在 GitHub（yt.json），YouTube 改版時只要更新設定，不用重裝 App。
    ============================================================ */
 var YT_DEFAULT = {
-  v: 1,
+  v: 2,
   endpoint: 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false',
   clients: [
+    {name: 'ANDROID_VR', id: 28, ver: '1.65.10', ua: 'com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip',
+      ctx: {deviceMake: 'Oculus', deviceModel: 'Quest 3', androidSdkVersion: 32, osName: 'Android', osVersion: '12L'}},
     {name: 'ANDROID_VR', id: 28, ver: '1.62.27', ua: 'com.google.android.apps.youtube.vr.oculus/1.62.27 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip',
+      ctx: {deviceMake: 'Oculus', deviceModel: 'Quest 3', androidSdkVersion: 32, osName: 'Android', osVersion: '12L'}},
+    {name: 'ANDROID_VR', id: 28, ver: '1.60.19', ua: 'com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip',
       ctx: {deviceMake: 'Oculus', deviceModel: 'Quest 3', androidSdkVersion: 32, osName: 'Android', osVersion: '12L'}},
     {name: 'IOS', id: 5, ver: '20.10.4', ua: 'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)',
       ctx: {deviceMake: 'Apple', deviceModel: 'iPhone16,2', osName: 'iPhone', osVersion: '18.3.2.22D82'}},
@@ -4366,11 +4409,19 @@ function natHttp(method, url, headers, body){
     setTimeout(function(){ if(HTTPW[id]){ delete HTTPW[id]; rej(new Error('逾時')); } }, 30000);
   });
 }
-YT.player = async function(id){
-  if(YT.cache[id] && Date.now() - YT.cache[id].t < 3 * 3600e3) return YT.cache[id].d;
-  var errs = [];
+/* 先用 2 個位元組試抓，確認這個用戶端給的網址真的能下載（避免 HTTP 403），不行就換下一個 */
+async function ytProbe(url, ua){
+  try{
+    var r = await natHttp('GET', url, {'User-Agent': ua, 'Range': 'bytes=0-1'}, '');
+    return r.status === 206 || r.status === 200 ? 0 : r.status;
+  }catch(e){ return -1; }
+}
+YT.player = async function(id, skip){
+  if(!skip && YT.cache[id] && Date.now() - YT.cache[id].t < 2 * 3600e3) return YT.cache[id].d;
+  var errs = [], hlsOnly = null;
   for(var i = 0; i < YT.cfg.clients.length; i++){
     var c = YT.cfg.clients[i];
+    if(skip && skip.indexOf(c.name + c.ver) >= 0) continue;
     var client = Object.assign({clientName: c.name, clientVersion: c.ver, hl: 'zh-TW', gl: 'TW', timeZone: 'Asia/Taipei', utcOffsetMinutes: 480}, c.ctx || {});
     var body = {context: {client: client}, videoId: id, contentCheckOk: true, racyCheckOk: true};
     if(c.embed) body.context.thirdParty = {embedUrl: 'https://www.youtube.com/watch?v=' + id};
@@ -4378,15 +4429,20 @@ YT.player = async function(id){
       var r = await natHttp('POST', YT.cfg.endpoint, {'Content-Type': 'application/json', 'User-Agent': c.ua, 'X-YouTube-Client-Name': String(c.id), 'X-YouTube-Client-Version': c.ver, 'Origin': 'https://www.youtube.com'}, JSON.stringify(body));
       var j = JSON.parse(r.body);
       var st = j.playabilityStatus || {};
-      if(st.status !== 'OK'){ errs.push(c.name + '：' + (st.reason || st.status || r.status)); continue; }
+      if(st.status !== 'OK'){ errs.push(c.name + ' ' + c.ver + '：' + (st.reason || st.status || ('HTTP ' + r.status))); continue; }
       var sd = j.streamingData || {};
       var fm = (sd.adaptiveFormats || []).concat(sd.formats || []).filter(function(f){ return f.url; });
-      if(!fm.length && !sd.hlsManifestUrl){ errs.push(c.name + '：沒有可下載的串流'); continue; }
       var d = {id: id, client: c, details: j.videoDetails || {}, formats: fm, hls: sd.hlsManifestUrl || ''};
-      YT.cache[id] = {t: Date.now(), d: d};
-      return d;
-    }catch(e){ errs.push(c.name + '：' + e.message); }
+      if(fm.length){
+        var test = fm.filter(function(f){ return /^audio/.test(f.mimeType); })[0] || fm[0];
+        var code = await ytProbe(test.url, c.ua);
+        if(!code){ YT.cache[id] = {t: Date.now(), d: d}; return d; }
+        errs.push(c.name + ' ' + c.ver + '：串流被拒（HTTP ' + code + '）');
+      } else errs.push(c.name + ' ' + c.ver + '：沒有可直接下載的串流');
+      if(d.hls && !hlsOnly){ d.formats = []; hlsOnly = d; }
+    }catch(e){ errs.push(c.name + ' ' + c.ver + '：' + e.message); }
   }
+  if(hlsOnly){ hlsOnly.note = errs.join('\n'); YT.cache[id] = {t: Date.now(), d: hlsOnly}; return hlsOnly; }
   throw new Error(errs.join('\n'));
 };
 function ytCodec(f){ var m = (f.mimeType || '').match(/codecs="([^"]+)"/); return m ? m[1] : ''; }
@@ -4441,6 +4497,13 @@ async function openYt(id){
     return;
   }
   var meta = ytMeta(d), opt = ytOptions(d), tab = lsGet('ws.ytTab', 'video');
+  var hlsMode = !d.formats.length && !!d.hls, hv = null;
+  if(hlsMode){
+    hv = await new Promise(function(res){
+      var done = false, fn = function(x){ if(!done && x.url === d.hls){ done = true; res(x.variants || []); } };
+      on('hlsInfo', fn); NAT.call('hlsInfo', d.hls, ''); setTimeout(function(){ if(!done){ done = true; res([]); } }, 15000);
+    });
+  }
   var name = h('input', {type: 'text', value: meta.title.replace(/[\\\/:*?"<>|]/g, '_').slice(0, 100)});
   function draw(){
     body.textContent = '';
@@ -4458,11 +4521,27 @@ async function openYt(id){
       list.appendChild(h('div', {class: 'opt', onclick: function(){ s.close(); fn(); }},
         h('span', {class: 'oi', html: icon(ic), style: color ? {background: color, color: '#fff'} : null}),
         h('div', {class: 'grow'}, h('b', {text: t}), h('div', {class: 'sub', html: sub})),
-        h('span', {class: 'badge', text: size ? '約 ' + fmtSize(size) : ''}),
+        size ? h('span', {class: 'badge', text: '約 ' + fmtSize(size)}) : null,
         h('span', {html: icon('download'), style: {color: 'var(--accent)'}})));
     }
     var nm = function(){ return (name.value.trim() || meta.title).replace(/[\\\/:*?"<>|]/g, '_'); };
-    var base = {src: BR.url || ('https://www.youtube.com/watch?v=' + d.id), title: meta.title, thumbUrl: meta.thumb, ua: d.client.ua, noCookie: true, referer: 'https://www.youtube.com/'};
+    var base = {src: BR.url || ('https://www.youtube.com/watch?v=' + d.id), title: meta.title, thumbUrl: meta.thumb, ua: d.client.ua, noCookie: true, referer: ''};
+    if(hlsMode){
+      body.appendChild(h('div', {class: 'note', html: '⚠️ 這部影片的一般串流被 YouTube 拒絕，改用 <b>HLS 串流</b>下載（最高 1080p，下載後轉成 MP4）。'}));
+      if(tab === 'video'){
+        (hv.length ? hv : [{url: '', h: 0, name: '最高畫質'}]).forEach(function(v){
+          row('video', v.h ? qLabel(v.h, {}) : (v.name || '最高畫質'), 'HLS 串流・下載後轉成 MP4', 0, function(){ ytDl([Object.assign({}, base, {kind: 'hls', url: d.hls, variant: v.url, name: nm() + (v.h ? '_' + v.h + 'p' : '')})], meta); }, 'var(--c-video)');
+        });
+        body.appendChild(list); paintIcons(body); return;
+      }
+      if(tab === 'music'){
+        var hb = Object.assign({}, base, {kind: 'hls', url: d.hls, variant: (hv[hv.length - 1] || {}).url || '', name: nm(), artist: meta.artist, title: meta.song, audioOnly: true});
+        [['mp3:320', 'MP3 320kbps'], ['mp3:192', 'MP3 192kbps'], ['flac', 'FLAC 無損格式'], ['wav', 'WAV 無損 PCM'], ['', 'M4A（AAC 原始音軌）']].forEach(function(k){
+          row('audio', k[1], '從 HLS 串流取出音軌' + (k[0] ? '後轉檔' : '、不轉檔'), 0, function(){ ytDl([Object.assign({}, hb, k[0] ? {convert: k[0]} : {})], meta, 'm4a'); }, 'var(--c-audio)');
+        });
+        body.appendChild(list); paintIcons(body); return;
+      }
+    }
     if(tab === 'video'){
       if(!opt.video.length) list.appendChild(h('div', {class: 'empty', text: '沒有可下載的影片串流'}));
       opt.video.forEach(function(o){
@@ -4500,12 +4579,13 @@ async function openYt(id){
   draw();
 }
 var PENDING_CONV = {};
-function ytDl(items, meta){
+function ytDl(items, meta, vidOut){
   var folder = LF.pickDefault && LF.pickDefault(items[0]);
   items.forEach(function(it){ if(folder) it.folder = folder; });
   dlCard(0, items.length, '準備下載…', 0);
-  NAT.call('dlStart', JSON.stringify({page: BR.url, title: meta.title, items: items, opts: {zip: false, imgFmt: 'orig', imgMax: 0, imgQ: 92, vidOut: 'mp4', vidQ: 'max'}}));
+  NAT.call('dlStart', JSON.stringify({page: BR.url, title: meta.title, items: items, opts: {zip: false, imgFmt: 'orig', imgMax: 0, imgQ: 92, vidOut: vidOut || 'mp4', vidQ: 'max'}}));
 }
+on('ytdl', function(id){ if(id) openYt(String(id)); });
 /* 下載完成後，需要轉檔的音樂自動排入轉檔佇列 */
 on('dl', function(d){
   if(d.state !== 'done' || !d.items) return;
@@ -4624,6 +4704,7 @@ Music.load = async function(play){
   var it = this.cur(); if(!it) return;
   try{ this.el.src = await Lib.src(it); if(play) await this.el.play(); }catch(e){ if(play) toast('無法播放：' + it.name, true); }
   this.mini();
+  if(CFG.lyr && CFG.lyr.auto && !Lyrics.of(it)){ var self0 = this; Lyrics.auto(it).then(function(l){ if(l && self0.cur() === it) self0.drawPlayer(); }).catch(function(){}); }
   if('mediaSession' in navigator) try{
     navigator.mediaSession.metadata = new MediaMetadata({title: songTitle(it), artist: it.artist || '', artwork: Lib.thumb(it) ? [{src: Lib.thumb(it), sizes: '360x360', type: 'image/jpeg'}] : []});
     navigator.mediaSession.setActionHandler('nexttrack', function(){ Music.next(); });
@@ -4649,6 +4730,7 @@ Music.el.addEventListener('timeupdate', function(){
   var pb = $('mpProg'); if(pb && !pb.__drag){ pb.max = d || 1; pb.value = t; }
   var a = $('mpT1'), b = $('mpT2'); if(a){ a.textContent = fmtDur(t); b.textContent = fmtDur(d); }
   var mb = $('miniBar'); if(mb) mb.style.width = (d ? 100 * t / d : 0) + '%';
+  var ml = $('miniLyr'); if(ml){ var cl = currentLyric(); var cur = Music.cur(); ml.textContent = cl || (cur && cur.artist) || '音樂庫'; }
 });
 function songTitle(it){ return (it.title && it.title !== it.name ? it.title : it.name.replace(/\.[^.]+$/, '')); }
 function musicItems(){ return Lib.items.filter(function(it){ return it.cat === 'audio'; }).sort(function(a, b){ return b.time - a.time; }); }
@@ -4658,7 +4740,7 @@ Music.mini = function(){
   Dock.set('music', h('div', {class: 'dockCard glass', style: {padding: '6px 8px', position: 'relative', overflow: 'hidden'}, onclick: function(){ Music.openPlayer(); }},
     h('div', {class: 'lrow', style: {padding: 0, border: 0, background: 'none', flex: 1, minWidth: 0}},
       h('div', {class: 'th', style: Object.assign({width: '40px', height: '40px', borderRadius: '10px'}, th ? {backgroundImage: 'url("' + th + '")'} : {background: 'var(--c-audio)'}), html: th ? '' : icon('audio')}),
-      h('div', {class: 't'}, h('b', {text: songTitle(it)}), h('div', {class: 'sub ell', text: it.artist || '音樂庫'}))),
+      h('div', {class: 't'}, h('b', {text: songTitle(it)}), h('div', {class: 'sub ell', id: 'miniLyr', text: it.artist || '音樂庫'}))),
     h('button', {class: 'ib', html: '<svg class="i fill" viewBox="0 0 24 24">' + (playing ? '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>' : IC.play) + '</svg>', onclick: function(e){ e.stopPropagation(); Music.toggle(); }}),
     h('button', {class: 'ib', html: icon('fwd'), onclick: function(e){ e.stopPropagation(); Music.next(); }}),
     h('button', {class: 'ib', html: icon('x', 'sm'), onclick: function(e){ e.stopPropagation(); Music.stop(); }}),
@@ -4675,9 +4757,25 @@ Music.drawPlayer = function(){
   var it = this.cur(); body.textContent = '';
   if(!it){ body.appendChild(h('div', {class: 'empty', text: '沒有播放中的歌曲'})); return; }
   var th = Lib.thumb(it), playing = !this.el.paused, self = this;
-  body.appendChild(h('div', {class: 'vwAudio', style: {height: 'auto', padding: '6px 0 0'}},
-    h('div', {class: 'art', style: th ? {backgroundImage: 'url("' + th + '")', width: 'min(280px,68vw)'} : {width: 'min(280px,68vw)'}, html: th ? '' : icon('audio', 'lg')}),
-    h('div', {style: {textAlign: 'center', maxWidth: '100%'}}, h('b', {text: songTitle(it), style: {fontSize: '18px', display: 'block'}}), h('div', {class: 'sub', text: (it.artist || '') + '・' + (it.name.split('.').pop() || '').toUpperCase() + '・' + fmtSize(it.size)}))));
+  var showLyr = CFG.lyr.view !== 'cover';
+  var stage = h('div', {class: 'mpStage'});
+  if(showLyr) LyrView.mount(stage, it);
+  else stage.appendChild(h('div', {class: 'art', style: th ? {backgroundImage: 'url("' + th + '")'} : null, html: th ? '' : icon('audio', 'lg'), onclick: function(){ CFG.lyr.view = 'lyrics'; saveCfg(); self.drawPlayer(); }}));
+  body.appendChild(stage);
+  body.appendChild(h('div', {class: 'row', style: {gap: '10px', marginTop: '10px'}},
+    h('div', {class: 'th', style: Object.assign({width: '46px', height: '46px', borderRadius: '12px', flex: 'none', backgroundSize: 'cover'}, th ? {backgroundImage: 'url("' + th + '")'} : {background: 'var(--c-audio)'})}),
+    h('div', {class: 'grow'}, h('b', {text: songTitle(it), style: {fontSize: '17px', display: 'block'}, class: 'ell'}), h('div', {class: 'sub ell', text: (it.artist || '') + '・' + (it.name.split('.').pop() || '').toUpperCase() + '・' + fmtSize(it.size) + (it.lrcSrc ? '・歌詞：' + it.lrcSrc.split('：')[0] : '')}))));
+  var tb = h('div', {class: 'mpTools'});
+  var tbtn = function(ic, label, fn, on){ tb.appendChild(h('button', {class: 'chip' + (on ? ' pri' : ''), style: on ? null : {background: 'var(--surface-3)', color: 'var(--text)', border: '1px solid var(--border-soft)'}, html: icon(ic, 'sm') + label, onclick: fn})); };
+  tbtn(showLyr ? 'image' : 'type', showLyr ? '封面' : '歌詞', function(){ CFG.lyr.view = showLyr ? 'cover' : 'lyrics'; saveCfg(); self.drawPlayer(); });
+  tbtn('search', '找歌詞', function(){ lyricsSearchSheet(it, function(){ self.drawPlayer(); }); });
+  tbtn('palette', '樣式', function(){ lyricsStyleSheet(function(){ if(LyrView.el) LyrView.el.setAttribute('style', lyrStyle()); }); });
+  if(Lyrics.isSynced(Lyrics.of(it))){
+    tbtn('back', '早 0.5 秒', function(){ it.lrcOffset = Math.round(((it.lrcOffset || 0) - 0.5) * 10) / 10; if(isApp) NAT.call('libMeta', it.id, JSON.stringify({lrcOffset: it.lrcOffset})); toast('歌詞時間 ' + (it.lrcOffset > 0 ? '+' : '') + it.lrcOffset + ' 秒'); LyrView.idx = -2; });
+    tbtn('fwd', '晚 0.5 秒', function(){ it.lrcOffset = Math.round(((it.lrcOffset || 0) + 0.5) * 10) / 10; if(isApp) NAT.call('libMeta', it.id, JSON.stringify({lrcOffset: it.lrcOffset})); toast('歌詞時間 ' + (it.lrcOffset > 0 ? '+' : '') + it.lrcOffset + ' 秒'); LyrView.idx = -2; });
+  }
+  if(Lyrics.of(it) && /\.(mp3|flac)$/i.test(it.name)) tbtn('download', '寫入檔案', async function(){ try{ toast('寫入歌詞中…'); await Lyrics.embed(it); toast('✓ 歌詞已寫進檔案，換到其他播放器也看得到'); self.drawPlayer(); }catch(e){ toast(e.message, true); } });
+  body.appendChild(tb);
   var prog = h('input', {type: 'range', id: 'mpProg', min: 0, max: this.el.duration || 1, step: .1, value: this.el.currentTime});
   prog.addEventListener('input', function(){ prog.__drag = true; $('mpT1').textContent = fmtDur(prog.value); });
   prog.addEventListener('change', function(){ self.el.currentTime = +prog.value; prog.__drag = false; });
@@ -4711,6 +4809,219 @@ function renderMusicHead(box, L){
     h('div', {class: 'grow'}, h('b', {text: '音樂庫', style: {fontSize: '17px'}}), h('div', {class: 'sub', text: L.length + ' 首' + (total ? '・' + fmtDur(total) : '')})),
     h('button', {class: 'btn pri sm', html: '<svg class="i sm fill" viewBox="0 0 24 24">' + IC.play + '</svg>播放', disabled: !L.length, onclick: function(){ Music.shuffle = false; Music.playList(L, 0); Music.openPlayer(); }}),
     h('button', {class: 'btn sm', text: '隨機', disabled: !L.length, onclick: function(){ Music.shuffle = true; lsSet('ws.mShuffle', true); Music.playList(L, Math.floor(Math.random() * L.length)); Music.openPlayer(); }})));
+}
+
+/* ============================================================
+   歌詞：依歌名／歌手上網找「有時間軸」的歌詞（LRCLIB、網易雲音樂），
+   播放時同步捲動，可自訂大小與顏色，也能寫進 MP3（USLT＋SYLT）／FLAC（LYRICS）檔案裡
+   ============================================================ */
+var Lyrics = {cache: {}};
+Lyrics.parse = function(lrc){
+  var out = [], off = 0;
+  String(lrc || '').split(/\r?\n/).forEach(function(line){
+    var mo = line.match(/^\[offset:\s*([+-]?\d+)\]/i); if(mo){ off = +mo[1] / 1000; return; }
+    var times = [], m, re = /\[(\d{1,3}):(\d{1,2}(?:[.:]\d{1,3})?)\]/g, last = 0;
+    while((m = re.exec(line))){ times.push(+m[1] * 60 + parseFloat(m[2].replace(':', '.'))); last = re.lastIndex; }
+    if(!times.length) return;
+    var text = line.slice(last).trim();
+    times.forEach(function(t){ out.push({t: Math.max(0, t - off), text: text}); });
+  });
+  out.sort(function(a, b){ return a.t - b.t; });
+  return out;
+};
+Lyrics.isSynced = function(lrc){ return /\[\d{1,3}:\d{1,2}[.:]\d/.test(lrc || ''); };
+function lyrFetch(url, headers){
+  if(isApp) return natHttp('GET', url, headers || {}, '').then(function(r){ if(r.status >= 400) throw new Error('HTTP ' + r.status); return r.body; });
+  return fetch(url).then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.text(); });
+}
+function cleanSong(s){ return String(s || '').replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[\(\[（【].*?(official|mv|lyric|audio|歌詞|官方|高音質|完整版|music video|4k|hd).*?[\)\]）】]/ig, '').replace(/\s*(official\s*(music\s*)?video|官方完整版|mv)\s*$/i, '').trim(); }
+Lyrics.search = async function(title, artist, dur){
+  var t = cleanSong(title), a = String(artist || '').replace(/\s*-\s*Topic$/i, '').trim(), out = [];
+  var jobs = [];
+  /* LRCLIB：開放的同步歌詞資料庫 */
+  jobs.push(lyrFetch('https://lrclib.net/api/search?track_name=' + encodeURIComponent(t) + (a ? '&artist_name=' + encodeURIComponent(a) : ''), {'User-Agent': 'WebSaver/1.2 (https://github.com/IanLin1120/web-saver)'})
+    .then(function(b){ JSON.parse(b).slice(0, 8).forEach(function(x){ if(x.syncedLyrics || x.plainLyrics) out.push({src: 'LRCLIB', name: x.trackName, artist: x.artistName, dur: x.duration, lrc: x.syncedLyrics || '', plain: x.plainLyrics || ''}); }); }).catch(function(){}));
+  if(!a) jobs.push(lyrFetch('https://lrclib.net/api/search?q=' + encodeURIComponent(t), {'User-Agent': 'WebSaver/1.2'})
+    .then(function(b){ JSON.parse(b).slice(0, 6).forEach(function(x){ if(x.syncedLyrics || x.plainLyrics) out.push({src: 'LRCLIB', name: x.trackName, artist: x.artistName, dur: x.duration, lrc: x.syncedLyrics || '', plain: x.plainLyrics || ''}); }); }).catch(function(){}));
+  /* 網易雲音樂：中文歌曲收錄最多（只有 APK 可用） */
+  if(isApp) jobs.push(lyrFetch('https://music.163.com/api/search/get/web?type=1&limit=6&s=' + encodeURIComponent((a ? a + ' ' : '') + t), {'Referer': 'https://music.163.com/', 'User-Agent': 'Mozilla/5.0'})
+    .then(async function(b){
+      var songs = ((JSON.parse(b).result || {}).songs || []).slice(0, 4);
+      await Promise.all(songs.map(async function(sg){
+        try{
+          var lb = JSON.parse(await lyrFetch('https://music.163.com/api/song/lyric?lv=1&tv=-1&id=' + sg.id, {'Referer': 'https://music.163.com/', 'User-Agent': 'Mozilla/5.0'}));
+          var l = (lb.lrc || {}).lyric || '';
+          if(l) out.push({src: '網易雲', name: sg.name, artist: (sg.artists || []).map(function(x){ return x.name; }).join('/'), dur: (sg.duration || 0) / 1000, lrc: Lyrics.isSynced(l) ? l : '', plain: Lyrics.isSynced(l) ? '' : l, trans: (lb.tlyric || {}).lyric || ''});
+        }catch(e){}
+      }));
+    }).catch(function(){}));
+  await Promise.all(jobs);
+  /* 排序：有時間軸、長度接近、歌名吻合的優先 */
+  var tl = t.toLowerCase();
+  out.forEach(function(x){
+    x.score = (x.lrc ? 50 : 0) + (dur && x.dur ? Math.max(0, 30 - Math.abs(x.dur - dur) * 3) : 0) + (String(x.name).toLowerCase() === tl ? 20 : String(x.name).toLowerCase().indexOf(tl) >= 0 || tl.indexOf(String(x.name).toLowerCase()) >= 0 ? 10 : 0) + (a && String(x.artist).indexOf(a) >= 0 ? 10 : 0);
+  });
+  out.sort(function(x, y){ return y.score - x.score; });
+  return out;
+};
+Lyrics.of = function(it){ return it && (it.lrc || it.lyrics) || ''; };
+Lyrics.save = function(it, lrc, src){
+  delete it.__lines; it.lrc = lrc; it.lrcSrc = src || '';
+  if(isApp) NAT.call('libMeta', it.id, JSON.stringify({lrc: lrc, lrcSrc: src || ''}));
+  else IDB.tx(['meta'], 'readwrite', function(t){ t.objectStore('meta').put(it); });
+  var li = Lib.byId(it.id); if(li && li !== it){ li.lrc = lrc; li.lrcSrc = src; delete li.__lines; }
+};
+Lyrics.auto = async function(it){
+  if(Lyrics.of(it)) return Lyrics.of(it);
+  var L = await Lyrics.search(it.title && it.title !== it.name ? it.title : it.name, it.artist || '', it.dur || 0);
+  var best = L.filter(function(x){ return x.lrc; })[0] || L[0];
+  if(best && best.score >= 45){ var l = best.lrc || best.plain; Lyrics.save(it, l, best.src + '：' + best.name + ' - ' + best.artist); return l; }
+  return '';
+};
+
+/* ---------- 把歌詞（與標籤）寫進檔案 ---------- */
+function syncsafe(b, o){ return ((b[o] & 0x7f) << 21) | ((b[o + 1] & 0x7f) << 14) | ((b[o + 2] & 0x7f) << 7) | (b[o + 3] & 0x7f); }
+Lyrics.embed = async function(it){
+  var ext = (it.name.split('.').pop() || '').toLowerCase();
+  if(ext !== 'mp3' && ext !== 'flac') throw new Error('只有 MP3 與 FLAC 可以把歌詞寫進檔案（其他格式在 App 內一樣會同步顯示）');
+  var lrc = Lyrics.of(it); if(!lrc) throw new Error('這首歌還沒有歌詞');
+  var u8 = new Uint8Array(await (await Lib.blob(it)).arrayBuffer());
+  var tags = {title: songTitle(it), artist: it.artist || '', album: it.album || '', lrc: lrc};
+  var th = Lib.thumb(it);
+  if(th){ try{ tags.cover = new Uint8Array(await (await fetchAny(th)).arrayBuffer()); tags.coverMime = 'image/jpeg'; }catch(e){} }
+  var out;
+  if(ext === 'mp3'){
+    var start = 0;
+    if(u8[0] === 0x49 && u8[1] === 0x44 && u8[2] === 0x33) start = 10 + syncsafe(u8, 6) + (u8[5] & 0x10 ? 10 : 0);
+    out = new Blob([AudioEnc.id3(tags), u8.subarray(start)], {type: 'audio/mpeg'});
+  } else {
+    if(!(u8[0] === 0x66 && u8[1] === 0x4c && u8[2] === 0x61 && u8[3] === 0x43)) throw new Error('不是有效的 FLAC 檔');
+    var p = 4, blocks = [], last = false;
+    while(!last && p < u8.length){
+      last = !!(u8[p] & 0x80); var type = u8[p] & 0x7f, len = (u8[p + 1] << 16) | (u8[p + 2] << 8) | u8[p + 3];
+      blocks.push({type: type, data: u8.subarray(p + 4, p + 4 + len)}); p += 4 + len;
+    }
+    blocks = blocks.filter(function(b){ return b.type !== 4 && b.type !== 1 && !(b.type === 6 && tags.cover); });
+    var vc = AudioEnc.flacMeta(tags);
+    vc.forEach(function(b){ blocks.push(b); });
+    var parts = [new Uint8Array([0x66, 0x4c, 0x61, 0x43])];
+    blocks.forEach(function(b, i){ var hb = new Uint8Array(4); hb[0] = (i === blocks.length - 1 ? 0x80 : 0) | b.type; hb[1] = (b.data.length >> 16) & 0xff; hb[2] = (b.data.length >> 8) & 0xff; hb[3] = b.data.length & 0xff; parts.push(hb, b.data); });
+    parts.push(u8.subarray(p));
+    out = new Blob(parts, {type: 'audio/flac'});
+  }
+  var meta = {src: it.src || '', title: it.title || '', artist: it.artist || '', album: it.album || '', thumbFrom: it.id, lrc: lrc, lrcSrc: it.lrcSrc || ''};
+  if(LF.map[it.id]) meta.folder = LF.map[it.id];
+  var nu = await saveBigBlob(out, it.name, meta);
+  if(isApp) NAT.call('libMeta', nu.id, JSON.stringify({lrc: lrc, lrcSrc: it.lrcSrc || '', dur: it.dur || 0}));
+  if(LF.map[it.id]){ LF.map[nu.id] = LF.map[it.id]; LF.save(); }
+  var wasCur = Music.cur() && Music.cur().id === it.id;
+  await Lib.del([it.id]);
+  var fresh = Lib.byId(nu.id) || nu; fresh.lrc = lrc;
+  if(wasCur){ Music.queue[Music.idx] = fresh; }
+  return fresh;
+};
+
+/* ---------- 歌詞樣式 ---------- */
+CFG.lyr = Object.assign({size: 19, cur: '', other: '', align: 'center', bold: true, auto: true, trans: false}, CFG.lyr || {});
+function lyrStyle(){
+  var c = CFG.lyr;
+  return '--lyr-size:' + c.size + 'px;--lyr-cur:' + (c.cur || 'var(--accent)') + ';--lyr-other:' + (c.other || 'var(--text-muted)') + ';text-align:' + c.align + ';--lyr-w:' + (c.bold ? 800 : 500);
+}
+function lyricsStyleSheet(after){
+  var c = CFG.lyr, body = h('div');
+  var prev = h('div', {class: 'lyrView', style: 'height:150px;' + lyrStyle()}, h('div', {class: 'lyrLine', text: '上一句歌詞'}), h('div', {class: 'lyrLine on', text: '正在唱的這一句'}), h('div', {class: 'lyrLine', text: '下一句歌詞'}));
+  function upd(){ prev.setAttribute('style', 'height:150px;' + lyrStyle()); saveCfg(); if(after) after(); }
+  body.appendChild(prev);
+  var sz = h('input', {type: 'range', min: 13, max: 40, step: 1, value: c.size}); var szv = h('span', {text: c.size + 'px'});
+  sz.oninput = function(){ c.size = +sz.value; szv.textContent = c.size + 'px'; upd(); };
+  body.appendChild(h('div', {class: 'field'}, h('div', {class: 'lbl'}, h('span', null, '字體大小'), szv), sz));
+  function colorRow(label, key, def){
+    var inp = h('input', {type: 'color', value: c[key] || def, style: {width: '64px', height: '38px'}});
+    inp.oninput = function(){ c[key] = inp.value; upd(); };
+    var sw = h('div', {class: 'chips'});
+    ['#e0a066', '#a2613a', '#ffffff', '#ffd27f', '#7fd1c7', '#ff7aa2', '#9cc27a', '#3a2e22'].forEach(function(col){ sw.appendChild(h('button', {class: 'fchip', style: {background: col, width: '30px', height: '30px', padding: 0, borderRadius: '50%'}, onclick: function(){ c[key] = col; inp.value = col; upd(); }})); });
+    return h('div', {class: 'field'}, h('div', {class: 'lbl'}, h('span', null, label), h('button', {class: 'btn sm ghost', text: '預設', onclick: function(){ c[key] = ''; upd(); }})), h('div', {class: 'row'}, inp, sw));
+  }
+  body.appendChild(colorRow('正在唱的歌詞顏色', 'cur', '#e0a066'));
+  body.appendChild(colorRow('其他歌詞顏色', 'other', '#9b8b76'));
+  body.appendChild(h('div', {class: 'field'}, h('div', {class: 'lbl'}, '對齊'), segRow([['left', '靠左'], ['center', '置中'], ['right', '靠右']], 'lyr.align', upd)));
+  body.appendChild(swRow('正在唱的歌詞加粗', null, 'lyr.bold', upd));
+  body.appendChild(swRow('顯示翻譯（有提供時）', null, 'lyr.trans', upd));
+  body.appendChild(swRow('下載音樂時自動找歌詞並寫入', 'MP3／FLAC 會把有時間軸的歌詞寫進檔案，其他格式存在 App 裡', 'lyr.auto'));
+  openSheet({title: '歌詞樣式', icon: 'type', body: body});
+}
+
+/* ---------- 搜尋歌詞面板 ---------- */
+async function lyricsSearchSheet(it, after){
+  var q = h('input', {type: 'search', value: cleanSong(songTitle(it)), placeholder: '歌名'});
+  var ar = h('input', {type: 'search', value: it.artist || '', placeholder: '歌手（可空白）'});
+  var list = h('div', {class: 'opts', style: {marginTop: '10px'}});
+  var body = h('div', null, h('div', {class: 'two'}, q, ar), h('div', {class: 'btn-row'}, h('button', {class: 'btn pri sm', html: icon('search', 'sm') + '搜尋', onclick: go}),
+    h('button', {class: 'btn sm', html: icon('edit', 'sm') + '貼上 LRC 歌詞', onclick: async function(){
+      var ta = h('textarea', {placeholder: '[00:12.30]第一句歌詞\n[00:16.80]第二句歌詞', style: {minHeight: '180px'}}); ta.value = Lyrics.of(it);
+      var d = dialog('貼上歌詞', '可以貼 LRC（有時間軸）或一般文字', [['儲存', function(){ Lyrics.save(it, ta.value.trim(), '手動'); s.close(); if(after) after(); }], ['取消', null, '']]);
+      d.el.insertBefore(ta, d.el.querySelector('.acts'));
+    }})), list);
+  var s = openSheet({title: '搜尋歌詞', icon: 'search', body: body, tall: true});
+  async function go(){
+    list.innerHTML = '<div class="ringBox"><div class="spin"></div><div class="sub">搜尋 LRCLIB' + (isApp ? '、網易雲音樂' : '') + '…</div></div>';
+    var L = await Lyrics.search(q.value, ar.value, it.dur || 0);
+    list.textContent = '';
+    if(!L.length){ list.appendChild(h('div', {class: 'empty', html: '<div class="big">🎤</div>找不到歌詞<br><span class="sub">試試只輸入歌名，或改成原文歌名</span>'})); return; }
+    L.slice(0, 12).forEach(function(x){
+      var lines = Lyrics.parse(x.lrc).slice(0, 3).map(function(l){ return l.text; }).filter(Boolean).join(' / ') || (x.plain || '').split('\n').slice(0, 2).join(' / ');
+      list.appendChild(h('div', {class: 'opt', onclick: function(){ Lyrics.save(it, x.lrc || x.plain, x.src + '：' + x.name + ' - ' + x.artist); if(x.trans) it.lrcTrans = x.trans; s.close(); toast('✓ 已套用歌詞'); if(after) after(); }},
+        h('span', {class: 'oi', html: icon(x.lrc ? 'audio' : 'type')}),
+        h('div', {class: 'grow'}, h('b', {text: x.name + '－' + x.artist}), h('div', {class: 'sub', text: x.src + (x.lrc ? '・有時間軸（同步捲動）' : '・純文字') + (x.dur ? '・' + fmtDur(x.dur) : '')}), h('div', {class: 'sub ell', text: lines}))));
+    });
+    paintIcons(list);
+  }
+  q.addEventListener('keydown', function(e){ if(e.key === 'Enter') go(); });
+  go();
+}
+
+/* ---------- 同步顯示 ---------- */
+var LyrView = {el: null, lines: [], idx: -1, raf: 0};
+LyrView.mount = function(container, it){
+  var lrc = Lyrics.of(it), self = this;
+  this.lines = Lyrics.isSynced(lrc) ? Lyrics.parse(lrc) : [];
+  this.idx = -1;
+  var v = h('div', {class: 'lyrView', style: lyrStyle()});
+  if(this.lines.length){
+    v.appendChild(h('div', {class: 'lyrPad'}));
+    this.lines.forEach(function(l, i){ v.appendChild(h('div', {class: 'lyrLine', text: l.text || '♪', onclick: function(){ Music.el.currentTime = l.t + (it.lrcOffset || 0); if(Music.el.paused) Music.el.play(); }})); });
+    v.appendChild(h('div', {class: 'lyrPad'}));
+  } else if(lrc){
+    String(lrc).replace(/\[[^\]]*\]/g, '').split(/\n/).forEach(function(t){ v.appendChild(h('div', {class: 'lyrLine', text: t || ' '})); });
+  } else {
+    v.appendChild(h('div', {class: 'empty', html: '<div class="big">🎤</div>還沒有歌詞'}, h('div', {class: 'btn-row', style: {justifyContent: 'center'}}, h('button', {class: 'btn pri sm', html: icon('search', 'sm') + '自動尋找歌詞', onclick: async function(){
+      this.disabled = true; this.textContent = '搜尋中…';
+      var l = await Lyrics.auto(it); if(l){ toast('✓ 找到歌詞'); Music.drawPlayer(); } else { toast('找不到相符的歌詞，可以手動搜尋', true); lyricsSearchSheet(it, function(){ Music.drawPlayer(); }); }
+    }}))));
+  }
+  container.appendChild(v);
+  this.el = v; this.it = it;
+  cancelAnimationFrame(this.raf);
+  var loop = function(){ self.tick(); self.raf = requestAnimationFrame(loop); };
+  if(this.lines.length) loop();
+};
+LyrView.tick = function(){
+  if(!this.el || !this.el.isConnected){ cancelAnimationFrame(this.raf); return; }
+  var t = Music.el.currentTime - ((this.it && this.it.lrcOffset) || 0), L = this.lines, i = -1;
+  for(var k = 0; k < L.length; k++){ if(L[k].t <= t + 0.15) i = k; else break; }
+  if(i === this.idx) return;
+  this.idx = i;
+  var nodes = this.el.querySelectorAll('.lyrLine');
+  nodes.forEach(function(n, j){ n.classList.toggle('on', j === i); n.classList.toggle('past', j < i); });
+  if(i >= 0 && nodes[i]){ var n = nodes[i]; this.el.scrollTo({top: n.offsetTop - this.el.clientHeight / 2 + n.offsetHeight / 2, behavior: CFG.motion ? 'smooth' : 'auto'}); }
+};
+function currentLyric(){
+  var it = Music.cur(); if(!it) return '';
+  var lrc = Lyrics.of(it); if(!Lyrics.isSynced(lrc)) return '';
+  if(!it.__lines) it.__lines = Lyrics.parse(lrc);
+  var t = Music.el.currentTime - (it.lrcOffset || 0), out = '';
+  for(var k = 0; k < it.__lines.length; k++){ if(it.__lines[k].t <= t + 0.15) out = it.__lines[k].text; else break; }
+  return out;
 }
 
 /* ============================================================

@@ -1,11 +1,77 @@
 {
- "v": 1,
+ "v": 2,
  "note": "YouTube 解析設定：App 會依序嘗試以下用戶端。YouTube 改版導致無法下載時，更新這裡的版本號即可（不用重裝 App）。",
  "endpoint": "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
  "clients": [
-  {"name": "ANDROID_VR", "id": 28, "ver": "1.62.27", "ua": "com.google.android.apps.youtube.vr.oculus/1.62.27 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip", "ctx": {"deviceMake": "Oculus", "deviceModel": "Quest 3", "androidSdkVersion": 32, "osName": "Android", "osVersion": "12L"}},
-  {"name": "IOS", "id": 5, "ver": "20.10.4", "ua": "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)", "ctx": {"deviceMake": "Apple", "deviceModel": "iPhone16,2", "osName": "iPhone", "osVersion": "18.3.2.22D82"}},
-  {"name": "ANDROID", "id": 3, "ver": "20.10.38", "ua": "com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip", "ctx": {"androidSdkVersion": 34, "osName": "Android", "osVersion": "14"}},
-  {"name": "TVHTML5_SIMPLY_EMBEDDED_PLAYER", "id": 85, "ver": "2.0", "ua": "Mozilla/5.0 (PlayStation; PlayStation 4/12.02) AppleWebKit/605.1.15 (KHTML, like Gecko)", "ctx": {}, "embed": true}
+  {
+   "name": "ANDROID_VR",
+   "id": 28,
+   "ver": "1.65.10",
+   "ua": "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
+   "ctx": {
+    "deviceMake": "Oculus",
+    "deviceModel": "Quest 3",
+    "androidSdkVersion": 32,
+    "osName": "Android",
+    "osVersion": "12L"
+   }
+  },
+  {
+   "name": "ANDROID_VR",
+   "id": 28,
+   "ver": "1.62.27",
+   "ua": "com.google.android.apps.youtube.vr.oculus/1.62.27 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
+   "ctx": {
+    "deviceMake": "Oculus",
+    "deviceModel": "Quest 3",
+    "androidSdkVersion": 32,
+    "osName": "Android",
+    "osVersion": "12L"
+   }
+  },
+  {
+   "name": "ANDROID_VR",
+   "id": 28,
+   "ver": "1.60.19",
+   "ua": "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
+   "ctx": {
+    "deviceMake": "Oculus",
+    "deviceModel": "Quest 3",
+    "androidSdkVersion": 32,
+    "osName": "Android",
+    "osVersion": "12L"
+   }
+  },
+  {
+   "name": "IOS",
+   "id": 5,
+   "ver": "20.10.4",
+   "ua": "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)",
+   "ctx": {
+    "deviceMake": "Apple",
+    "deviceModel": "iPhone16,2",
+    "osName": "iPhone",
+    "osVersion": "18.3.2.22D82"
+   }
+  },
+  {
+   "name": "ANDROID",
+   "id": 3,
+   "ver": "20.10.38",
+   "ua": "com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip",
+   "ctx": {
+    "androidSdkVersion": 34,
+    "osName": "Android",
+    "osVersion": "14"
+   }
+  },
+  {
+   "name": "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
+   "id": 85,
+   "ver": "2.0",
+   "ua": "Mozilla/5.0 (PlayStation; PlayStation 4/12.02) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+   "ctx": {},
+   "embed": true
+  }
  ]
 }

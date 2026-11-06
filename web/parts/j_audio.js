@@ -50,6 +50,29 @@ var AudioEnc = (function(){
   function crc8(a, s, e){ var c = 0; for(var i = s; i < e; i++) c = CRC8[c ^ a[i]]; return c; }
   function crc16(a, s, e){ var c = 0; for(var i = s; i < e; i++) c = ((c << 8) ^ CRC16[(c >> 8) ^ a[i]]) & 0xffff; return c; }
 
+  /* FLAC 標籤區塊：VORBIS_COMMENT（歌名、歌手、歌詞）＋ PICTURE（封面） */
+  function flacMeta(tags){
+    tags = tags || {};
+    var blocks = [], vendor = utf8('網頁擷取 FLAC'), cm = [];
+    if(tags.title) cm.push(utf8('TITLE=' + tags.title));
+    if(tags.artist) cm.push(utf8('ARTIST=' + tags.artist));
+    if(tags.album) cm.push(utf8('ALBUM=' + tags.album));
+    if(tags.lrc){ cm.push(utf8('LYRICS=' + tags.lrc)); cm.push(utf8('UNSYNCEDLYRICS=' + String(tags.lrc).replace(/\[[^\]]*\]/g, '').replace(/\n{2,}/g, '\n').trim())); }
+    var vlen = 8 + vendor.length + cm.reduce(function(s, x){ return s + 4 + x.length; }, 0), vb = new Uint8Array(vlen), vdv = new DataView(vb.buffer), o = 0;
+    vdv.setUint32(o, vendor.length, true); o += 4; vb.set(vendor, o); o += vendor.length;
+    vdv.setUint32(o, cm.length, true); o += 4;
+    cm.forEach(function(x){ vdv.setUint32(o, x.length, true); o += 4; vb.set(x, o); o += x.length; });
+    blocks.push({type: 4, data: vb});
+    if(tags.cover){
+      var mime = utf8(tags.coverMime || 'image/jpeg'), pic = tags.cover;
+      var pb = new Uint8Array(32 + mime.length + pic.length), pdv = new DataView(pb.buffer), q2 = 0;
+      pdv.setUint32(q2, 3); q2 += 4; pdv.setUint32(q2, mime.length); q2 += 4; pb.set(mime, q2); q2 += mime.length;
+      pdv.setUint32(q2, 0); q2 += 4; q2 += 16; pdv.setUint32(q2, pic.length); q2 += 4; pb.set(pic, q2);
+      blocks.push({type: 6, data: pb});
+    }
+    return blocks;
+  }
+
   /* ---------- FLAC（固定預測＋Rice 編碼，完全無損） ---------- */
   function residual(x, order, out){
     var n = x.length;
@@ -151,23 +174,7 @@ var AudioEnc = (function(){
     si.bits(Math.floor(N / 4294967296), 4); si.bits(N >>> 0, 32);
     for(var m = 0; m < 16; m++) si.bits(0, 8);
     meta.push([0, si.out().slice()]);
-    var vendor = utf8('網頁擷取 FLAC'), cm = [];
-    if(tags && tags.title) cm.push(utf8('TITLE=' + tags.title));
-    if(tags && tags.artist) cm.push(utf8('ARTIST=' + tags.artist));
-    if(tags && tags.album) cm.push(utf8('ALBUM=' + tags.album));
-    if(tags && tags.comment) cm.push(utf8('COMMENT=' + tags.comment));
-    var vlen = 4 + vendor.length + 4 + cm.reduce(function(s, x){ return s + 4 + x.length; }, 0), vb = new Uint8Array(vlen), vdv = new DataView(vb.buffer), o = 0;
-    vdv.setUint32(o, vendor.length, true); o += 4; vb.set(vendor, o); o += vendor.length;
-    vdv.setUint32(o, cm.length, true); o += 4;
-    cm.forEach(function(x){ vdv.setUint32(o, x.length, true); o += 4; vb.set(x, o); o += x.length; });
-    meta.push([4, vb]);
-    if(tags && tags.cover){
-      var mime = utf8(tags.coverMime || 'image/jpeg'), pic = tags.cover;
-      var pb = new Uint8Array(32 + mime.length + pic.length), pdv = new DataView(pb.buffer), q2 = 0;
-      pdv.setUint32(q2, 3); q2 += 4; pdv.setUint32(q2, mime.length); q2 += 4; pb.set(mime, q2); q2 += mime.length;
-      pdv.setUint32(q2, 0); q2 += 4; q2 += 16; pdv.setUint32(q2, pic.length); q2 += 4; pb.set(pic, q2);
-      meta.push([6, pb]);
-    }
+    flacMeta(tags).forEach(function(b){ meta.push([b.type, b.data]); });
     var head = [new Uint8Array([0x66, 0x4c, 0x61, 0x43])];
     meta.forEach(function(mm, i){
       var hb = new Uint8Array(4); hb[0] = (i === meta.length - 1 ? 0x80 : 0) | mm[0];
@@ -190,6 +197,17 @@ var AudioEnc = (function(){
       frames.push([id, body]);
     }
     textFrame('TIT2', tags.title); textFrame('TPE1', tags.artist); textFrame('TALB', tags.album);
+    function u16(str, term){ var a = [0xff, 0xfe]; for(var i = 0; i < str.length; i++){ var c = str.charCodeAt(i); a.push(c & 0xff, c >> 8); } if(term) a.push(0, 0); return a; }
+    if(tags.lrc){
+      /* USLT：完整歌詞（含時間軸文字，多數播放器可顯示）；SYLT：逐句同步歌詞 */
+      var us = [1, 0x7a, 0x68, 0x6f].concat(u16('', true), u16(String(tags.lrc), false));
+      frames.push(['USLT', new Uint8Array(us)]);
+      if(typeof Lyrics !== 'undefined' && Lyrics.isSynced(tags.lrc)){
+        var sy = [1, 0x7a, 0x68, 0x6f, 2, 1].concat(u16('', true));
+        Lyrics.parse(tags.lrc).forEach(function(l){ var ms = Math.round(l.t * 1000); sy = sy.concat(u16(l.text || ' ', true), [(ms >>> 24) & 0xff, (ms >> 16) & 0xff, (ms >> 8) & 0xff, ms & 0xff]); });
+        frames.push(['SYLT', new Uint8Array(sy)]);
+      }
+    }
     if(tags.cover){
       var mime = utf8(tags.coverMime || 'image/jpeg'), b = new Uint8Array(1 + mime.length + 1 + 1 + 1 + tags.cover.length), o = 0;
       b[o++] = 0; b.set(mime, o); o += mime.length; b[o++] = 0; b[o++] = 3; b[o++] = 0; b.set(tags.cover, o);
@@ -221,7 +239,7 @@ var AudioEnc = (function(){
     if(onp) onp(1);
     return new Blob(out, {type: 'audio/mpeg'});
   }
-  return {wav: wav, flac: flac, mp3: mp3, id3: id3};
+  return {wav: wav, flac: flac, mp3: mp3, id3: id3, flacMeta: flacMeta};
 })();
 
 /* ---------- 轉檔佇列：把檔案庫裡的音訊轉成 MP3／FLAC／WAV ---------- */
@@ -251,6 +269,7 @@ Conv.next = async function(){
     var pcm = {sampleRate: buf.sampleRate, channels: []};
     for(var c = 0; c < Math.min(2, buf.numberOfChannels); c++) pcm.channels.push(buf.getChannelData(c));
     var tags = {title: it.title || it.name.replace(/\.[^.]+$/, ''), artist: it.artist || '', album: it.album || ''};
+    if(CFG.lyr && CFG.lyr.auto){ this.card(job, 0, '尋找歌詞…'); it.dur = it.dur || Math.round(buf.duration); try{ var lr = await Lyrics.auto(it); if(lr) tags.lrc = lr; }catch(e){} }
     var th = Lib.thumb(it);
     if(th){ try{ var tb = await (await fetchAny(th)).arrayBuffer(); tags.cover = new Uint8Array(tb); tags.coverMime = 'image/jpeg'; }catch(e){} }
     var self = this, onp = function(p){ self.card(job, p, '編碼中…'); };
@@ -258,6 +277,7 @@ Conv.next = async function(){
     this.card(job, 1, '儲存中…');
     var name = it.name.replace(/\.[^.]+$/, '') + '.' + f.ext;
     var meta = {src: it.src || '', title: it.title || '', artist: it.artist || '', album: it.album || '', thumbFrom: it.id};
+    if(tags.lrc){ meta.lrc = tags.lrc; meta.lrcSrc = it.lrcSrc || ''; }
     if(it.folder) meta.folder = it.folder;
     var nu = await saveBigBlob(out, name, meta);
     if(LF.map[it.id]){ LF.map[nu.id] = LF.map[it.id]; LF.save(); }

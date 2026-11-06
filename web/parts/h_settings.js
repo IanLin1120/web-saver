@@ -84,6 +84,13 @@ function renderSettings(){
   /* YouTube */
   P.appendChild(card('video', 'YouTube', [
     swRow('YouTube 去廣告', '移除影片前後與中間的廣告、首頁與搜尋結果的贊助內容；漏網的廣告會自動靜音快轉並略過（重新整理 YouTube 後生效）', 'ytAds'),
+    h('div', {class: 'sect-h', style: {margin: '12px 0 2px'}}, h('span', {text: '播放器強化（Morphe 風格）'})),
+    swRow('背景播放', '切到其他 App 或關閉螢幕，聲音繼續播放', 'yt.bg'),
+    swRow('子母畫面', '影片播放中按 Home 鍵自動縮成小視窗；也可按播放器上的 ⧉', 'yt.pip'),
+    swRow('SponsorBlock 自動跳過', '自動跳過業配、開場、片尾、提醒訂閱等片段（社群標記資料）', 'yt.sb'),
+    swRow('手勢調整', '在影片右半邊上下滑調音量、左半邊調亮度', 'yt.gest'),
+    swRow('播放器快捷列', '影片右下角的 速度／循環／子母畫面／下載 按鈕', 'yt.bar'),
+    selRow('預設畫質', [['max', '最高畫質'], ['1080', '1080p'], ['720', '720p'], ['480', '480p（省流量）'], ['auto', '讓 YouTube 自動決定']], 'yt.q'),
     h('div', {class: 'sub', style: {margin: '6px 0', lineHeight: '1.7'}, html: '在瀏覽頁開啟任何 YouTube 影片（含 Shorts），按「媒體」就能選：<br>・影片：144p～4K，影像與聲音分開下載後在手機上合併（不重新壓縮）<br>・音樂：MP3 128／192／320kbps、M4A、OPUS 原始音軌、FLAC／WAV 無損格式（附歌名、歌手、封面）'}),
     h('div', {class: 'btn-row'}, h('button', {class: 'btn sm', html: icon('update', 'sm') + '更新解析設定', onclick: async function(){ await YT.loadCfg(); YT.cache = {}; toast('解析設定：' + YT.cfg.clients.map(function(c){ return c.name; }).join('、')); }})),
     h('div', {class: 'note', text: '下載的影片與音樂僅供個人離線觀看收聽，請尊重創作者著作權。會員專屬、付費或有 DRM 保護的內容無法下載。'})

@@ -27,18 +27,75 @@ final class Pdf {
 
     static JSONObject renderSync(final MainActivity a, final File html, String name, String url, String title, final JSONObject opts) throws Exception {
         final File out = Lib.get(a).tmpFile("pdf");
+        String first = null;
+        /* 方法一：系統列印引擎（向量、可選取文字、正確分頁） */
+        try { printSync(a, html, out, opts == null ? new JSONObject() : opts); }
+        catch (Throwable t) { first = t.getMessage(); out.delete(); }
+        if (!out.exists() || out.length() < 100) {
+            /* 方法二：把網頁畫進 PDF */
+            final CountDownLatch done = new CountDownLatch(1);
+            final Throwable[] err = {null};
+            Util.ui(new Runnable() {
+                @Override public void run() {
+                    try { new Job(a, html, out, opts == null ? new JSONObject() : opts, done, err).start(); }
+                    catch (Throwable t) { err[0] = t; done.countDown(); }
+                }
+            });
+            if (!done.await(150, TimeUnit.SECONDS)) throw new Exception("產生 PDF 逾時" + (first == null ? "" : "（" + first + "）"));
+            if (err[0] != null) throw new Exception((err[0].getMessage() == null ? err[0].toString() : err[0].getMessage()) + (first == null ? "" : "；" + first));
+            if (!out.exists() || out.length() < 100) throw new Exception("PDF 產生失敗" + (first == null ? "" : "（" + first + "）"));
+        }
+        return Lib.get(a).add(out, name, "application/pdf", url, title, null);
+    }
+
+    private static void printSync(final MainActivity a, final File html, final File out, final JSONObject opts) throws Exception {
         final CountDownLatch done = new CountDownLatch(1);
-        final Throwable[] err = {null};
+        final String[] err = {null};
+        final WebView[] hold = {null};
         Util.ui(new Runnable() {
             @Override public void run() {
-                try { new Job(a, html, out, opts, done, err).start(); }
-                catch (Throwable t) { err[0] = t; done.countDown(); }
+                try {
+                    final WebView w = new WebView(a);
+                    hold[0] = w;
+                    w.getSettings().setAllowFileAccess(true);
+                    w.getSettings().setJavaScriptEnabled(false);
+                    w.setBackgroundColor(Color.WHITE);
+                    int wpx = a.root.getWidth() > 0 ? a.root.getWidth() : 1080;
+                    FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(wpx, a.root.getHeight() > 0 ? a.root.getHeight() : 1800);
+                    w.setTranslationX(-wpx - 400);
+                    a.root.addView(w, 0, lp);
+                    w.setWebViewClient(new WebViewClient() {
+                        boolean once = false;
+                        @Override public void onPageFinished(final WebView v, String u) {
+                            if (once) return;
+                            once = true;
+                            Util.MAIN.postDelayed(new Runnable() {
+                                @Override public void run() {
+                                    try {
+                                        String paper = opts.optString("paper", "a4");
+                                        PrintAttributes.MediaSize ms = paper.equals("letter") ? PrintAttributes.MediaSize.NA_LETTER : paper.equals("a3") ? PrintAttributes.MediaSize.ISO_A3 : PrintAttributes.MediaSize.ISO_A4;
+                                        if (opts.optBoolean("landscape", false)) ms = ms.asLandscape();
+                                        int mils = Math.round(opts.optInt("margin", 10) / 25.4f * 1000);
+                                        PrintAttributes at = new PrintAttributes.Builder().setMediaSize(ms)
+                                            .setResolution(new PrintAttributes.Resolution("pdf", "pdf", 600, 600))
+                                            .setMinMargins(new PrintAttributes.Margins(mils, mils, mils, mils))
+                                            .setColorMode(PrintAttributes.COLOR_MODE_COLOR).build();
+                                        android.print.PdfPrinter.write(v.createPrintDocumentAdapter("page"), at, out, new android.print.PdfPrinter.Done() {
+                                            @Override public void on(String e) { err[0] = e; done.countDown(); }
+                                        });
+                                    } catch (Throwable t) { err[0] = String.valueOf(t); done.countDown(); }
+                                }
+                            }, 700);
+                        }
+                    });
+                    w.loadUrl("file://" + html.getAbsolutePath());
+                } catch (Throwable t) { err[0] = String.valueOf(t); done.countDown(); }
             }
         });
-        if (!done.await(150, TimeUnit.SECONDS)) throw new Exception("產生 PDF 逾時");
-        if (err[0] != null) throw new Exception(err[0].getMessage() == null ? err[0].toString() : err[0].getMessage());
-        if (!out.exists() || out.length() < 100) throw new Exception("PDF 產生失敗");
-        return Lib.get(a).add(out, name, "application/pdf", url, title, null);
+        boolean ok = done.await(120, TimeUnit.SECONDS);
+        Util.ui(new Runnable() { @Override public void run() { if (hold[0] != null) { try { a.root.removeView(hold[0]); hold[0].destroy(); } catch (Throwable t) { /* ignore */ } } } });
+        if (!ok) throw new Exception("列印引擎逾時");
+        if (err[0] != null) throw new Exception(err[0]);
     }
 
     private static final class Job {

@@ -107,6 +107,7 @@ Music.load = async function(play){
   var it = this.cur(); if(!it) return;
   try{ this.el.src = await Lib.src(it); if(play) await this.el.play(); }catch(e){ if(play) toast('無法播放：' + it.name, true); }
   this.mini();
+  if(CFG.lyr && CFG.lyr.auto && !Lyrics.of(it)){ var self0 = this; Lyrics.auto(it).then(function(l){ if(l && self0.cur() === it) self0.drawPlayer(); }).catch(function(){}); }
   if('mediaSession' in navigator) try{
     navigator.mediaSession.metadata = new MediaMetadata({title: songTitle(it), artist: it.artist || '', artwork: Lib.thumb(it) ? [{src: Lib.thumb(it), sizes: '360x360', type: 'image/jpeg'}] : []});
     navigator.mediaSession.setActionHandler('nexttrack', function(){ Music.next(); });
@@ -132,6 +133,7 @@ Music.el.addEventListener('timeupdate', function(){
   var pb = $('mpProg'); if(pb && !pb.__drag){ pb.max = d || 1; pb.value = t; }
   var a = $('mpT1'), b = $('mpT2'); if(a){ a.textContent = fmtDur(t); b.textContent = fmtDur(d); }
   var mb = $('miniBar'); if(mb) mb.style.width = (d ? 100 * t / d : 0) + '%';
+  var ml = $('miniLyr'); if(ml){ var cl = currentLyric(); var cur = Music.cur(); ml.textContent = cl || (cur && cur.artist) || '音樂庫'; }
 });
 function songTitle(it){ return (it.title && it.title !== it.name ? it.title : it.name.replace(/\.[^.]+$/, '')); }
 function musicItems(){ return Lib.items.filter(function(it){ return it.cat === 'audio'; }).sort(function(a, b){ return b.time - a.time; }); }
@@ -141,7 +143,7 @@ Music.mini = function(){
   Dock.set('music', h('div', {class: 'dockCard glass', style: {padding: '6px 8px', position: 'relative', overflow: 'hidden'}, onclick: function(){ Music.openPlayer(); }},
     h('div', {class: 'lrow', style: {padding: 0, border: 0, background: 'none', flex: 1, minWidth: 0}},
       h('div', {class: 'th', style: Object.assign({width: '40px', height: '40px', borderRadius: '10px'}, th ? {backgroundImage: 'url("' + th + '")'} : {background: 'var(--c-audio)'}), html: th ? '' : icon('audio')}),
-      h('div', {class: 't'}, h('b', {text: songTitle(it)}), h('div', {class: 'sub ell', text: it.artist || '音樂庫'}))),
+      h('div', {class: 't'}, h('b', {text: songTitle(it)}), h('div', {class: 'sub ell', id: 'miniLyr', text: it.artist || '音樂庫'}))),
     h('button', {class: 'ib', html: '<svg class="i fill" viewBox="0 0 24 24">' + (playing ? '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>' : IC.play) + '</svg>', onclick: function(e){ e.stopPropagation(); Music.toggle(); }}),
     h('button', {class: 'ib', html: icon('fwd'), onclick: function(e){ e.stopPropagation(); Music.next(); }}),
     h('button', {class: 'ib', html: icon('x', 'sm'), onclick: function(e){ e.stopPropagation(); Music.stop(); }}),
@@ -158,9 +160,25 @@ Music.drawPlayer = function(){
   var it = this.cur(); body.textContent = '';
   if(!it){ body.appendChild(h('div', {class: 'empty', text: '沒有播放中的歌曲'})); return; }
   var th = Lib.thumb(it), playing = !this.el.paused, self = this;
-  body.appendChild(h('div', {class: 'vwAudio', style: {height: 'auto', padding: '6px 0 0'}},
-    h('div', {class: 'art', style: th ? {backgroundImage: 'url("' + th + '")', width: 'min(280px,68vw)'} : {width: 'min(280px,68vw)'}, html: th ? '' : icon('audio', 'lg')}),
-    h('div', {style: {textAlign: 'center', maxWidth: '100%'}}, h('b', {text: songTitle(it), style: {fontSize: '18px', display: 'block'}}), h('div', {class: 'sub', text: (it.artist || '') + '・' + (it.name.split('.').pop() || '').toUpperCase() + '・' + fmtSize(it.size)}))));
+  var showLyr = CFG.lyr.view !== 'cover';
+  var stage = h('div', {class: 'mpStage'});
+  if(showLyr) LyrView.mount(stage, it);
+  else stage.appendChild(h('div', {class: 'art', style: th ? {backgroundImage: 'url("' + th + '")'} : null, html: th ? '' : icon('audio', 'lg'), onclick: function(){ CFG.lyr.view = 'lyrics'; saveCfg(); self.drawPlayer(); }}));
+  body.appendChild(stage);
+  body.appendChild(h('div', {class: 'row', style: {gap: '10px', marginTop: '10px'}},
+    h('div', {class: 'th', style: Object.assign({width: '46px', height: '46px', borderRadius: '12px', flex: 'none', backgroundSize: 'cover'}, th ? {backgroundImage: 'url("' + th + '")'} : {background: 'var(--c-audio)'})}),
+    h('div', {class: 'grow'}, h('b', {text: songTitle(it), style: {fontSize: '17px', display: 'block'}, class: 'ell'}), h('div', {class: 'sub ell', text: (it.artist || '') + '・' + (it.name.split('.').pop() || '').toUpperCase() + '・' + fmtSize(it.size) + (it.lrcSrc ? '・歌詞：' + it.lrcSrc.split('：')[0] : '')}))));
+  var tb = h('div', {class: 'mpTools'});
+  var tbtn = function(ic, label, fn, on){ tb.appendChild(h('button', {class: 'chip' + (on ? ' pri' : ''), style: on ? null : {background: 'var(--surface-3)', color: 'var(--text)', border: '1px solid var(--border-soft)'}, html: icon(ic, 'sm') + label, onclick: fn})); };
+  tbtn(showLyr ? 'image' : 'type', showLyr ? '封面' : '歌詞', function(){ CFG.lyr.view = showLyr ? 'cover' : 'lyrics'; saveCfg(); self.drawPlayer(); });
+  tbtn('search', '找歌詞', function(){ lyricsSearchSheet(it, function(){ self.drawPlayer(); }); });
+  tbtn('palette', '樣式', function(){ lyricsStyleSheet(function(){ if(LyrView.el) LyrView.el.setAttribute('style', lyrStyle()); }); });
+  if(Lyrics.isSynced(Lyrics.of(it))){
+    tbtn('back', '早 0.5 秒', function(){ it.lrcOffset = Math.round(((it.lrcOffset || 0) - 0.5) * 10) / 10; if(isApp) NAT.call('libMeta', it.id, JSON.stringify({lrcOffset: it.lrcOffset})); toast('歌詞時間 ' + (it.lrcOffset > 0 ? '+' : '') + it.lrcOffset + ' 秒'); LyrView.idx = -2; });
+    tbtn('fwd', '晚 0.5 秒', function(){ it.lrcOffset = Math.round(((it.lrcOffset || 0) + 0.5) * 10) / 10; if(isApp) NAT.call('libMeta', it.id, JSON.stringify({lrcOffset: it.lrcOffset})); toast('歌詞時間 ' + (it.lrcOffset > 0 ? '+' : '') + it.lrcOffset + ' 秒'); LyrView.idx = -2; });
+  }
+  if(Lyrics.of(it) && /\.(mp3|flac)$/i.test(it.name)) tbtn('download', '寫入檔案', async function(){ try{ toast('寫入歌詞中…'); await Lyrics.embed(it); toast('✓ 歌詞已寫進檔案，換到其他播放器也看得到'); self.drawPlayer(); }catch(e){ toast(e.message, true); } });
+  body.appendChild(tb);
   var prog = h('input', {type: 'range', id: 'mpProg', min: 0, max: this.el.duration || 1, step: .1, value: this.el.currentTime});
   prog.addEventListener('input', function(){ prog.__drag = true; $('mpT1').textContent = fmtDur(prog.value); });
   prog.addEventListener('change', function(){ self.el.currentTime = +prog.value; prog.__drag = false; });
