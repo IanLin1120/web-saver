@@ -43,6 +43,19 @@
             </intent-filter>
         </activity>
 
+        <!-- 分享選單的第二個選項：直接開啟下載面板（像 Snaptube） -->
+        <activity-alias
+            android:name=".DownloadAlias"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:label="用網頁擷取下載">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+
         <provider
             android:name=".LibProvider"
             android:authorities="com.ian.websaver.files"

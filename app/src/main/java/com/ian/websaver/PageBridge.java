@@ -31,6 +31,14 @@ public class PageBridge {
 
     @JavascriptInterface public void ytDl(String id) { MainActivity.emit("ytdl", id); }
 
+    @JavascriptInterface public void ytStream(String url) { if (url != null && url.contains("googlevideo.com/videoplayback")) YtSniff.note(b, url); }
+
+    @JavascriptInterface public void ytInfo(String vid, String json) { YtSniff.info(vid, json); MainActivity.emit("ytInfo", vid); }
+
+    @JavascriptInterface public void fullscreen(final boolean on, final boolean land) { Util.ui(new Runnable() { @Override public void run() { b.fullscreen(on, land); } }); }
+
+    @JavascriptInterface public void ytOpenTab(final String url) { MainActivity.emit("ytOpen", url); }
+
     @JavascriptInterface public void brightness(final float v) { Util.ui(new Runnable() { @Override public void run() { b.brightness(v); } }); }
 
     @JavascriptInterface public void pip() { Util.ui(new Runnable() { @Override public void run() { b.a.enterPip(true); } }); }

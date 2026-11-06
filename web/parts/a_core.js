@@ -113,6 +113,9 @@ var IC = {
   undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
   copy: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
   zoomIn: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5M11 8v6M8 11h6"/>',
+  ytplay: '<rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="M10 9.2v5.6l4.8-2.8z" fill="currentColor"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+  history: '<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4.5h4.5M12 7.5V12l3 2"/>',
   sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>'
 };
 function icon(name, cls){ return '<svg class="i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24">' + (IC[name] || IC.other) + '</svg>'; }
@@ -175,8 +178,9 @@ var Sheets = {stack: []};
 function coverNative(on){
   if(!isApp) return;
   NAT.call('cover', !!on);
-  if(!on){ $('brSnap').classList.remove('on'); var vs = $('vwSnap'); if(vs) vs.classList.remove('on'); }
+  if(!on){ $('brSnap').classList.remove('on'); $('ytSnap').classList.remove('on'); var vs = $('vwSnap'); if(vs) vs.classList.remove('on'); }
 }
+on('snapYt', function(d){ if(d){ var s = $('ytSnap'); s.src = d; s.classList.add('on'); } });
 on('snap', function(d){ if(d){ var s = $('brSnap'); s.src = d; s.classList.add('on'); } });
 on('snapVw', function(d){ var s = $('vwSnap'); if(d && s){ s.src = d; s.classList.add('on'); } });
 
@@ -296,7 +300,7 @@ function ring(pct){
 function uiZoom(){ var z = parseFloat(document.documentElement.style.zoom); return z > 0 ? z : 1; }
 
 /* ---------- 頁面切換 ---------- */
-var VIEWS = ['browse', 'lib', 'set'];
+var VIEWS = ['browse', 'yt', 'lib', 'set'];
 var curView = 'browse';
 function showView(v){
   if(VIEWS.indexOf(v) < 0) v = 'browse';

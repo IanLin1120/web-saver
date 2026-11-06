@@ -91,7 +91,11 @@ function renderSettings(){
     swRow('手勢調整', '在影片右半邊上下滑調音量、左半邊調亮度', 'yt.gest'),
     swRow('Morphe 風格播放器', '換上自訂的播放控制：大按鈕、雙擊快轉 ±10 秒、長按 2 倍速、左右滑拖曳進度、上下滑調亮度／音量、進度條顯示 SponsorBlock 片段、畫質／速度選單、子母畫面、下載', 'yt.skin'),
     selRow('預設畫質', [['max', '最高畫質'], ['1080', '1080p'], ['720', '720p'], ['480', '480p（省流量）'], ['auto', '讓 YouTube 自動決定']], 'yt.q'),
-    h('div', {class: 'sub', style: {margin: '6px 0', lineHeight: '1.7'}, html: '在瀏覽頁開啟任何 YouTube 影片（含 Shorts），按「媒體」就能選：<br>・影片：144p～4K，影像與聲音分開下載後在手機上合併（不重新壓縮）<br>・音樂：MP3 128／192／320kbps、M4A、OPUS 原始音軌、FLAC／WAV 無損格式（附歌名、歌手、封面）'}),
+    selRow('下載與播放的影片編碼', [['vp9', '高畫質優先：最高 4K（VP9，存成 WebM）'], ['h264', '相容優先：最高 1080p（H.264，存成 MP4，所有播放器都能播）']], 'yt.codec', function(){ toast('重新整理 YouTube 頁面後生效'); }),
+    swRow('顯示倒讚數', '在播放器標題下方顯示按讚／倒讚數（Return YouTube Dislike）', 'yt.ryd'),
+    swRow('隱藏 Shorts', '首頁與搜尋結果不顯示 Shorts 短片區塊', 'yt.noShorts'),
+    swRow('懸浮下載按鈕', '在網頁與 YouTube 影片上顯示可拖曳的 ⬇ 按鈕（彈出視窗裡也有），一點就開啟下載面板', 'fab'),
+    h('div', {class: 'sub', style: {margin: '6px 0', lineHeight: '1.7'}, html: '在「YouTube」分頁（或瀏覽頁）開啟任何影片，按右上角「下載」、播放器上的 ⬇ 或懸浮按鈕就能選：<br>・影片：144p～4K，影像與聲音分開下載後在手機上合併（不重新壓縮）<br>・音樂：MP3 128／192／320kbps、M4A、OPUS 原始音軌、FLAC／WAV 無損格式（附歌名、歌手、封面）'}),
     h('div', {class: 'btn-row'}, h('button', {class: 'btn sm', html: icon('update', 'sm') + '更新解析設定', onclick: async function(){ await YT.loadCfg(); YT.cache = {}; toast('解析設定：' + YT.cfg.clients.map(function(c){ return c.name; }).join('、')); }})),
     h('div', {class: 'note', text: '下載的影片與音樂僅供個人離線觀看收聽，請尊重創作者著作權。會員專屬、付費或有 DRM 保護的內容無法下載。'})
   ]));
@@ -151,4 +155,21 @@ function bmBackup(){
       inp.click();
     }]
   ]);
+}
+
+/* YouTube 分頁右上角「⋯ → 播放器設定」 */
+function openYtSettings(){
+  var body = h('div', {class: 'card glass', style: {padding: '6px 12px'}},
+    swRow('YouTube 去廣告', '重新整理 YouTube 後生效', 'ytAds'),
+    swRow('Morphe 風格播放器', '手勢播放控制（關閉則使用 YouTube 原本的播放器）', 'yt.skin'),
+    swRow('背景播放', '切到其他 App 或關閉螢幕，聲音繼續播放', 'yt.bg'),
+    swRow('子母畫面', '播放中按 Home 鍵自動縮成小視窗', 'yt.pip'),
+    swRow('SponsorBlock 自動跳過', '跳過業配、開場、片尾、提醒訂閱等片段', 'yt.sb'),
+    swRow('顯示倒讚數', 'Return YouTube Dislike', 'yt.ryd'),
+    swRow('隱藏 Shorts', '首頁與搜尋結果不顯示 Shorts', 'yt.noShorts'),
+    selRow('預設畫質', [['max', '最高畫質'], ['1080', '1080p'], ['720', '720p'], ['480', '480p（省流量）'], ['auto', '讓 YouTube 自動決定']], 'yt.q'),
+    selRow('影片編碼', [['vp9', '高畫質優先（最高 4K、WebM）'], ['h264', '相容優先（最高 1080p、MP4）']], 'yt.codec'),
+    swRow('懸浮下載按鈕', '可拖曳的 ⬇ 按鈕', 'fab'));
+  openSheet({title: 'YouTube 播放器設定', icon: 'gear', body: body, tall: true, onClose: function(){ if(isApp) NAT.call('ytNav', 'reload'); },
+    foot: h('div', {class: 'sub', text: '關閉這個面板後會重新整理 YouTube 讓設定生效'})});
 }

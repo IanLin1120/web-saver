@@ -178,102 +178,222 @@ function ytMeta(d){
   return {title: t, song: song, artist: artist, thumb: 'https://i.ytimg.com/vi/' + d.id + '/hqdefault.jpg', thumbMax: 'https://i.ytimg.com/vi/' + d.id + '/maxresdefault.jpg', dur: +d.details.lengthSeconds || 0};
 }
 
-/* ---------- 下載面板 ---------- */
+/* ---------- 下載面板（Snaptube 風格：大縮圖、影片／音樂分頁、選畫質、一鍵下載） ----------
+   主要來源：App 內 YouTube 播放器實際在播的串流（已帶 YouTube 算好的簽章與驗證，不會被 403 拒絕）。
+   找不到時才改用舊的多來源解析。 */
+var ITAG_H = {160: 144, 133: 240, 134: 360, 135: 480, 136: 720, 137: 1080, 298: 720, 299: 1080, 264: 1440, 266: 2160, 278: 144, 242: 240, 243: 360, 244: 480, 247: 720, 248: 1080,
+  271: 1440, 313: 2160, 302: 720, 303: 1080, 308: 1440, 315: 2160, 330: 144, 331: 240, 332: 360, 333: 480, 334: 720, 335: 1080, 336: 1440, 337: 2160,
+  394: 144, 395: 240, 396: 360, 397: 480, 398: 720, 399: 1080, 400: 1440, 401: 2160, 18: 360, 22: 720};
+var QKEY = {144: 'tiny', 240: 'small', 360: 'medium', 480: 'large', 720: 'hd720', 1080: 'hd1080', 1440: 'hd1440', 2160: 'hd2160', 4320: 'highres'};
+var QKEY_H = {tiny: 144, small: 240, medium: 360, large: 480, hd720: 720, hd1080: 1080, hd1440: 1440, hd2160: 2160, highres: 4320};
+function sMime(s){ try{ return decodeURIComponent(s.mime || ''); }catch(e){ return s.mime || ''; } }
+
+/* 讓 App 內的播放器載入這部影片並回報資訊；影片沒開著就先在 YouTube 分頁打開 */
+async function ytPageData(id, onStep){
+  if(!isApp || !NAT.has('ytInfoReq')) return null;
+  var where = NAT.call('ytInfoReq', id);
+  if(!where){
+    if(onStep) onStep('在 YouTube 分頁開啟影片…');
+    YTB.started = true; NAT.call('ytLoad', 'https://m.youtube.com/watch?v=' + id);
+    for(var k = 0; k < 40 && !where; k++){ await sleep(500); where = NAT.call('ytInfoReq', id); }
+    if(!where) return null;
+  }
+  if(onStep) onStep('讀取影片資訊…');
+  for(var i = 0; i < 24; i++){
+    var pd = NAT.json('ytSniff', id);
+    if(pd && pd.info && (pd.info.formats.length || pd.info.levels.length)) return pd;
+    await sleep(400);
+    if(i % 4 === 3) NAT.call('ytInfoReq', id);
+  }
+  return NAT.json('ytSniff', id);
+}
+function ytFromPage(id, pd){
+  var inf = pd.info || {details: {}, formats: [], levels: []};
+  var fm = (inf.formats || []).slice();
+  if(!fm.some(function(f){ return /^video/.test(f.mimeType); })){
+    (inf.levels || []).forEach(function(q){ var hh = QKEY_H[q]; if(hh && hh < 4320) fm.push({itag: 0, mimeType: 'video/webm', height: hh}); });
+    if(!fm.length) [1080, 720, 480, 360].forEach(function(hh){ fm.push({itag: 0, mimeType: 'video/webm', height: hh}); });
+  }
+  return {id: id, page: true, src: 'App 內播放器', details: inf.details || {}, formats: fm, hls: inf.hls || '', live: !!inf.live, sabr: !!inf.sabr};
+}
+function ytHeightOf(itag, d){
+  var f = (d.formats || []).filter(function(x){ return x.itag === itag; })[0];
+  return f && f.height ? f.height : (ITAG_H[itag] || 0);
+}
+/* 從攔截到的串流中挑出指定畫質的影像＋最搭的聲音 */
+function ytPickStreams(d, pd, wantH, audioOnly){
+  var len = +(d.details.lengthSeconds || 0);
+  var S = (pd && pd.streams || []).filter(function(s){ return !s.sabr && (!len || !+s.dur || Math.abs(+s.dur - len) < 4); });
+  var aud = S.filter(function(s){ return /^audio/.test(sMime(s)); });
+  var vids = S.filter(function(s){ return /^video/.test(sMime(s)) && (audioOnly || ytHeightOf(s.itag, d) === wantH); });
+  var v = vids.sort(function(a, b){ return (+b.clen || 0) - (+a.clen || 0); })[0] || null;
+  var cont = v && /webm/.test(sMime(v)) ? 'webm' : 'mp4';
+  var a = aud.filter(function(s){ return (cont === 'webm') === /webm/.test(sMime(s)); }).sort(function(x, y){ return (+y.clen || 0) - (+x.clen || 0); })[0] || aud[0] || null;
+  return {v: v, a: a, cont: cont, sabrOnly: !S.length && (pd && pd.streams || []).some(function(s){ return s.sabr; })};
+}
+async function ytPageStreams(d, wantH, audioOnly, onStep){
+  var pd = NAT.json('ytSniff', d.id), r = ytPickStreams(d, pd, wantH, audioOnly);
+  if(r.a && (audioOnly || r.v)) return r;
+  if(onStep) onStep(audioOnly ? '取得音軌…' : '切換到 ' + wantH + 'p，取得串流…');
+  var tag = NAT.call('ytPrep', d.id, audioOnly ? 'tiny' : (QKEY[wantH] || 'hd720'));
+  if(!tag){ var pd2 = await ytPageData(d.id, onStep); if(!pd2) return r; tag = NAT.call('ytPrep', d.id, audioOnly ? 'tiny' : (QKEY[wantH] || 'hd720')); }
+  for(var i = 0; i < 36; i++){
+    await sleep(500);
+    pd = NAT.json('ytSniff', d.id); r = ytPickStreams(d, pd, wantH, audioOnly);
+    if(r.a && (audioOnly || r.v)) break;
+    if(i === 14) NAT.call('ytPrep', d.id, audioOnly ? 'tiny' : (QKEY[wantH] || 'hd720'));
+  }
+  NAT.call('ytPrep', d.id, '__done');
+  return r;
+}
+/* 每個畫質的選項（大小、容器） */
+function ytPageOptions(d){
+  var h264 = CFG.yt.codec === 'h264';
+  var vids = d.formats.filter(function(f){ return /^video/.test(f.mimeType) && !f.audioQuality && f.height; });
+  var auds = d.formats.filter(function(f){ return /^audio/.test(f.mimeType); });
+  var aOpus = auds.filter(function(f){ return /opus/.test(ytCodec(f)); }).sort(function(a, b){ return b.bitrate - a.bitrate; })[0];
+  var aM4a = auds.filter(function(f){ return /mp4a/.test(ytCodec(f)); }).sort(function(a, b){ return b.bitrate - a.bitrate; })[0];
+  var by = {};
+  vids.forEach(function(f){
+    var c = ytCodec(f), ok = h264 ? (/avc1/.test(c) || !c) : !/av01/.test(c);
+    if(!ok) return;
+    var cur = by[f.height];
+    var score = function(x){ var cc = ytCodec(x); return (h264 ? 0 : /vp0?9/.test(cc) ? 2 : 1) * 1e12 + (x.contentLength || 0); };
+    if(!cur || score(f) > score(cur)) by[f.height] = f;
+  });
+  if(h264) Object.keys(by).forEach(function(k){ if(+k > 1080) delete by[k]; });
+  var out = Object.keys(by).map(Number).sort(function(a, b){ return b - a; }).map(function(hh){
+    var f = by[hh], webm = /webm/.test(f.mimeType), a = webm ? (aOpus || aM4a) : (aM4a || aOpus);
+    return {h: hh, f: f, cont: webm ? 'webm' : 'mp4', fps: f.fps || 0, size: fSize(f) + fSize(a)};
+  });
+  return {video: out, opus: aOpus, m4a: aM4a, best: h264 ? (aM4a || aOpus) : (aOpus || aM4a)};
+}
+function qTag(hh){ return hh >= 2160 ? '4K' : hh >= 1440 ? '2K' : hh >= 1080 ? 'Full HD' : hh >= 720 ? 'HD' : hh >= 480 ? '標準' : '省流量'; }
+
 async function openYt(id){
-  if(!isApp){ dialog('需要 APK 版', '網頁版受瀏覽器限制，無法讀取 YouTube 的影片串流。請在 APK 版的瀏覽頁開啟 YouTube 影片，再按「媒體」。', [['好', null]]); return; }
-  var body = h('div', {html: '<div class="ringBox"><div class="spin"></div><div class="sub">正在解析 YouTube 影片…</div></div>'});
-  var s = openSheet({title: 'YouTube 下載', icon: 'video', body: body, tall: true,
+  if(!isApp){ dialog('需要 APK 版', '網頁版受瀏覽器限制，無法讀取 YouTube 的影片串流。請使用 APK 版的「YouTube」分頁。', [['好', null]]); return; }
+  var body = h('div', {html: '<div class="ringBox"><div class="spin"></div><div class="sub">正在讀取影片…</div></div>'});
+  var foot = h('div', {style: {display: 'contents'}});
+  var s = openSheet({title: '下載', icon: 'download', body: body, tall: true, cls: 'ytdl', foot: foot,
     headExtra: h('button', {class: 'btn sm ghost', text: '一般偵測', onclick: function(){ s.close(); openMedia(true); }})});
-  var d;
-  try{ d = await YT.player(id, null, function(label, i, n){ var st = body.querySelector('.sub'); if(st) st.textContent = '正在尋找可下載的來源（' + i + '/' + n + '）：' + label; }); }
-  catch(e){
-    body.innerHTML = '';
-    body.appendChild(h('div', {class: 'empty', html: '<div class="big">⚠️</div>無法解析這部影片<br><span class="sub" style="white-space:pre-line">' + esc(e.message) + '</span>'}));
-    body.appendChild(h('div', {class: 'note', html: '可能原因：影片有年齡限制、會員專屬、私人影片，或 YouTube 改版。可到「設定 → YouTube」按「更新解析設定」後再試。'}));
-    return;
+  var step = function(t){ var st = body.querySelector('.sub'); if(st) st.textContent = t; };
+  var d = null, pd = await ytPageData(id, step);
+  if(s.closed) return;
+  if(pd && (pd.info || (pd.streams && pd.streams.length))) d = ytFromPage(id, pd);
+  if(!d){
+    try{ d = await YT.player(id, null, function(label, i, n){ step('尋找下載來源（' + i + '/' + n + '）：' + label); }); }
+    catch(e){
+      body.innerHTML = '';
+      body.appendChild(h('div', {class: 'empty', html: '<div class="big">⚠️</div>無法讀取這部影片<br><span class="sub" style="white-space:pre-line">' + esc(e.message) + '</span>'}));
+      body.appendChild(h('div', {class: 'note', html: '請先在「YouTube」分頁打開這部影片並播放幾秒，再按下載。會員專屬、私人或有年齡限制（未登入）的影片無法下載。'}));
+      return;
+    }
   }
-  var meta = ytMeta(d), opt = ytOptions(d), tab = lsGet('ws.ytTab', 'video');
-  var hlsMode = !d.formats.length && !!d.hls, hv = null;
-  if(hlsMode){
-    hv = await new Promise(function(res){
-      var done = false, fn = function(x){ if(!done && x.url === d.hls){ done = true; res(x.variants || []); } };
-      on('hlsInfo', fn); NAT.call('hlsInfo', d.hls, ''); setTimeout(function(){ if(!done){ done = true; res([]); } }, 15000);
-    });
-  }
+  if(s.closed) return;
+  var meta = ytMeta(d), tab = lsGet('ws.ytTab', 'video'), pick = null;
+  var opt = d.page ? ytPageOptions(d) : null, old = d.page ? null : ytOptions(d);
   var name = h('input', {type: 'text', value: meta.title.replace(/[\\\/:*?"<>|]/g, '_').slice(0, 100)});
+  var nm = function(){ return (name.value.trim() || meta.title).replace(/[\\\/:*?"<>|]/g, '_'); };
+  var go = h('button', {class: 'btn pri block', html: icon('download', 'sm') + '下載', disabled: true});
+  foot.appendChild(go);
+  function choose(p, el){ pick = p; qsa('.ydRow', body).forEach(function(x){ x.classList.remove('on'); }); if(el) el.classList.add('on'); go.disabled = !p; go.innerHTML = icon('download', 'sm') + (p ? '下載　' + p.label : '下載'); }
   function draw(){
-    body.textContent = '';
-    body.appendChild(h('div', {class: 'capHead'}, h('div', {class: 'snap', style: {width: '112px', height: '63px', backgroundImage: 'url("' + pxUrl(meta.thumb) + '")', backgroundSize: 'cover', backgroundPosition: 'center'}}),
-      h('div', {class: 'grow'}, h('b', {text: meta.title, style: {display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontSize: '14px'}}),
-        h('div', {class: 'sub', text: (d.details.author || '') + (meta.dur ? '・' + fmtDur(meta.dur) : '')}), h('div', {class: 'sub', text: '來源：' + d.src, style: {fontSize: '11px'}}))));
-    body.appendChild(h('div', {class: 'field'}, h('div', {class: 'lbl'}, '檔名'), name));
-    var seg = h('div', {class: 'seg', style: {margin: '6px 0 10px'}});
+    body.textContent = ''; pick = null; go.disabled = true; go.innerHTML = icon('download', 'sm') + '下載';
+    body.appendChild(h('div', {class: 'ydHead'},
+      h('div', {class: 'ydThumb', style: {backgroundImage: 'url("' + pxUrl(meta.thumb) + '")'}}, meta.dur ? h('span', {text: fmtDur(meta.dur)}) : null),
+      h('div', {class: 'ydInfo'}, h('b', {text: meta.title}), h('div', {class: 'sub', text: (d.details.author || '') + (d.page ? '' : '・來源：' + d.src)}))));
+    var seg = h('div', {class: 'seg ydTabs'});
     [['video', '影片', 'video'], ['music', '音樂', 'audio'], ['thumb', '縮圖', 'image']].forEach(function(t){
       seg.appendChild(h('button', {class: tab === t[0] ? 'on' : '', html: icon(t[2], 'sm') + t[1], onclick: function(){ tab = t[0]; lsSet('ws.ytTab', tab); draw(); }}));
     });
     body.appendChild(seg);
-    var list = h('div', {class: 'opts'});
-    function row(ic, t, sub, size, fn, color){
-      list.appendChild(h('div', {class: 'opt', onclick: function(){ s.close(); fn(); }},
-        h('span', {class: 'oi', html: icon(ic), style: color ? {background: color, color: '#fff'} : null}),
-        h('div', {class: 'grow'}, h('b', {text: t}), h('div', {class: 'sub', html: sub})),
-        size ? h('span', {class: 'badge', text: '約 ' + fmtSize(size)}) : null,
-        h('span', {html: icon('download'), style: {color: 'var(--accent)'}})));
+    var list = h('div', {class: 'ydList'});
+    function row(p, big, small, size, tag, color){
+      var el = h('div', {class: 'ydRow', onclick: function(){ choose(p, el); }},
+        h('span', {class: 'ydQ', style: color ? {background: color} : null}, h('b', {text: big}), small ? h('small', {text: small}) : null),
+        h('div', {class: 'grow'}, h('b', {text: p.label}), h('div', {class: 'sub', html: p.sub || ''})),
+        h('div', {class: 'ydSz'}, size ? h('b', {text: fmtSize(size)}) : h('b', {text: '—'}), tag ? h('span', {class: 'badge', text: tag}) : null),
+        h('span', {class: 'ydRad'}));
+      el.ondblclick = function(){ choose(p, el); go.click(); };
+      list.appendChild(el);
+      return el;
     }
-    var nm = function(){ return (name.value.trim() || meta.title).replace(/[\\\/:*?"<>|]/g, '_'); };
-    var base = {src: BR.url || ('https://www.youtube.com/watch?v=' + d.id), title: meta.title, thumbUrl: meta.thumb, ua: d.ua || '', noCookie: true, referer: ''};
-    if(hlsMode){
-      body.appendChild(h('div', {class: 'note', html: '⚠️ 這部影片的一般串流被 YouTube 拒絕，改用 <b>HLS 串流</b>下載（最高 1080p，下載後轉成 MP4）。'}));
-      if(tab === 'video'){
-        (hv.length ? hv : [{url: '', h: 0, name: '最高畫質'}]).forEach(function(v){
-          row('video', v.h ? qLabel(v.h, {}) : (v.name || '最高畫質'), 'HLS 串流・下載後轉成 MP4', 0, function(){ ytDl([Object.assign({}, base, {kind: 'hls', url: d.hls, variant: v.url, name: nm() + (v.h ? '_' + v.h + 'p' : '')})], meta); }, 'var(--c-video)');
-        });
-        body.appendChild(list); paintIcons(body); return;
-      }
-      if(tab === 'music'){
-        var hb = Object.assign({}, base, {kind: 'hls', url: d.hls, variant: (hv[hv.length - 1] || {}).url || '', name: nm(), artist: meta.artist, title: meta.song, audioOnly: true});
-        [['mp3:320', 'MP3 320kbps'], ['mp3:192', 'MP3 192kbps'], ['flac', 'FLAC 無損格式'], ['wav', 'WAV 無損 PCM'], ['', 'M4A（AAC 原始音軌）']].forEach(function(k){
-          row('audio', k[1], '從 HLS 串流取出音軌' + (k[0] ? '後轉檔' : '、不轉檔'), 0, function(){ ytDl([Object.assign({}, hb, k[0] ? {convert: k[0]} : {})], meta, 'm4a'); }, 'var(--c-audio)');
-        });
-        body.appendChild(list); paintIcons(body); return;
-      }
-    }
+    if(d.live) body.appendChild(h('div', {class: 'note', text: '這是直播，只能下載已經播出的部分（HLS）。'}));
     if(tab === 'video'){
-      if(!opt.video.length) list.appendChild(h('div', {class: 'empty', text: '沒有可下載的影片串流'}));
-      opt.video.forEach(function(o){
-        row('video', o.label, (o.cont === 'mp4' ? 'MP4' : 'WebM') + '・' + o.codec + (o.muxed ? '' : '＋' + (o.a ? (/opus/.test(ytCodec(o.a)) ? 'Opus' : 'AAC') : '') + ' 音訊，下載後合併') + (o.cont === 'webm' ? '<br>高畫質只有 VP9 編碼，存成 WebM' : ''),
-          fSize(o.v) + fSize(o.a), function(){
-            ytStart(d, meta, {type: 'video', h: o.h, cont: o.cont, name: nm() + '_' + o.h + 'p'});
-          }, 'var(--c-video)');
-      });
-      if(d.hls) row('layers', 'HLS 串流（備用）', '若上面的選項下載失敗可試這個・最高 1080p', 0, function(){ ytDl([Object.assign({}, base, {kind: 'hls', url: d.hls, name: nm()})], meta); });
-    } else if(tab === 'music'){
-      var best = opt.opus || opt.m4a;
-      if(!best) list.appendChild(h('div', {class: 'empty', text: '沒有可下載的音軌'}));
-      else {
-        var src = function(o){ return {kind: 'audio', url: o.url, ext: /webm/.test(o.mimeType) ? 'webm' : 'mp4'}; };
-        var au = Object.assign({}, base, {artist: meta.artist, name: nm()});
-        var ms = {title: meta.song, artist: meta.artist};
-        [[320, '極高音質'], [192, '高音質'], [128, '標準']].forEach(function(k){
-          row('audio', 'MP3 ' + k[0] + 'kbps', k[1] + '・相容所有播放器（下載後轉檔）', meta.dur * k[0] * 125, function(){ ytStart(d, meta, {type: 'audio', pick: 'best', name: nm(), extra: {audioOut: 'orig', convert: 'mp3:' + k[0]}}); }, 'var(--c-audio)');
+      if(d.page){
+        if(!opt.video.length) list.appendChild(h('div', {class: 'empty', text: '沒有可下載的影片串流'}));
+        opt.video.forEach(function(o){
+          row({label: o.h + 'p' + (o.fps > 30 ? o.fps : ''), sub: (o.cont === 'mp4' ? 'MP4・H.264' : 'WebM・VP9') + '＋聲音・下載後自動合併', run: function(){ ytStartPage(d, meta, {type: 'video', h: o.h, name: nm() + '_' + o.h + 'p'}); }},
+            o.h >= 1080 ? o.h + 'P' : o.h + 'p', qTag(o.h), o.size, o.cont.toUpperCase(), 'var(--c-video)');
         });
-        if(opt.m4a) row('audio', 'M4A（AAC 原始音軌）', '不轉檔、原音直出・約 ' + Math.round(opt.m4a.bitrate / 1000) + 'kbps', fSize(opt.m4a), function(){ ytStart(d, meta, {type: 'audio', pick: 'm4a', name: nm(), extra: {audioOut: 'm4a'}}); }, 'var(--c-audio)');
-        if(opt.opus) row('sparkle', 'OPUS（原始最高音質）', 'YouTube 音質最好的音軌、不轉檔・約 ' + Math.round(opt.opus.bitrate / 1000) + 'kbps', fSize(opt.opus), function(){ ytStart(d, meta, {type: 'audio', pick: 'opus', name: nm(), extra: {audioOut: 'opus'}}); }, 'var(--c-audio)');
-        row('sparkle', 'FLAC 無損格式', '完整保留原始音軌、不再有任何音質損失・附歌名與封面', meta.dur * 48000 * 4 * 0.6, function(){ ytStart(d, meta, {type: 'audio', pick: 'best', name: nm(), extra: {audioOut: 'orig', convert: 'flac'}}); }, 'var(--olive)');
-        row('sparkle', 'WAV 無損 PCM', '未壓縮，檔案最大，適合剪輯軟體', meta.dur * 48000 * 4, function(){ ytStart(d, meta, {type: 'audio', pick: 'best', name: nm(), extra: {audioOut: 'orig', convert: 'wav'}}); }, 'var(--olive)');
-        body.appendChild(list);
-        body.appendChild(h('div', {class: 'note', html: '🎧 說明：YouTube 提供的原始音訊本身就是壓縮過的（Opus 約 160kbps、AAC 約 128kbps）。<b>FLAC／WAV</b> 會把這條音軌「一點不漏」地保存下來，之後怎麼轉、怎麼剪都不會再掉音質，但無法比 YouTube 的原始音軌更好。想要最小檔案又最好音質，選 <b>OPUS</b>。'}));
-        paintIcons(body); return;
+      } else {
+        old.video.forEach(function(o){ row({label: o.label, sub: (o.cont === 'mp4' ? 'MP4' : 'WebM') + '・' + o.codec, run: function(){ ytStart(d, meta, {type: 'video', h: o.h, cont: o.cont, name: nm() + '_' + o.h + 'p'}); }}, o.h + 'p', qTag(o.h), fSize(o.v) + fSize(o.a), o.cont.toUpperCase(), 'var(--c-video)'); });
       }
+      if(d.hls) row({label: 'HLS 串流（備用）', sub: '上面的選項失敗時可試這個', run: function(){ ytDl([{kind: 'hls', url: d.hls, name: nm(), src: 'https://www.youtube.com/watch?v=' + d.id, title: meta.title, thumbUrl: meta.thumb, noCookie: true}], meta); }}, 'HLS', '', 0, 'MP4');
+    } else if(tab === 'music'){
+      var best = d.page ? opt.best : (old.opus || old.m4a);
+      var dur = meta.dur;
+      var mk = function(type, extra){ return function(){ if(d.page) ytStartPage(d, meta, {type: 'audio', name: nm(), extra: extra}); else ytStart(d, meta, {type: 'audio', pick: type, name: nm(), extra: extra}); }; };
+      [[320, '極高音質'], [192, '高音質'], [128, '標準音質']].forEach(function(k){
+        row({label: 'MP3 ' + k[0] + 'kbps', sub: k[1] + '・所有播放器都能播・附歌名封面', run: mk('best', {audioOut: 'orig', convert: 'mp3:' + k[0]})}, 'MP3', k[0] + 'k', dur * k[0] * 125, 'MP3', 'var(--c-audio)');
+      });
+      var m4a = d.page ? opt.m4a : old.m4a, opus = d.page ? opt.opus : old.opus;
+      if(m4a || (d.page && CFG.yt.codec === 'h264')) row({label: 'M4A 原始音軌', sub: 'AAC・不轉檔、原音直出', run: mk('m4a', {audioOut: 'm4a'})}, 'M4A', 'AAC', fSize(m4a), 'M4A', 'var(--c-audio)');
+      if(opus || (d.page && CFG.yt.codec !== 'h264')) row({label: 'OPUS 原始最高音質', sub: 'YouTube 音質最好的音軌・不轉檔', run: mk('opus', {audioOut: 'opus'})}, 'OPUS', '原始', fSize(opus), 'OPUS', 'var(--c-audio)');
+      row({label: 'FLAC 無損', sub: '完整保留原始音軌、不再損失・附歌名封面', run: mk('best', {audioOut: 'orig', convert: 'flac'})}, 'FLAC', '無損', dur * 48000 * 4 * 0.6, 'FLAC', 'var(--olive)');
+      row({label: 'WAV 無損 PCM', sub: '未壓縮，適合剪輯軟體', run: mk('best', {audioOut: 'orig', convert: 'wav'})}, 'WAV', '無損', dur * 48000 * 4, 'WAV', 'var(--olive)');
+      if(!best && !d.page) list.appendChild(h('div', {class: 'empty', text: '沒有可下載的音軌'}));
     } else {
-      row('image', '最高解析度縮圖（JPG）', 'maxresdefault・1280×720 以上（若影片有提供）', 0, function(){ ytDl([{kind: 'image', url: meta.thumbMax, name: nm() + '_縮圖', referer: base.referer}], meta); }, 'var(--c-image)');
-      row('image', '標準縮圖（JPG）', 'hqdefault・480×360', 0, function(){ ytDl([{kind: 'image', url: meta.thumb, name: nm() + '_縮圖', referer: base.referer}], meta); }, 'var(--c-image)');
+      row({label: '最高解析度縮圖', sub: '1280×720 以上（若影片有提供）', run: function(){ ytDl([{kind: 'image', url: meta.thumbMax, name: nm() + '_縮圖'}], meta); }}, 'JPG', 'HD', 0, 'JPG', 'var(--c-image)');
+      row({label: '標準縮圖', sub: '480×360', run: function(){ ytDl([{kind: 'image', url: meta.thumb, name: nm() + '_縮圖'}], meta); }}, 'JPG', 'SD', 0, 'JPG', 'var(--c-image)');
     }
     body.appendChild(list);
+    var nameRow = h('details', {class: 'ydName'}, h('summary', {text: '檔名：' + nm()}), h('div', {class: 'field', style: {marginTop: '8px'}}, name));
+    name.oninput = function(){ nameRow.firstChild.textContent = '檔名：' + nm(); };
+    body.appendChild(nameRow);
+    body.appendChild(h('div', {class: 'sub', style: {fontSize: '11.5px', margin: '8px 2px', lineHeight: '1.6'}, html: d.page ? '✓ 直接使用 App 內 YouTube 播放器的串流下載（不會被 403 拒絕）。下載時播放器會靜音切換畫質幾秒，下載中可以繼續看其他影片。' : '來源：' + esc(d.src)}));
+    /* 預設選第一個（或上次選的畫質） */
+    var rows = qsa('.ydRow', list), last = lsGet('ws.ytLast' + tab, '');
+    var pre = rows.filter(function(r){ return r.querySelector('.grow b').textContent === last; })[0] || rows[0];
+    if(pre) pre.click();
     paintIcons(body);
   }
+  go.onclick = function(){ if(!pick) return; lsSet('ws.ytLast' + tab, pick.label); s.close(); pick.run(); };
   draw();
 }
+
+/* 用 App 內播放器的串流下載 */
+async function ytStartPage(d, meta, ch, retry){
+  var audioOnly = ch.type === 'audio';
+  dlCard(0, 1, '準備下載：' + (audioOnly ? '取得音軌…' : ch.h + 'p…'), 0);
+  var r = await ytPageStreams(d, ch.h, audioOnly, function(t){ dlCard(0, 1, t, 0); });
+  if(!r.a || (!audioOnly && !r.v)){
+    Dock.remove('dl');
+    var why = r.sabrOnly ? 'YouTube 對這部影片使用新的「SABR」串流格式，目前無法直接取得完整檔案。' : '播放器沒有載入' + (audioOnly ? '音軌' : ' ' + ch.h + 'p 的畫面') + '。';
+    dialog('無法取得串流', why + '<br><br>請在「YouTube」分頁讓影片<b>播放幾秒</b>（不要停在廣告），再按一次下載；或改選其他畫質。', [['用其他來源試試', function(){ ytLegacy(d.id, meta, ch); }], ['好', null]]);
+    return;
+  }
+  var base = {src: 'https://www.youtube.com/watch?v=' + d.id, title: meta.title, thumbUrl: meta.thumb, ua: '', noCookie: true, referer: 'https://m.youtube.com/'};
+  YTJOB = {id: d.id, meta: meta, ch: ch, page: true, d: d, tries: retry || 0, skip: []};
+  if(audioOnly){
+    var ext = /webm/.test(sMime(r.a)) ? 'webm' : 'mp4', extra = Object.assign({}, ch.extra || {});
+    if(extra.audioOut === 'opus' && ext !== 'webm') extra.audioOut = 'm4a';
+    if(extra.audioOut === 'm4a' && ext !== 'mp4') extra.audioOut = 'opus';
+    ytDl([Object.assign({}, base, {kind: 'audio', url: r.a.url, ext: ext, name: ch.name, artist: meta.artist}, extra, {title: meta.song})], meta, 'mp4');
+  } else {
+    lsSet('ws.ytLastH', ch.h);
+    ytDl([Object.assign({}, base, {kind: 'merge', url: r.v.url, audioUrl: r.a.url, container: r.cont, name: ch.name})], meta, 'mp4');
+  }
+}
+/* 舊的多來源解析（備用） */
+async function ytLegacy(id, meta, ch){
+  dlCard(0, 1, '尋找其他下載來源…', 0);
+  try{
+    var d = await YT.player(id, null, function(l){ dlCard(0, 1, '嘗試：' + l, 0); });
+    ytStart(d, meta, ch.type === 'video' ? {type: 'video', h: ch.h, cont: 'mp4', name: ch.name} : {type: 'audio', pick: 'best', name: ch.name, extra: ch.extra});
+  }catch(e){ Dock.remove('dl'); dialog('下載失敗', '其他來源也無法下載：<br><span class="sub" style="white-space:pre-line">' + esc(e.message) + '</span>', [['好', null]]); }
+}
+
 var PENDING_CONV = {};
 function ytDl(items, meta, vidOut){
   var folder = LF.pickDefault && LF.pickDefault(items[0]);
@@ -310,11 +430,18 @@ function ytStart(d, meta, ch){
   YTJOB = {id: d.id, meta: meta, ch: ch, key: d.key, skip: [d.key], tries: 0};
   ytDl(b[0], meta, b[1]);
 }
-function ytWillRetry(d){ return !!(YTJOB && d && d.state === 'done' && d.fail && !d.ok && !d.cancel && YTJOB.tries < 6); }
+function ytWillRetry(d){ return !!(YTJOB && d && d.state === 'done' && d.fail && !d.ok && !d.cancel && YTJOB.tries < (YTJOB.page ? 2 : 6)); }
 on('dl', async function(d){
   if(d.state !== 'done' || !YTJOB) return;
   if(!ytWillRetry(d)){ YTJOB = null; return; }
   var J = YTJOB; J.tries++;
+  if(J.page){
+    /* 串流網址可能過期：清掉記錄，請播放器重新載入後再試一次 */
+    toast('下載被中斷，重新取得串流後再試一次…');
+    NAT.call('ytForget', J.id);
+    ytStartPage(J.d, J.meta, J.ch, J.tries);
+    return;
+  }
   if(J.key) YT.markBad(J.key);
   toast('這個來源下載被拒，自動改用其他來源重試（第 ' + J.tries + ' 次）…');
   dlCard(0, 1, '尋找其他下載來源…', 0);

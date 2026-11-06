@@ -8,7 +8,8 @@ var CFG_DEF = {
   cap: {format: 'html', mode: 'full', removeAds: true, reader: false, embedImages: true, imgQ: 'orig', embedFonts: true, removeHidden: true, autoScroll: true, banner: true, nameTpl: '{title}', paper: 'a4', landscape: false, margin: 10},
   media: {imgFmt: 'orig', imgMax: 0, imgQ: 90, minPx: 120, vidQ: 'max', vidOut: 'mp4', zip: true, audFmt: 'orig', nameMode: 'orig', customName: '', seqOn: true, seqMode: 'page', seqDigits: 3, seqSep: '_'},
   ytAds: true,
-  yt: {bg: true, pip: true, sb: true, q: 'max', gest: true, bar: true, speed: true, skin: true},
+  yt: {bg: true, pip: true, sb: true, q: 'max', gest: true, bar: true, speed: true, skin: true, ryd: true, noShorts: false, codec: 'vp9'},
+  fab: true,
   lib: {sort: 'time', dir: 'desc', view: 'grid', cat: 'all'},
   autoExport: false,
   proxies: 'https://corsproxy.io/?url={url}\nhttps://api.allorigins.win/raw?url={url}\nhttps://api.codetabs.com/v1/proxy?quest={url}'

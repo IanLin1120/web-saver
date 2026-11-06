@@ -46,6 +46,9 @@ import java.util.regex.Pattern;
 /** 內建瀏覽器：一個原生 WebView 疊在 App 介面上（位置由網頁介面決定），負責廣告阻擋、彈出視窗、擷取與媒體偵測。 */
 final class Browser {
     final MainActivity a;
+    /** "br"＝瀏覽分頁；"yt"＝YouTube 分頁（固定手機版、專用播放器） */
+    final String tag;
+    final boolean ytTab;
     WebView wv;
     private FrameLayout popupHost;
     private WebView popup;
@@ -162,8 +165,12 @@ final class Browser {
         }
     }
 
-    Browser(MainActivity act) {
+    Browser(MainActivity act) { this(act, "br"); }
+
+    Browser(MainActivity act, String tg) {
         a = act;
+        tag = tg;
+        ytTab = "yt".equals(tg);
         android.content.SharedPreferences p = a.prefs;
         mode = p.getString("brMode", "mobile");
         popups = p.getString("brPopups", "smart");
@@ -178,7 +185,9 @@ final class Browser {
         injectYt = Util.asset(a, "inject/yt.js");
         ytAds = p.getBoolean("ytAds", true);
         try { ytOpts = new JSONObject(p.getString("ytOpts", "{}")); } catch (Throwable t) { ytOpts = new JSONObject(); }
+        if (ytTab) mode = "mobile";
         wv = makeWebView(false);
+        if (ytTab) wv.getSettings().setMediaPlaybackRequiresUserGesture(false);
         wv.setVisibility(View.GONE);
         final float rad = Util.dp(a, 16);
         wv.setOutlineProvider(new android.view.ViewOutlineProvider() {
@@ -243,6 +252,7 @@ final class Browser {
             String scheme = u.getScheme();
             if (scheme == null || !scheme.startsWith("http")) return null;
             String host = u.getHost();
+            if (host != null && host.endsWith("googlevideo.com") && "/videoplayback".equals(u.getPath())) YtSniff.note(Browser.this, u.toString());
             if (ytAds && !isPopup && r.isForMainFrame() && "GET".equalsIgnoreCase(r.getMethod()) && isYt(host)) {
                 WebResourceResponse x = ytPage(u.toString(), r.getRequestHeaders());
                 if (x != null) return x;
@@ -260,7 +270,7 @@ final class Browser {
                 h.put("Access-Control-Allow-Origin", "*");
                 return new WebResourceResponse("text/plain", "utf-8", 204, "No Content", h, new ByteArrayInputStream(new byte[0]));
             }
-            if (!isPopup) noteMedia(u.toString(), r.getRequestHeaders());
+            noteMedia(u.toString(), r.getRequestHeaders());
             return null;
         }
 
@@ -431,6 +441,7 @@ final class Browser {
 
     void show(boolean on) {
         shown = on;
+        if (!on && fs) fullscreen(false, false);
         wv.setVisibility(on && !covered ? View.VISIBLE : View.GONE);
         if (on) wv.onResume();
     }
@@ -441,10 +452,12 @@ final class Browser {
     void cover(boolean on) {
         covered = on;
         if (on) {
-            if (wv.getVisibility() == View.VISIBLE) MainActivity.emit("snap", snapshot(wv, 0.5f, 62));
-            wv.setVisibility(View.GONE);
+            if (wv.getVisibility() == View.VISIBLE && !fs) MainActivity.emit(ytTab ? "snapYt" : "snap", snapshot(wv, 0.5f, 62));
+            if (!fs) wv.setVisibility(View.GONE);
+            if (popupHost != null) popupHost.setVisibility(View.GONE);
         } else {
-            wv.setVisibility(shown ? View.VISIBLE : View.GONE);
+            wv.setVisibility(shown || fs ? View.VISIBLE : View.GONE);
+            if (popupHost != null) popupHost.setVisibility(View.VISIBLE);
         }
     }
 
@@ -520,8 +533,37 @@ final class Browser {
             if (savedLp != null) wv.setLayoutParams(savedLp);
             wv.setClipToOutline(true);
             wv.evaluateJavascript("window.__wsYTpip&&__wsYTpip(false)", null);
-            if (a.vw != null) a.vw.toFront();
+            a.restack();
         }
+    }
+
+    /* ---------- 播放器全螢幕（不靠網頁全螢幕 API：直接把這個 WebView 放大到整個螢幕、隱藏狀態列、橫向） ---------- */
+    boolean fs = false;
+    private FrameLayout.LayoutParams fsLp;
+
+    void fullscreen(boolean on, boolean land) {
+        if (on == fs) { if (on) a.setRequestedOrientation(land ? android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE : android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED); return; }
+        fs = on;
+        if (on) {
+            fsLp = new FrameLayout.LayoutParams((FrameLayout.LayoutParams) wv.getLayoutParams());
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) wv.getLayoutParams();
+            lp.topMargin = lp.bottomMargin = lp.leftMargin = lp.rightMargin = 0;
+            wv.setLayoutParams(lp);
+            wv.setClipToOutline(false);
+            wv.setVisibility(View.VISIBLE);
+            wv.bringToFront();
+            a.immersive(true);
+            a.setRequestedOrientation(land ? android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE : android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        } else {
+            if (fsLp != null) wv.setLayoutParams(fsLp);
+            wv.setClipToOutline(true);
+            wv.setVisibility(shown && !covered ? View.VISIBLE : View.GONE);
+            a.immersive(false);
+            a.setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            a.restack();
+        }
+        wv.evaluateJavascript("window.__wsYTfs&&__wsYTfs(" + on + ")", null);
+        emitState();
     }
 
     void brightness(float v) {
@@ -542,7 +584,8 @@ final class Browser {
             o.put("blocked", AdBlock.blockedPage.get());
             o.put("mode", mode);
             o.put("secure", curUrl.startsWith("https:"));
-            MainActivity.emit("br", o.toString());
+            o.put("fs", fs);
+            MainActivity.emit(ytTab ? "ytbr" : "br", o.toString());
         } catch (Throwable t) { /* ignore */ }
     }
 
@@ -560,14 +603,14 @@ final class Browser {
     /* ---------- 設定 ---------- */
     void config(JSONObject c) {
         String oldMode = mode;
-        mode = c.optString("mode", mode);
+        if (!ytTab) mode = c.optString("mode", mode);
         popups = c.optString("popups", popups);
         ads = c.optBoolean("ads", ads);
         ytAds = c.optBoolean("ytAds", ytAds);
         if (c.has("yt")) { ytOpts = c.optJSONObject("yt"); a.prefs.edit().putString("ytOpts", String.valueOf(ytOpts)).apply(); }
         pw = c.optBoolean("pw", pw);
         textZoom = c.optInt("textZoom", textZoom);
-        a.prefs.edit().putString("brMode", mode).putString("brPopups", popups).putBoolean("brAds", ads).putBoolean("ytAds", ytAds).putBoolean("brPw", pw).putInt("brZoom", textZoom)
+        if (!ytTab) a.prefs.edit().putString("brMode", mode).putString("brPopups", popups).putBoolean("brAds", ads).putBoolean("ytAds", ytAds).putBoolean("brPw", pw).putInt("brZoom", textZoom)
             .putString("adHosts", c.optString("adHosts", a.prefs.getString("adHosts", "")))
             .putString("adCss", c.optString("adCss", a.prefs.getString("adCss", "")))
             .putString("adAllow", c.optString("adAllow", a.prefs.getString("adAllow", ""))).apply();
@@ -625,6 +668,19 @@ final class Browser {
         bg.setColor(Color.parseColor("#a2613a"));
         close.setBackground(bg);
         close.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { closePopup(); } });
+        if (!ytTab) {
+            TextView into = new TextView(a);
+            into.setText("⇱ 在分頁開啟");
+            into.setTextSize(13);
+            into.setTypeface(Typeface.DEFAULT_BOLD);
+            into.setTextColor(Color.parseColor("#a2613a"));
+            into.setPadding(pad, pad, pad, pad);
+            into.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) {
+                String u = popup == null ? "" : popup.getUrl();
+                if (u != null && u.startsWith("http")) { closePopupView(); MainActivity.emit("popup", "{\"open\":false}"); load(u); emitState(); }
+            } });
+            bar.addView(into);
+        }
         bar.addView(close);
         box.addView(bar, new LinearLayout.LayoutParams(-1, -2));
         box.addView(popup, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -639,6 +695,7 @@ final class Browser {
         t.setWebView(popup);
         msg.sendToTarget();
         MainActivity.emit("popup", "{\"open\":true}");
+        a.restack();
     }
 
     private void closePopupView() {
@@ -812,6 +869,7 @@ final class Browser {
     }
 
     void emitMediaCount() {
+        if (ytTab) return;
         Util.ui(new Runnable() {
             @Override public void run() {
                 wv.evaluateJavascript("(function(){try{return document.querySelectorAll('img,video,audio').length}catch(e){return 0}})()", new ValueCallback<String>() {
@@ -890,4 +948,12 @@ final class Browser {
     void clearPageMedia() { synchronized (netMedia) { netMedia.clear(); } }
 
     ViewGroup.LayoutParams lp() { return wv.getLayoutParams(); }
+
+    boolean popupOpen() { return popup != null; }
+
+    int netVideoCount() {
+        int n = 0;
+        synchronized (netMedia) { for (JSONObject o : netMedia.values()) if (!"image".equals(o.optString("kind"))) n++; }
+        return n;
+    }
 }

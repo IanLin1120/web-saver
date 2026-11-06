@@ -290,6 +290,7 @@ function renderSelBar(){
     if(!oneCat){ toast('資料夾是依種類分開的，請只選同一種類的檔案', true); return; }
     folderPicker(oneCat, '移到資料夾', function(fid){ LF.setItems(picked.map(function(x){ return x.id; }), fid); LV.sel.clear(); LV.selMode = false; toast('已移動'); renderLib(); }, {cur: LV.folder[oneCat] || ''});
   }}));
+  bar.appendChild(h('button', {class: 'ib', html: icon('edit'), title: '重新命名', disabled: !n, onclick: function(){ renameItems(picked); }}));
   bar.appendChild(h('button', {class: 'ib', html: icon('share'), title: '匯出', disabled: !n, onclick: function(){ exportSheet(picked); }}));
   bar.appendChild(h('button', {class: 'ib', html: icon('trash'), title: '刪除', disabled: !n, style: {color: 'var(--danger)'}, onclick: async function(){
     if(!(await confirmDlg('刪除 ' + n + ' 個檔案？', '共 ' + fmtSize(picked.reduce(function(s, x){ return s + (x.size || 0); }, 0)) + '，刪除後無法復原。', '刪除', true))) return;
@@ -362,4 +363,35 @@ function openWifi(){
     paintIcons(body);
   }
   draw();
+}
+
+/* 重新命名：一個檔案直接改名；多個檔案用「名稱＋流水號」批次改名（依目前排序） */
+async function renameItems(picked){
+  if(!picked.length) return;
+  if(picked.length === 1){
+    var it = picked[0];
+    var n = await promptDlg('重新命名', it.name.replace(/\.[a-z0-9]+$/i, ''));
+    if(n){ await Lib.rename(it, n); LV.sel.clear(); LV.selMode = false; renderLib(); toast('已重新命名'); }
+    return;
+  }
+  var order = libVisible().filter(function(x){ return picked.indexOf(x) >= 0; });
+  var base = h('input', {type: 'text', value: (order[0].title || order[0].name).replace(/\.[a-z0-9]+$/i, '').replace(/[_\s-]*\d+$/, '').slice(0, 60)});
+  var start = h('input', {type: 'number', value: 1, min: 0, style: {width: '90px'}});
+  var pad = h('select', null, h('option', {value: '2'}, '01'), h('option', {value: '3', selected: true}, '001'), h('option', {value: '4'}, '0001'), h('option', {value: '0'}, '1'));
+  var sep = h('select', null, h('option', {value: '_', selected: true}, '名稱_001'), h('option', {value: ' '}, '名稱 001'), h('option', {value: '-'}, '名稱-001'), h('option', {value: ''}, '名稱001'));
+  var prev = h('div', {class: 'sub', style: {margin: '8px 2px', lineHeight: '1.7'}});
+  function nameOf(i){ var k = String((+start.value || 0) + i), w = +pad.value; while(k.length < w) k = '0' + k; return (base.value.trim() || '檔案') + sep.value + k; }
+  function upd(){ prev.innerHTML = order.slice(0, 3).map(function(it, i){ return esc(it.name) + ' → <b>' + esc(nameOf(i)) + (it.name.match(/\.[a-z0-9]+$/i) || [''])[0] + '</b>'; }).join('<br>') + (order.length > 3 ? '<br>…共 ' + order.length + ' 個' : ''); }
+  [base, start, pad, sep].forEach(function(x){ x.oninput = x.onchange = upd; });
+  var body = h('div', null, h('div', {class: 'field'}, h('div', {class: 'lbl'}, '新名稱'), base),
+    h('div', {class: 'two'}, h('div', {class: 'field'}, h('div', {class: 'lbl'}, '起始號碼'), start), h('div', {class: 'field'}, h('div', {class: 'lbl'}, '位數'), pad)),
+    h('div', {class: 'field'}, h('div', {class: 'lbl'}, '格式'), sep), prev);
+  var go = h('button', {class: 'btn pri', html: icon('edit', 'sm') + '全部重新命名'});
+  var s = openSheet({title: '批次重新命名（' + order.length + ' 個）', icon: 'edit', body: body, foot: go});
+  go.onclick = async function(){
+    go.disabled = true;
+    for(var i = 0; i < order.length; i++){ if(isApp) NAT.call('libRename', order[i].id, nameOf(i)); else await Lib.rename(order[i], nameOf(i)); }
+    await Lib.refresh(); LV.sel.clear(); LV.selMode = false; s.close(); renderLib(); toast('已重新命名 ' + order.length + ' 個檔案');
+  };
+  upd();
 }

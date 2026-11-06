@@ -53,8 +53,61 @@ public class Bridge {
     @JavascriptInterface public void brShow(final boolean on) { ui(new Runnable() { @Override public void run() { a.br.show(on); } }); }
 
     @JavascriptInterface public void cover(final boolean on) {
-        ui(new Runnable() { @Override public void run() { a.br.cover(on); a.vw.cover(on); } });
+        ui(new Runnable() { @Override public void run() { a.br.cover(on); a.yt.cover(on); a.vw.cover(on); a.fab.cover(on); } });
     }
+
+    /* ---------- YouTube 分頁 ---------- */
+    @JavascriptInterface public void ytRect(final float top, final float bottom, final float left, final float right) {
+        ui(new Runnable() { @Override public void run() { a.yt.setRect(top, bottom, left, right); } });
+    }
+
+    @JavascriptInterface public void ytShow(final boolean on) { ui(new Runnable() { @Override public void run() { a.yt.show(on); a.fab.refresh(); } }); }
+
+    @JavascriptInterface public void ytLoad(final String url) { ui(new Runnable() { @Override public void run() { a.yt.load(url); } }); }
+
+    @JavascriptInterface public void ytNav(final String what) {
+        ui(new Runnable() {
+            @Override public void run() {
+                Browser y = a.yt;
+                switch (what) {
+                    case "back": y.goBack(); break;
+                    case "fwd": if (y.wv.canGoForward()) y.wv.goForward(); break;
+                    case "reload": y.wv.reload(); break;
+                    case "stop": y.wv.stopLoading(); break;
+                    case "fsOff": y.fullscreen(false, false); a.br.fullscreen(false, false); break;
+                    case "pause": y.wv.evaluateJavascript("(function(){var v=document.querySelector('video');if(v)v.pause()})()", null); break;
+                    default: break;
+                }
+            }
+        });
+    }
+
+    @JavascriptInterface public String ytState() {
+        try { return new JSONObject().put("url", a.yt.curUrl).put("title", a.yt.curTitle).put("br", a.br.curUrl).toString(); } catch (Throwable t) { return "{}"; }
+    }
+
+    /** 下載面板：讀取從播放器攔截到的串流與影片資訊 */
+    @JavascriptInterface public String ytSniff(String vid) { return YtSniff.get(vid); }
+
+    @JavascriptInterface public void ytForget(String vid) { YtSniff.forget(vid); }
+
+    /** 請正在播這部影片的播放器切換到指定畫質並短暫播放，讓我們攔截到該畫質的串流網址 */
+    @JavascriptInterface public String ytPrep(final String vid, final String q) {
+        final Browser b = YtSniff.vidOf(a.yt.curUrl).equals(vid) ? a.yt : YtSniff.vidOf(a.br.curUrl).equals(vid) ? a.br : null;
+        if (b == null) return "";
+        ui(new Runnable() { @Override public void run() { b.wv.evaluateJavascript("window.__wsYTprep&&__wsYTprep(" + JSONObject.quote(q) + ")", null); } });
+        return b.tag;
+    }
+
+    @JavascriptInterface public String ytInfoReq(final String vid) {
+        final Browser b = YtSniff.vidOf(a.yt.curUrl).equals(vid) ? a.yt : YtSniff.vidOf(a.br.curUrl).equals(vid) ? a.br : null;
+        if (b == null) return "";
+        ui(new Runnable() { @Override public void run() { b.wv.evaluateJavascript("window.__wsYTinfo&&__wsYTinfo()", null); } });
+        return b.tag;
+    }
+
+    /** 懸浮下載按鈕 */
+    @JavascriptInterface public void fab(final boolean on, final String label) { ui(new Runnable() { @Override public void run() { a.fab.set(on, label); } }); }
 
     @JavascriptInterface public void brLoad(final String url) { ui(new Runnable() { @Override public void run() { a.br.load(url); } }); }
 
@@ -75,7 +128,7 @@ public class Bridge {
     }
 
     @JavascriptInterface public void brConfig(final String json) {
-        ui(new Runnable() { @Override public void run() { try { a.br.config(new JSONObject(json)); } catch (Throwable t) { /* ignore */ } } });
+        ui(new Runnable() { @Override public void run() { try { a.br.config(new JSONObject(json)); a.yt.config(new JSONObject(json)); } catch (Throwable t) { /* ignore */ } } });
     }
 
     @JavascriptInterface public String brState() {
@@ -98,7 +151,7 @@ public class Bridge {
         try { Comic.fromHtml(a, id, new JSONObject(opts == null || opts.isEmpty() ? "{}" : opts)); } catch (Throwable t) { MainActivity.toast("設定錯誤"); }
     }
 
-    @JavascriptInterface public void setInject(final String name, final String code) { ui(new Runnable() { @Override public void run() { a.br.setInject(name, code); } }); }
+    @JavascriptInterface public void setInject(final String name, final String code) { ui(new Runnable() { @Override public void run() { a.br.setInject(name, code); a.yt.setInject(name, code); } }); }
 
     @JavascriptInterface public void brMedia(final int minPx) { ui(new Runnable() { @Override public void run() { a.br.scanMedia(minPx); } }); }
 

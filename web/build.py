@@ -6,7 +6,7 @@ root = os.path.join(here, '..')
 ver = os.environ.get('VER') or open(os.path.join(root, 'VERSION')).read().strip()
 R = lambda *p: open(os.path.join(here, *p), encoding='utf-8').read()
 
-order = ['a_core', 'b_cfg', 'c_browser', 'd_capture', 'e_media', 'f_library', 'g_viewer', 'h_settings', 'i_update', 'j_audio', 'k_youtube', 'l_folders_music', 'm_lyrics', 'z_boot']
+order = ['a_core', 'b_cfg', 'c_browser', 'd_capture', 'e_media', 'f_library', 'g_viewer', 'h_settings', 'i_update', 'j_audio', 'k_youtube', 'l_folders_music', 'm_lyrics', 'n_ytab', 'o_history', 'z_boot']
 app = '\n'.join(R('parts', n + '.js') for n in order).replace('__VER__', ver)
 
 hosts = [l.strip().lower() for l in R('inject', 'adhosts.txt').splitlines() if l.strip() and not l.startswith('#') and '/' not in l]

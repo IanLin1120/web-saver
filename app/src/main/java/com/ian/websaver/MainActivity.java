@@ -30,7 +30,9 @@ public class MainActivity extends Activity {
 
     FrameLayout root;
     WebView ui;
-    Browser br;
+    Browser br, yt;
+    Fab fab;
+    boolean inPipNow = false;
     Viewer vw;
     SharedPreferences prefs;
     private ValueCallback<Uri[]> fileCb;
@@ -90,7 +92,21 @@ public class MainActivity extends Activity {
         });
 
         br = new Browser(this);
+        yt = new Browser(this, "yt");
         vw = new Viewer(this);
+        fab = new Fab(this);
+        if (Build.VERSION.SDK_INT >= 24) {
+            try {
+                android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(new android.webkit.ServiceWorkerClient() {
+                    @Override public WebResourceResponse shouldInterceptRequest(WebResourceRequest r) {
+                        Uri u = r.getUrl();
+                        String h = u.getHost();
+                        if (h != null && h.endsWith("googlevideo.com") && "/videoplayback".equals(u.getPath())) YtSniff.noteVid(YtSniff.lastVid, u.toString());
+                        return null;
+                    }
+                });
+            } catch (Throwable t) { /* ignore */ }
+        }
         ui.loadUrl("file:///android_asset/index.html");
         handleIntent(getIntent());
     }
@@ -110,9 +126,28 @@ public class MainActivity extends Activity {
         } catch (Throwable t) { /* ignore */ }
     }
 
+    private Browser pipBr;
+
+    void immersive(boolean on) {
+        View d = getWindow().getDecorView();
+        if (on) d.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+        else { d.setSystemUiVisibility(0); setBars(prefs.getString("barColor", "#efe5d3"), prefs.getBoolean("barDark", false)); }
+        if (fab != null) fab.refresh();
+    }
+
+    /** 重新排列原生畫面的上下順序：檢視器、彈出視窗、懸浮按鈕永遠在最上面 */
+    void restack() {
+        if (vw != null) vw.toFront();
+        if (fab != null) fab.refresh();
+    }
+
     /* ---------- 子母畫面（YouTube 影片播放中按 Home 自動縮小） ---------- */
+    /** 目前在畫面上的瀏覽器（YouTube 分頁或瀏覽分頁） */
+    Browser act() { return yt != null && (yt.isShown() || yt.fs || yt.inPip) ? yt : br; }
+
     void updatePipParams() {
         if (Build.VERSION.SDK_INT < 26 || br == null) return;
+        Browser br = act();
         try {
             android.app.PictureInPictureParams.Builder b = new android.app.PictureInPictureParams.Builder()
                 .setAspectRatio(new android.util.Rational(Math.round(br.videoRatio * 1000), 1000));
@@ -123,6 +158,7 @@ public class MainActivity extends Activity {
 
     boolean enterPip(boolean force) {
         if (Build.VERSION.SDK_INT < 26 || br == null) return false;
+        Browser br = act();
         if (!force && !br.wantsPip()) return false;
         try {
             return enterPictureInPictureMode(new android.app.PictureInPictureParams.Builder()
@@ -137,7 +173,10 @@ public class MainActivity extends Activity {
 
     @Override public void onPictureInPictureModeChanged(boolean on, android.content.res.Configuration c) {
         super.onPictureInPictureModeChanged(on, c);
-        if (br != null) br.pipMode(on);
+        inPipNow = on;
+        if (on) { pipBr = act(); pipBr.pipMode(true); }
+        else if (pipBr != null) { pipBr.pipMode(false); pipBr = null; }
+        if (fab != null) fab.refresh();
         emit("pip", on ? "1" : "0");
     }
 
@@ -159,7 +198,8 @@ public class MainActivity extends Activity {
         } else if (Intent.ACTION_VIEW.equals(i.getAction()) && i.getData() != null) u = i.getDataString();
         if (u != null) {
             final String url = u;
-            Util.MAIN.postDelayed(new Runnable() { @Override public void run() { emit("openUrl", url); } }, 900);
+            final boolean dl = i.getComponent() != null && i.getComponent().getClassName().endsWith("DownloadAlias");
+            Util.MAIN.postDelayed(new Runnable() { @Override public void run() { emit(dl ? "shareDl" : "openUrl", url); } }, 900);
         }
     }
 
@@ -253,6 +293,7 @@ public class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         if (br != null) br.onResume();
+        if (yt != null) yt.onResume();
         emit("resume", "");
     }
 
@@ -260,15 +301,20 @@ public class MainActivity extends Activity {
         super.onPause();
         try { CookieManager.getInstance().flush(); } catch (Throwable t) { /* ignore */ }
         if (br != null) br.onPause();
+        if (yt != null) yt.onPause();
     }
 
     @Override public void onBackPressed() {
         if (customView != null) { hideCustom(); return; }
+        if (yt != null && yt.fs) { yt.fullscreen(false, false); return; }
+        if (br != null && br.fs) { br.fullscreen(false, false); return; }
         if (br != null && br.closePopup()) return;
+        if (yt != null && yt.closePopup()) return;
         if (ui == null) { super.onBackPressed(); return; }
         ui.evaluateJavascript("(window.onNativeBack&&onNativeBack())?'1':'0'", new ValueCallback<String>() {
             @Override public void onReceiveValue(String v) {
                 if ("\"1\"".equals(v)) return;
+                if (yt != null && yt.isShown() && yt.goBack()) return;
                 if (br != null && br.isShown() && br.goBack()) return;
                 moveTaskToBack(true);
             }

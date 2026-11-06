@@ -124,7 +124,7 @@ on('br', function(d){
   renderBr();
 });
 on('mediaCount', function(d){ BR.mediaN = (d.dom || 0) + (d.net || 0); renderBr(); });
-on('openUrl', function(u){ navigate(String(u)); });
+on('openUrl', function(u){ u = String(u); if(isApp && YT.idOf(u)){ ytOpen('https://m.youtube.com/watch?v=' + YT.idOf(u)); return; } navigate(u); });
 
 /* ---------- 版面模式（手機版／電腦版／閱讀模式） ---------- */
 var MODES = [['mobile', '手機版', 'phone', '一般手機網頁'], ['desktop', '電腦版', 'monitor', '要求網站顯示電腦版版面'], ['reader', '閱讀模式', 'book', '只顯示文章內容，去除干擾']];
@@ -201,7 +201,7 @@ function openBmList(startFolder){
   var chips = folderChips(sel, function(id){ sel = id; draw(); }, {all: true});
   chips.className = 'folderBar';
   var body = h('div', null, search, chips, list);
-  var manage = h('button', {class: 'ib', html: icon('edit'), title: '管理收藏夾', onclick: function(){ manageFolders(function(){ chips.redraw(); draw(); }); }});
+  var manage = h('span', {style: {display: 'contents'}}, h('button', {class: 'ib', html: icon('history'), title: '瀏覽記錄', onclick: function(){ s.close(); openHistory(); }}), h('button', {class: 'ib', html: icon('edit'), title: '管理收藏夾', onclick: function(){ manageFolders(function(){ chips.redraw(); draw(); }); }}));
   var s = openSheet({title: '我的收藏', icon: 'books', body: body, tall: true, headExtra: manage});
   function draw(){
     list.textContent = '';
@@ -276,26 +276,13 @@ function renderStart(){
     }})));
   if(!isApp) sects.appendChild(h('div', {class: 'note', html: '🌐 <b>網頁版</b>：瀏覽器的安全限制讓網頁無法直接開啟其他網站，這裡會透過「代理伺服器」讀取網頁內容（不執行網頁程式、無法登入）。完整的瀏覽、登入、廣告阻擋與影片偵測請使用 <b>APK 版</b>。代理伺服器可在「設定 → 網頁版代理」修改。'}));
   if(BR.loaded) sects.appendChild(h('div', {class: 'opt', style: {marginTop: '12px'}, onclick: leaveHome}, h('span', {class: 'oi', html: icon('back')}), h('div', {class: 'grow'}, h('b', {text: '回到目前網頁'}), h('div', {class: 'sub ell', text: BR.title || BR.url}))));
-  /* 收藏 */
+  /* 收藏與瀏覽記錄（只放入口按鈕，畫面保持清爽） */
   var tiles = h('div', {class: 'tiles'});
-  var bms = BM.items.slice(0, 12);
-  bms.forEach(function(it){ tiles.appendChild(h('div', {class: 'tile', onclick: function(){ navigate(it.url); }}, favEl(it), h('span', {text: it.title || hostOf(it.url)}))); });
-  tiles.appendChild(h('div', {class: 'tile', onclick: function(){ openBmList(''); }}, h('div', {class: 'fav', html: icon('books')}), h('span', {text: '全部收藏'})));
+  tiles.appendChild(h('div', {class: 'tile', onclick: function(){ openBmList(''); }}, h('div', {class: 'fav', html: icon('books')}), h('span', {text: '全部收藏'}), h('small', {class: 'sub', text: BM.items.length + ' 個'})));
+  tiles.appendChild(h('div', {class: 'tile', onclick: function(){ openHistory(); }}, h('div', {class: 'fav', html: icon('history')}), h('span', {text: '瀏覽記錄'}), h('small', {class: 'sub', text: Hist.items.length + ' 筆'})));
+  tiles.appendChild(h('div', {class: 'tile', onclick: function(){ ytOpen(); }}, h('div', {class: 'fav', html: icon('ytplay')}), h('span', {text: 'YouTube'}), h('small', {class: 'sub', text: '無廣告播放器'})));
   sects.appendChild(h('div', {class: 'sect-h'}, h('span', {text: '⭐ 收藏'}), h('button', {text: '管理收藏夾', onclick: function(){ manageFolders(renderStart); }})));
   sects.appendChild(tiles);
-  /* 最近擷取 */
-  var recent = Lib.items.slice().sort(function(a, b){ return b.time - a.time; }).slice(0, 10);
-  if(recent.length){
-    sects.appendChild(h('div', {class: 'sect-h'}, h('span', {text: '🕘 最近擷取'}), h('button', {text: '檔案庫 ›', onclick: function(){ showView('lib'); }})));
-    var hs = h('div', {class: 'hscroll'});
-    recent.forEach(function(it){
-      var c = CAT[it.cat] || CAT.other;
-      hs.appendChild(h('div', {class: 'mini', onclick: function(){ Viewer.open(it, recent); }},
-        h('div', {class: 'th', style: Lib.thumb(it) ? {backgroundImage: 'url("' + Lib.thumb(it) + '")'} : {display: 'grid', placeItems: 'center', color: c.c}, html: (Lib.thumb(it) ? '' : icon(c.ic, 'lg')) + '<span class="tag" style="background:' + c.c + '">' + c.name + '</span>'}),
-        h('b', {text: it.title || it.name}), h('div', {class: 'sub', text: fmtSize(it.size) + '・' + fmtDate(it.time)})));
-    });
-    sects.appendChild(hs);
-  }
   /* 說明 */
   sects.appendChild(h('div', {class: 'sect-h'}, h('span', {text: '💡 怎麼用'})));
   sects.appendChild(h('div', {class: 'tips'},
