@@ -60,7 +60,10 @@ final class YtSniff {
         try {
             Uri u = Uri.parse(url);
             String it = u.getQueryParameter("itag");
-            if (it == null) return;
+            if (it == null) {
+                /* SABR 新串流：網址裡沒有畫質編號，無法直接下載，只記下來讓面板顯示正確原因 */
+                if (url.contains("sabr=1")) it = "0"; else return;
+            }
             int itag = Integer.parseInt(it);
             JSONObject o = new JSONObject();
             boolean sabr = "1".equals(u.getQueryParameter("sabr"));

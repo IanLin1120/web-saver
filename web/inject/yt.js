@@ -9,6 +9,14 @@
   function prune(o, depth) {
     if (!o || typeof o !== 'object' || (depth || 0) > 6) return o;
     try { if (o.streamingData && o.videoDetails && o.videoDetails.videoId) PR[o.videoDetails.videoId] = o; } catch (e) {}
+    /* 有傳統串流網址時，關掉 SABR 新串流，讓播放器改用一般網址（App 才攔截得到可下載的完整網址） */
+    try {
+      var sd0 = o.streamingData;
+      if (sd0 && sd0.serverAbrStreamingUrl && !(window.__wsCfg && window.__wsCfg.yt && window.__wsCfg.yt.sabr)) {
+        var af0 = sd0.adaptiveFormats || [];
+        if (af0.length && af0.every(function (f) { return f.url || f.signatureCipher || f.cipher; })) delete sd0.serverAbrStreamingUrl;
+      }
+    } catch (e) {}
     for (var i = 0; i < KEYS.length; i++) if (KEYS[i] in o) { try { delete o[KEYS[i]]; } catch (e) {} }
     if (o.playerResponse) prune(o.playerResponse, (depth || 0) + 1);
     if (o.response && o.response.playerResponse) prune(o.response.playerResponse, (depth || 0) + 1);
@@ -223,6 +231,11 @@
       out.hls = sd.hlsManifestUrl || '';
       out.live = !!vd.isLive;
       out.sabr = !!sd.serverAbrStreamingUrl;
+      try {
+        out.captions = (((r.captions || {}).playerCaptionsTracklistRenderer || {}).captionTracks || []).map(function (t) {
+          return {lang: t.languageCode, kind: t.kind || '', url: t.baseUrl, name: t.name && (t.name.simpleText || (t.name.runs || []).map(function (x) { return x.text; }).join(''))};
+        });
+      } catch (e) {}
     }
     if (!out.details.title) { var tt = document.querySelector('.slim-video-information-title, h1.title, h2.slim-video-metadata-title-modern'); out.details.title = tt ? tt.textContent.trim() : (document.title || '').replace(/ - YouTube$/, ''); }
     if (!out.details.lengthSeconds && v && isFinite(v.duration)) out.details.lengthSeconds = Math.round(v.duration);
@@ -287,6 +300,38 @@
      左半邊上下滑調亮度、右半邊上下滑調音量、中間往上滑全螢幕／往下滑離開全螢幕、
      速度、畫質、循環、子母畫面、下載、SponsorBlock 片段標示、全螢幕（App 原生橫向）
      ============================================================ */
+  /* YouTube 啟用 Trusted Types，直接設 innerHTML 會被擋（這是之前控制列完全沒出現的原因）：
+     先試建立允許的政策，不行就用自己的小型解析器逐一建立元素 */
+  var TTP = null;
+  try { if (window.trustedTypes && trustedTypes.createPolicy) TTP = trustedTypes.createPolicy('wsskin' + Math.random().toString(36).slice(2, 7), {createHTML: function (x) { return x; }}); } catch (e) { TTP = null; }
+  function buildInto(root, html) {
+    var re = /<(\/?)([a-zA-Z][\w-]*)((?:\s+[\w:-]+(?:="[^"]*")?)*)\s*(\/?)>|([^<]+)/g, m, stack = [root], NS = 'http://www.w3.org/2000/svg';
+    while ((m = re.exec(html))) {
+      var top = stack[stack.length - 1];
+      if (m[5] != null) { top.appendChild(document.createTextNode(m[5].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&'))); continue; }
+      if (m[1]) { if (stack.length > 1) stack.pop(); continue; }
+      var tag = m[2], svg = tag === 'svg' || top.namespaceURI === NS;
+      var el = svg ? document.createElementNS(NS, tag) : document.createElement(tag), ar = /([\w:-]+)(?:="([^"]*)")?/g, a;
+      while ((a = ar.exec(m[3]))) el.setAttribute(a[1], a[2] == null ? '' : a[2]);
+      top.appendChild(el);
+      if (!m[4] && !/^(br|img|input|hr)$/i.test(tag)) stack.push(el);
+    }
+  }
+  function setH(el, html) {
+    if (TTP) { try { el.innerHTML = TTP.createHTML(html); return; } catch (e) {} }
+    try { el.innerHTML = html; return; } catch (e) {}
+    while (el.firstChild) el.removeChild(el.firstChild);
+    buildInto(el, html);
+  }
+  window.__wsSetH = setH;
+  /* 不讓 YouTube 的 Service Worker 接管頁面（否則 App 沒辦法在頁面載入時插入去廣告與播放器程式） */
+  try {
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.register = function () { return Promise.reject(new Error('disabled')); };
+      navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { r.unregister(); }); }).catch(function () {});
+    }
+  } catch (e) {}
+
   var W = {flash: function (m) { var f = W.sh && W.sh.getElementById('flash'); if (!f) return; f.textContent = m; f.classList.add('on'); clearTimeout(W.ft); W.ft = setTimeout(function () { f.classList.remove('on'); }, 1300); }};
   var ICON = {
     play: '<path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none"/>',
@@ -299,6 +344,7 @@
     pip: '<rect x="2.5" y="4" width="19" height="16" rx="2"/><rect x="12" y="11" width="7" height="6" rx="1" fill="currentColor"/>',
     dl: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/>', next: '<path d="M6 5l9 7-9 7z" fill="currentColor" stroke="none"/><path d="M18 5v14"/>',
     prev: '<path d="M18 5L9 12l9 7z" fill="currentColor" stroke="none"/><path d="M6 5v14"/>',
+    cc: '<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M10.5 10.2a2.4 2.4 0 1 0 0 3.6M17 10.2a2.4 2.4 0 1 0 0 3.6"/>',
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
     unlock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>',
     down: '<path d="M6 9l6 6 6-6"/>', more: '<circle cx="12" cy="5.5" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="18.5" r="1.4" fill="currentColor"/>'
@@ -368,7 +414,7 @@
       host.addEventListener(ev, function (e) { e.stopPropagation(); if (ev === 'contextmenu') e.preventDefault(); });
     });
     var sh = host.attachShadow({mode: 'open'}); W.sh = sh;
-    sh.innerHTML = '<style>' +
+    setH(sh, '<style>' +
       ':host{all:initial}*{box-sizing:border-box;font-family:-apple-system,"Noto Sans TC",Roboto,sans-serif}' +
       '.root{position:absolute;inset:0;color:#fff;overflow:hidden;touch-action:none}' +
       '.ui{position:absolute;inset:0;opacity:0;transition:opacity .2s;pointer-events:none;background:rgba(0,0,0,.42)}' +
@@ -414,9 +460,9 @@
       '<button id="pp2" title="子母畫面">' + ic('pip') + '</button><button id="dl" title="下載">' + ic('dl') + '</button><button id="mo" title="更多">' + ic('more') + '</button></div>' +
       '<div class="mid"><button id="pv2" title="上一部">' + ic('prev') + '</button><button class="sk" id="rw">' + ic('rew') + '<i>10</i></button><button class="pp" id="pp">' + ic('play') + '</button><button class="sk" id="fw">' + ic('fwd') + '<i>10</i></button><button id="nx" title="下一部">' + ic('next') + '</button></div>' +
       '<div class="bot"><div class="bar" id="bar"><div class="tr"><div class="bf" id="bf"></div><div id="segs"></div><div class="pl" id="pl"></div></div><div class="kn" id="kn"></div></div>' +
-      '<div class="row"><span id="tm">0:00 / 0:00</span><span class="g"></span><span id="sb"></span><button id="lk" class="fsOnly" title="鎖定畫面">' + ic('lock') + '</button><button id="q" title="畫質">' + ic('gear') + '</button><button id="fs" title="全螢幕">' + ic('full') + '</button></div></div></div>' +
+      '<div class="row"><span id="tm">0:00 / 0:00</span><span class="g"></span><span id="sb"></span><button id="lk" class="fsOnly" title="鎖定畫面">' + ic('lock') + '</button><button id="cc" title="字幕">' + ic('cc') + '</button><button id="q" title="畫質">' + ic('gear') + '</button><button id="fs" title="全螢幕">' + ic('full') + '</button></div></div></div>' +
       '<div class="mini" id="mini"><i id="miniB"></i></div><button class="lockb" id="ulk">' + ic('unlock') + '</button>' +
-      '<div class="scrim" id="scrim"></div><div class="sheet" id="sheet"></div><div class="prev" id="pvw"></div><div class="flash" id="flash"></div></div>';
+      '<div class="scrim" id="scrim"></div><div class="sheet" id="sheet"></div><div class="prev" id="pvw"></div><div class="flash" id="flash"></div></div>');
     document.documentElement.appendChild(host);
     var $ = function (id) { return sh.getElementById(id); };
     var root = $('root'), hideT = 0;
@@ -436,7 +482,7 @@
     function closeSheet() { $('sheet').classList.remove('on'); $('scrim').classList.remove('on'); }
     $('scrim').onclick = function (e) { e.stopPropagation(); closeSheet(); };
     function sheet(title, items) {
-      var m = $('sheet'); m.innerHTML = '<h4></h4>'; m.firstChild.textContent = title;
+      var m = $('sheet'); while (m.firstChild) m.removeChild(m.firstChild); m.appendChild(document.createElement('h4')); m.firstChild.textContent = title;
       items.forEach(function (it) {
         var b = document.createElement('button'); b.textContent = it[0]; if (it[2]) b.className = 'on';
         if (it[3]) { var s2 = document.createElement('span'); s2.className = 'sub'; s2.textContent = it[3]; b.appendChild(s2); }
@@ -450,6 +496,36 @@
       try { L = p.getAvailableQualityLevels() || []; cur = p.getPlaybackQuality(); } catch (x) {}
       if (!L.length) { W.flash('這部影片無法選擇畫質'); return; }
       sheet('畫質', L.map(function (q) { return [QNAME[q] || q, function () { setQuality(q); W.flash('畫質：' + (QNAME[q] || q)); }, q === cur]; }));
+    };
+    $('cc').onclick = function (e) {
+      e.stopPropagation(); var p = ytp(), list = [], cur = null;
+      try { p.loadModule('captions'); list = p.getOption('captions', 'tracklist') || []; cur = p.getOption('captions', 'track'); } catch (x) {}
+      if (!list.length) {
+        try {
+          var r = PR[videoId()] || (p.getPlayerResponse && p.getPlayerResponse());
+          list = ((r.captions || {}).playerCaptionsTracklistRenderer || {}).captionTracks || [];
+          list = list.map(function (t) { return {languageCode: t.languageCode, displayName: t.name && (t.name.simpleText || (t.name.runs || []).map(function (x) { return x.text; }).join('')), kind: t.kind, vss_id: t.vssId}; });
+        } catch (x) {}
+      }
+      if (!list.length) {
+        var yb = document.querySelector('.ytp-subtitles-button, button.ytm-closed-captioning-button, button[aria-label*="字幕"], button[aria-label*="aption"]');
+        if (yb) { yb.click(); W.flash('已切換字幕'); } else W.flash('這部影片沒有字幕');
+        return;
+      }
+      var on = cur && cur.languageCode;
+      function setT(t, tr) {
+        try {
+          p.loadModule('captions');
+          var o = {languageCode: t.languageCode}; if (t.kind) o.kind = t.kind; if (t.vss_id) o.vss_id = t.vss_id; if (tr) o.translationLanguage = {languageCode: tr, languageName: '中文（繁體）'};
+          p.setOption('captions', 'track', o); localStorage.setItem('__wsCC', t.languageCode);
+          W.flash('字幕：' + (t.displayName || t.languageName || t.languageCode) + (tr ? ' → 中文（繁體）' : ''));
+        } catch (x) { W.flash('無法切換字幕'); }
+      }
+      var items = [['關閉字幕', function () { try { p.setOption('captions', 'track', {}); p.unloadModule('captions'); } catch (x) {} localStorage.removeItem('__wsCC'); W.flash('字幕：關'); }, !on]];
+      list.forEach(function (t) { items.push([t.displayName || t.languageName || t.languageCode, function () { setT(t); }, on === t.languageCode, t.kind === 'asr' ? '自動產生' : '']); });
+      var zh = list.some(function (t) { return /^zh/.test(t.languageCode); });
+      if (!zh) items.push(['自動翻譯成中文（繁體）', function () { setT(list[0], 'zh-Hant'); }, false, '由 ' + (list[0].displayName || list[0].languageCode)]);
+      sheet('字幕', items);
     };
     $('lp').onclick = function (e) { e.stopPropagation(); var v = vid(); if (!v) return; v.loop = !v.loop; $('lp').style.color = v.loop ? '#ff6b6b' : '#fff'; W.flash(v.loop ? '循環播放：開' : '循環播放：關'); show(); };
     $('pp2').onclick = function (e) { e.stopPropagation(); try { B.pip(); } catch (x) { W.flash('需要 App 才能使用子母畫面'); } };
@@ -465,7 +541,7 @@
       ]);
     };
     function isFs() { return FS.on; }
-    W.syncFs = function () { $('fs').innerHTML = ic(isFs() ? 'exit' : 'full'); if (isFs()) host.classList.add('fs'); else { host.classList.remove('fs'); root.classList.remove('locked'); } };
+    W.syncFs = function () { setH($('fs'), ic(isFs() ? 'exit' : 'full')); if (isFs()) host.classList.add('fs'); else { host.classList.remove('fs'); root.classList.remove('locked'); } };
     $('fs').onclick = function (e) { e.stopPropagation(); setFs(!isFs()); show(); };
     $('mn').onclick = function (e) { e.stopPropagation(); setFs(false); };
     $('lk').onclick = function (e) { e.stopPropagation(); root.classList.add('locked'); hide(); W.flash('已鎖定畫面，點左邊的鎖頭解除'); };
@@ -479,7 +555,7 @@
     function endScrub(e) { if (!dragging) return; e.stopPropagation(); dragging = false; bar.classList.remove('drag'); $('pvw').classList.remove('on'); var v = vid(); if (v && W.scrubTo != null) v.currentTime = W.scrubTo; W.scrubTo = null; show(); }
     bar.addEventListener('pointerup', endScrub); bar.addEventListener('pointercancel', endScrub);
     W.drawSegs = function () {
-      var v = vid(), box = $('segs'); if (!box) return; box.innerHTML = '';
+      var v = vid(), box = $('segs'); if (!box) return; while (box.firstChild) box.removeChild(box.firstChild);
       if (!v || !v.duration) return;
       SB.segs.forEach(function (g) { var d = document.createElement('div'); d.className = 'sg'; d.style.left = (100 * g.s / v.duration) + '%'; d.style.width = Math.max(0.4, 100 * (g.e - g.s) / v.duration) + '%'; d.style.background = SBCOL[g.c] || '#0f0'; box.appendChild(d); });
       $('sb').textContent = SB.segs.length ? 'SponsorBlock ' + SB.segs.length + ' 段' : '';
@@ -525,7 +601,7 @@
         clearTimeout(tapT);
         combo.n = inCombo ? combo.n + 1 : 1; combo.side = side; combo.t = now;
         seekBy(side === 'l' ? -10 : 10);
-        var rp = $(side === 'l' ? 'rl' : 'rr'); rp.innerHTML = ic(side === 'l' ? 'rew' : 'fwd') + '<span>' + (combo.n * 10) + ' 秒</span>'; rp.classList.add('on');
+        var rp = $(side === 'l' ? 'rl' : 'rr'); setH(rp, ic(side === 'l' ? 'rew' : 'fwd') + '<span>' + (combo.n * 10) + ' 秒</span>'); rp.classList.add('on');
         clearTimeout(rp._t); rp._t = setTimeout(function () { rp.classList.remove('on'); }, 700);
         lastTap = {t: 0, side: ''}; hide(); return;
       }
@@ -551,7 +627,7 @@
         $('miniB').style.width = f * 100 + '%';
         try { var b = v.buffered; if (b.length) $('bf').style.width = (d ? 100 * b.end(b.length - 1) / d : 0) + '%'; } catch (x) {}
         $('tm').textContent = fmt(t) + ' / ' + fmt(d);
-        var pp = v.paused ? 'play' : 'pause'; if ($('pp').dataset.s !== pp) { $('pp').dataset.s = pp; $('pp').innerHTML = ic(pp); }
+        var pp = v.paused ? 'play' : 'pause'; if ($('pp').dataset.s !== pp) { $('pp').dataset.s = pp; setH($('pp'), ic(pp)); }
         $('spin').classList.toggle('on', !v.paused && v.readyState < 3 && !prepSt);
         if (v.paused && !root.classList.contains('show') && !root.classList.contains('locked') && !prepSt) show(true);
         if ($('segs').childNodes.length !== SB.segs.length && d) W.drawSegs();

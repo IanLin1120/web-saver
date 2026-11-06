@@ -80,30 +80,68 @@ final class Comic {
         return 0;
     }
 
-    /** 最小的 PDF 寫入器：每張 JPEG 一頁，頁寬 595pt，高度依比例 */
-    static void writePdf(List<Img> imgs, File out, String title) throws Exception {
+    /**
+     * 最小的 PDF 寫入器（JPEG 原檔直接放入、不重新壓縮）。
+     * stack=true：多張圖上下無縫疊在同一頁（每頁最高 14400pt，PDF 規格上限），任何 PDF 閱讀器看都是連續的長條；
+     * stack=false：每張圖一頁。
+     */
+    static void writePdf(List<Img> imgs, File out, String title) throws Exception { writePdf(imgs, out, title, true); }
+
+    static void writePdf(List<Img> imgs, File out, String title, boolean stack) throws Exception {
+        final float PW = 595f, MAXH = 14400f;
+        /* 分頁：把圖片依序放進頁面，超過高度上限就換頁 */
+        List<List<Integer>> pages = new ArrayList<>();
+        List<Float> heights = new ArrayList<>();
+        List<Integer> cur = null;
+        float curH = 0;
+        for (int i = 0; i < imgs.size(); i++) {
+            Img im = imgs.get(i);
+            float ih = Math.max(1f, PW * im.h / im.w);
+            if (cur == null || !stack || curH + ih > MAXH) {
+                if (cur != null) { pages.add(cur); heights.add(curH); }
+                cur = new ArrayList<>(); curH = 0;
+            }
+            cur.add(i); curH += ih;
+        }
+        if (cur != null) { pages.add(cur); heights.add(curH); }
+        int np = pages.size(), n = imgs.size();
+        /* 物件編號：1 目錄、2 頁面樹、每頁 2 個（頁＋內容）、每張圖 1 個、最後資訊 */
+        int firstPage = 3, firstImg = 3 + np * 2, infoObj = firstImg + n;
+        long[] off = new long[infoObj + 1];
         OutputStream os = new java.io.BufferedOutputStream(new FileOutputStream(out), 1 << 16);
-        long[] off = new long[3 + imgs.size() * 3 + 1];
         long[] pos = {0};
-        int n = imgs.size();
-        int pagesObj = 2, infoObj = 3 + n * 3;
-        pos[0] += w(os, "%PDF-1.4\n%âãÏÓ\n");
+        pos[0] += w(os, "%PDF-1.4\n%\u00e2\u00e3\u00cf\u00d3\n");
         off[1] = pos[0];
         pos[0] += w(os, "1 0 obj\n<< /Type /Catalog /Pages 2 0 R /PageLayout /OneColumn >>\nendobj\n");
         StringBuilder kids = new StringBuilder();
-        for (int i = 0; i < n; i++) kids.append(3 + i * 3).append(" 0 R ");
+        for (int p = 0; p < np; p++) kids.append(firstPage + p * 2).append(" 0 R ");
         off[2] = pos[0];
-        pos[0] += w(os, "2 0 obj\n<< /Type /Pages /Count " + n + " /Kids [" + kids + "] >>\nendobj\n");
+        pos[0] += w(os, "2 0 obj\n<< /Type /Pages /Count " + np + " /Kids [" + kids + "] >>\nendobj\n");
+        for (int p = 0; p < np; p++) {
+            List<Integer> pg = pages.get(p);
+            float ph = heights.get(p), pw = PW, sc = 1f;
+            if (ph > MAXH) { sc = MAXH / ph; pw = PW * sc; ph = MAXH; }
+            StringBuilder res = new StringBuilder(), cs = new StringBuilder();
+            float y = ph;
+            for (int k = 0; k < pg.size(); k++) {
+                int idx = pg.get(k);
+                Img im = imgs.get(idx);
+                float ih = PW * im.h / im.w * sc;
+                y -= ih;
+                res.append("/Im").append(k).append(' ').append(firstImg + idx).append(" 0 R ");
+                /* 每張圖多畫 0.6pt 蓋住接縫，避免閱讀器縮放時出現細白線 */
+                cs.append("q ").append(fmt(pw)).append(" 0 0 ").append(fmt(ih + (k < pg.size() - 1 ? 0.6f : 0f))).append(" 0 ").append(fmt(y - (k < pg.size() - 1 ? 0.6f : 0f))).append(" cm /Im").append(k).append(" Do Q\n");
+            }
+            int pageObj = firstPage + p * 2, contObj = pageObj + 1;
+            off[pageObj] = pos[0];
+            pos[0] += w(os, pageObj + " 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + fmt(pw) + " " + fmt(ph) + "] /Resources << /XObject << " + res + ">> >> /Contents " + contObj + " 0 R >>\nendobj\n");
+            off[contObj] = pos[0];
+            pos[0] += w(os, contObj + " 0 obj\n<< /Length " + cs.length() + " >>\nstream\n" + cs + "endstream\nendobj\n");
+        }
         byte[] buf = new byte[65536];
         for (int i = 0; i < n; i++) {
             Img im = imgs.get(i);
-            float pw = 595f, ph = Math.max(10f, 595f * im.h / im.w);
-            int pageObj = 3 + i * 3, contObj = pageObj + 1, imgObj = pageObj + 2;
-            off[pageObj] = pos[0];
-            pos[0] += w(os, pageObj + " 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + fmt(pw) + " " + fmt(ph) + "] /Resources << /XObject << /Im0 " + imgObj + " 0 R >> >> /Contents " + contObj + " 0 R >>\nendobj\n");
-            String cs = "q " + fmt(pw) + " 0 0 " + fmt(ph) + " 0 0 cm /Im0 Do Q";
-            off[contObj] = pos[0];
-            pos[0] += w(os, contObj + " 0 obj\n<< /Length " + cs.length() + " >>\nstream\n" + cs + "\nendstream\nendobj\n");
+            int imgObj = firstImg + i;
             off[imgObj] = pos[0];
             pos[0] += w(os, imgObj + " 0 obj\n<< /Type /XObject /Subtype /Image /Width " + im.w + " /Height " + im.h + " /ColorSpace " + (im.comps == 1 ? "/DeviceGray" : "/DeviceRGB") +
                 " /BitsPerComponent 8 /Filter /DCTDecode /Length " + im.f.length() + " >>\nstream\n");
@@ -202,9 +240,9 @@ final class Comic {
         String base = Util.safeName(opts.optString("name", title));
         JSONArray out = new JSONArray();
         if (!fmt.equals("html")) {
-            emit("progress", 90, "製作無縫 PDF（" + imgs.size() + " 頁）…");
+            emit("progress", 90, "製作無縫 PDF（" + imgs.size() + " 張圖）…");
             File pdf = lib.tmpFile("pdf");
-            writePdf(imgs, pdf, title);
+            writePdf(imgs, pdf, title, opts.optBoolean("stack", true));
             JSONObject o = lib.add(pdf, base + ".pdf", "application/pdf", src, title, thumb);
             lib.touch(o.getString("id"), "seamless", true);
             o.put("seamless", true);

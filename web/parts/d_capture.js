@@ -14,19 +14,25 @@ function openCapture(){
   if(CAPTURING){ toast('正在擷取中，請稍候'); return; }
   var c = CFG.cap;
   if(!c.mode) c.mode = c.reader ? 'reader' : 'full';
-  var comicNote = h('div', {class: 'note' + (c.mode === 'comic' ? '' : ' hide'), html: '🖼 <b>長條漫畫／圖集模式</b>：會先自動捲動載入整頁，只取出網頁裡的<b>內容圖片</b>（漫畫頁、相片），依順序<b>無縫接起來</b>，首頁按鈕、選單、留言、廣告等都不會出現。PDF 每張圖一頁、頁寬一致，圖片不重新壓縮。'});
+  var comicNote = h('div', {class: 'note' + (c.mode === 'comic' ? '' : ' hide'), html: '🖼 <b>長條漫畫／圖集模式</b>：會先自動捲動載入整頁，只取出網頁裡的<b>內容圖片</b>（漫畫頁、相片），依順序<b>無縫接起來</b>，首頁按鈕、選單、留言、廣告等都不會出現。PDF 把圖片接在同一張長頁上（任何 PDF 閱讀器看都是連續長條），圖片不重新壓縮。'});
   var name = h('input', {type: 'text', value: capName(c.nameTpl)});
   var snap = h('div', {class: 'snap'});
   var fmts = [['html', 'HTML', '離線網頁', 'html', 'var(--c-html)'], ['pdf', 'PDF', '文件', 'pdf', 'var(--c-pdf)'], ['both', '兩者', 'HTML＋PDF', 'layers', 'var(--olive)']];
   var fmtBox = h('div', {class: 'fmtGrid'});
   var pdfBox = h('div');
+  if(!c.pdfStyle) c.pdfStyle = 'page';
+  var styleBox = h('div', {class: 'field'}, h('div', {class: 'lbl'}, 'PDF 版面'),
+    segRow([['page', '一般網頁排版', 'pdf'], ['seamless', '無縫長條圖片', 'image']], 'cap.pdfStyle', function(){ drawFmt(); }),
+    h('div', {class: 'sub', style: {margin: '6px 2px 0', fontSize: '12px'}, text: '無縫長條圖片：PDF 只放網頁裡的內容圖片，上下接起來沒有空隙，按鈕、選單、廣告都不會出現（適合漫畫、圖集）。'}));
   function drawFmt(){
     fmtBox.textContent = '';
     fmts.forEach(function(f){
       fmtBox.appendChild(h('div', {class: 'fmt' + (c.format === f[0] ? ' on' : ''), onclick: function(){ c.format = f[0]; saveCfg(); drawFmt(); }},
         h('div', {class: 'fi', html: icon(f[3]), style: {background: f[4]}}), f[1], h('div', {class: 'sub', text: f[2]})));
     });
-    pdfBox.classList.toggle('hide', c.format === 'html');
+    var comic = c.mode === 'comic';
+    styleBox.classList.toggle('hide', c.format === 'html' || comic);
+    pdfBox.classList.toggle('hide', c.format === 'html' || comic || c.pdfStyle === 'seamless');
   }
   drawFmt();
   var body = h('div', null,
@@ -34,7 +40,8 @@ function openCapture(){
       isApp ? h('div', {class: 'sub', style: {marginTop: '4px'}, html: icon('shield', 'sm') + ' 本頁已阻擋 ' + BR.blocked + ' 個廣告請求'}) : null)),
     h('div', {class: 'field'}, h('div', {class: 'lbl'}, '檔名'), name),
     h('div', {class: 'field'}, h('div', {class: 'lbl'}, '輸出格式'), fmtBox),
-    h('div', {class: 'field'}, h('div', {class: 'lbl'}, '擷取內容'), segRow([['full', '完整頁面', 'globe'], ['reader', '只要文章', 'book'], ['comic', '只要圖片（漫畫）', 'image']], 'cap.mode', function(v){ CFG.cap.reader = v === 'reader'; saveCfg(); comicNote.classList.toggle('hide', v !== 'comic'); })),
+    styleBox,
+    h('div', {class: 'field'}, h('div', {class: 'lbl'}, '擷取內容'), segRow([['full', '完整頁面', 'globe'], ['reader', '只要文章', 'book'], ['comic', '只要圖片', 'image']], 'cap.mode', function(v){ drawFmt(); CFG.cap.reader = v === 'reader'; saveCfg(); comicNote.classList.toggle('hide', v !== 'comic'); })),
     comicNote,
     h('div', {class: 'card glass', style: {padding: '4px 12px', marginTop: '12px'}},
       swRow('移除廣告', '依內建規則＋你的自訂規則移除廣告區塊', 'cap.removeAds'),
@@ -63,6 +70,7 @@ function openCapture(){
 }
 $('bCap').addEventListener('click', openCapture);
 
+var CAP_NEXT = null;
 function capOpts(nm){
   var c = CFG.cap, q = IMGQ.filter(function(x){ return x[0] === c.imgQ; })[0] || IMGQ[0];
   return {name: nm, mode: c.mode || (c.reader ? 'reader' : 'full'), minRatio: 0.6, format: c.format, reader: c.mode === 'reader' || (!c.mode && !!c.reader), removeAds: !!c.removeAds, removeHidden: !!c.removeHidden, embedImages: !!c.embedImages, embedFonts: !!c.embedFonts,
@@ -78,6 +86,12 @@ function runCapture(nm){
   CAPTURING = true;
   capCard(1, '準備擷取…');
   var o = capOpts(nm);
+  /* 一般擷取但 PDF 選「無縫長條圖片」：PDF 用圖片模式做；選「兩者」時先存 HTML，再做無縫 PDF */
+  if(o.mode !== 'comic' && o.format !== 'html' && CFG.cap.pdfStyle === 'seamless'){
+    var co = Object.assign({}, o, {mode: 'comic', format: 'pdf'});
+    if(o.format === 'pdf') o = co;
+    else { o.format = 'html'; CAP_NEXT = co; }
+  }
   if(o.mode === 'comic'){ if(isApp) setTimeout(function(){ NAT.call('brComic', JSON.stringify(o)); }, 380); else webComic(o); return; }
   if(isApp){ setTimeout(function(){ NAT.call('brCapture', JSON.stringify(o)); }, 380); return; }
   webCapture(o);
@@ -87,13 +101,14 @@ on('cap', function(d){
   if(d.state === 'progress') capCard(d.pct || 0, d.msg);
   else if(d.state === 'done'){
     CAPTURING = false; Dock.remove('cap');
+    if(CAP_NEXT){ var nx = CAP_NEXT; CAP_NEXT = null; Lib.refresh(); CAPTURING = true; capCard(1, '製作無縫圖片 PDF…'); if(isApp) NAT.call('brComic', JSON.stringify(nx)); else webComic(nx); return; }
     var items = d.items || [];
     Lib.refresh();
     flashLib();
     toast('✓ 已儲存 ' + items.map(function(x){ return (CAT[x.cat] || CAT.other).name; }).join('＋') + '（' + fmtSize(items.reduce(function(s, x){ return s + (x.size || 0); }, 0)) + '）', false,
       items.length ? ['開啟', function(){ Viewer.open(Lib.byId(items[0].id) || items[0]); }] : null);
   } else if(d.state === 'error'){
-    CAPTURING = false; Dock.remove('cap');
+    CAPTURING = false; Dock.remove('cap'); CAP_NEXT = null;
     dialog('擷取失敗', esc(d.msg || '未知錯誤') + '<br><br>可以試試：切換「只要文章」、關閉「嵌入字型」，或重新整理網頁後再擷取。', [['好', null]]);
   }
 });
