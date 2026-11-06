@@ -48,6 +48,7 @@ function openCapture(){
       swRow('嵌入圖片', '圖片存進檔案裡，離線也看得到', 'cap.embedImages'),
       swRow('嵌入字型', '保留網站原本的字體（檔案會大一點）', 'cap.embedFonts'),
       swRow('移除隱藏的元素', '彈出層、選單等看不見的內容不存', 'cap.removeHidden'),
+      isApp ? swRow('在背景擷取', '在看不到的地方重新開啟這個網頁來讀取與捲動，不會動到你正在看的畫面（需要登入或操作過的頁面請關閉）', 'cap.bg') : null,
       isApp ? swRow('先捲動載入所有圖片', '有「捲到才載入」的圖片時建議開啟', 'cap.autoScroll') : null,
       swRow('頁首加上原網址與儲存時間', null, 'cap.banner')),
     selRow('圖片畫質', IMGQ.map(function(x){ return [x[0], x[1]]; }), 'cap.imgQ'),
@@ -74,7 +75,7 @@ var CAP_NEXT = null;
 function capOpts(nm){
   var c = CFG.cap, q = IMGQ.filter(function(x){ return x[0] === c.imgQ; })[0] || IMGQ[0];
   return {name: nm, mode: c.mode || (c.reader ? 'reader' : 'full'), minRatio: 0.6, format: c.format, reader: c.mode === 'reader' || (!c.mode && !!c.reader), removeAds: !!c.removeAds, removeHidden: !!c.removeHidden, embedImages: !!c.embedImages, embedFonts: !!c.embedFonts,
-    imgMaxPx: q[2], imgQuality: 0.85, pruneCss: true, autoScroll: !!c.autoScroll, banner: !!c.banner,
+    imgMaxPx: q[2], imgQuality: 0.85, pruneCss: true, autoScroll: !!c.autoScroll, bg: c.bg !== false, banner: !!c.banner,
     extraCss: (CFG.adCss || '').split(/\n+/).map(function(x){ return x.trim(); }).filter(Boolean).join(','),
     paper: c.paper, landscape: !!c.landscape, margin: +c.margin || 0};
 }

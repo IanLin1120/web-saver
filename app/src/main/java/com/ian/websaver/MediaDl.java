@@ -110,6 +110,9 @@ final class MediaDl {
                     if (pref.isEmpty()) pref = o.optString("vidQ", "max");
                     Object[] r = hls(lib, url, ref, base, pref, o.optString("vidOut", "mp4"), idx, n, shown);
                     f = (File) r[0]; name = (String) r[1]; mime = (String) r[2];
+                } else if (kind.equals("grab")) {
+                    Object[] r = YtGrab.run(a, lib, it, base, idx, n, shown);
+                    f = (File) r[0]; name = (String) r[1]; mime = (String) r[2];
                 } else if (kind.equals("merge") || (kind.equals("audio") && it.has("audioOut"))) {
                     Object[] r = yt(lib, it, ref, base, idx, n, shown);
                     f = (File) r[0]; name = (String) r[1]; mime = (String) r[2];

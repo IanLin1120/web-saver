@@ -56,7 +56,10 @@ on('ytbr', function(d){
   else if(YTB.title) Hist.title(YTB.url, YTB.title);
   renderYt(); fabSync();
 });
+/* 離開網頁（回首頁）或切換分頁時，清空懸浮按鈕上殘留的偵測結果 */
+function fabClear(){ if(isApp) NAT.call('brMediaClear'); BR.mediaN = 0; fabSync(); }
 on('view', function(e){
+  if(e.prev === 'browse' && e.v !== 'browse') fabClear();
   if(e.v === 'yt'){ ytEnsure(); if(!YTB.started) renderYtStart(); }
   ytSyncLayout(); ytUpdateVisible(); fabSync();
   if(e.prev === 'yt' && e.v !== 'yt' && isApp) NAT.call('ytNav', 'fsOff');
@@ -85,6 +88,17 @@ $('ytMore').addEventListener('click', function(){
 });
 on('ytOpen', function(u){ ytOpen(String(u)); });
 
+/* 手機轉橫向時自動全螢幕播放，轉回直向自動離開（像 YouTube App） */
+var YT_AUTOFS = false;
+function ytOrient(){
+  if(!isApp) return;
+  var land = innerWidth > innerHeight * 1.1;
+  if(land && curView === 'yt' && ytCurId() && !YTB.fs && !Sheets.stack.length){ YT_AUTOFS = true; NAT.call('ytNav', 'fsOn'); }
+  else if(!land && YTB.fs && YT_AUTOFS){ YT_AUTOFS = false; NAT.call('ytNav', 'fsOff'); }
+  if(!YTB.fs && !land) YT_AUTOFS = false;
+}
+window.addEventListener('resize', function(){ clearTimeout(ytOrient.t); ytOrient.t = setTimeout(ytOrient, 250); });
+
 /* ---------- 從其他 App 分享進來 ---------- */
 /* 「用網頁擷取下載」：YouTube 連結 → 在 YouTube 分頁打開並直接跳出下載面板；其他網址 → 打開並偵測媒體 */
 on('shareDl', function(u){
@@ -103,7 +117,7 @@ function fabSync(){
   var on = false, label = '';
   if(CFG.fab){
     if(curView === 'yt') on = !!ytCurId() && !YTB.fs;
-    else if(curView === 'browse'){ on = (!BR.home && BR.loaded && !!BR.url && !/^(about|data):/.test(BR.url)) || FAB.popup; label = BR.mediaN ? String(BR.mediaN > 99 ? '99+' : BR.mediaN) : ''; }
+    else if(curView === 'browse'){ on = !BR.home && BR.loaded && !!BR.url && !/^(about|data):/.test(BR.url); label = on && BR.mediaN ? String(BR.mediaN > 99 ? '99+' : BR.mediaN) : ''; }
   }
   NAT.call('fab', on, label);
 }

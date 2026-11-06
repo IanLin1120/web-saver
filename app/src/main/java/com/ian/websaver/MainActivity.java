@@ -127,6 +127,29 @@ public class MainActivity extends Activity {
     }
 
     private Browser pipBr;
+    private Browser grabBr, bgBr;
+
+    /** 背景用的隱藏瀏覽器：放在最底層（被 App 介面蓋住），照常載入與播放，但使用者看不到 */
+    Browser hidden(String tag) {
+        Browser b = "grab".equals(tag) ? grabBr : bgBr;
+        if (b == null) {
+            b = new Browser(this, tag);
+            root.removeView(b.wv);
+            root.addView(b.wv, 0, new android.widget.FrameLayout.LayoutParams(-1, -1));
+            b.wv.setVisibility(View.VISIBLE);
+            if ("grab".equals(tag)) grabBr = b; else bgBr = b;
+        }
+        if ("bg".equals(tag) && br != null) {
+            /* 背景擷取用和瀏覽分頁相同的版面大小與模式 */
+            android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(br.wv.getWidth() > 0 ? br.wv.getWidth() : -1, br.wv.getHeight() > 0 ? br.wv.getHeight() : -1);
+            b.wv.setLayoutParams(lp);
+            b.mode = br.mode;
+            b.wv.getSettings().setUserAgentString(br.wv.getSettings().getUserAgentString());
+        }
+        b.shown = true;
+        b.wv.setVisibility(View.VISIBLE);
+        return b;
+    }
 
     void immersive(boolean on) {
         View d = getWindow().getDecorView();

@@ -122,7 +122,9 @@ async function makeThumb(blob, it){
 }
 
 /* ---------- 檔案庫畫面 ---------- */
-var LV = {sel: new Set(), selMode: false, q: '', folder: lsGet('ws.lvFolder', {})};
+var LV = {sel: new Set(), selMode: false, q: '', folder: lsGet('ws.lvFolder', {}), open: false};
+/* 進入檔案庫時先收起來，點分類才顯示檔案 */
+on('view', function(e){ if(e.v === 'lib' && e.prev !== 'lib'){ LV.open = false; if(typeof renderCats === 'function'){ renderCats(); renderLibList(); } } });
 function libVisible(){
   var c = CFG.lib, q = LV.q.toLowerCase();
   var L = Lib.items.filter(function(it){ return (c.cat === 'all' || it.cat === c.cat) && (!q || (it.name + ' ' + (it.title || '') + ' ' + (it.src || '')).toLowerCase().indexOf(q) >= 0); });
@@ -175,7 +177,7 @@ function renderCats(){
   Lib.items.forEach(function(it){ cnt[it.cat] = (cnt[it.cat] || 0) + 1; });
   [['all', '全部', 'layers']].concat(Object.keys(CAT).map(function(k){ return [k, CAT[k].name, CAT[k].ic]; })).forEach(function(c){
     if(c[0] !== 'all' && !cnt[c[0]]) return;
-    bar.appendChild(h('button', {class: 'fchip' + (CFG.lib.cat === c[0] ? ' on' : ''), html: icon(c[2], 'sm') + (c[0] === 'audio' ? '音樂庫' : c[1]) + ' <span class="c">' + (cnt[c[0]] || 0) + '</span>', onclick: function(){ setCfg('lib.cat', c[0]); renderLibList(); renderCats(); }}));
+    bar.appendChild(h('button', {class: 'fchip' + (LV.open && CFG.lib.cat === c[0] ? ' on' : ''), html: icon(c[2], 'sm') + (c[0] === 'audio' ? '音樂庫' : c[1]) + ' <span class="c">' + (cnt[c[0]] || 0) + '</span>', onclick: function(){ if(LV.open && CFG.lib.cat === c[0]) LV.open = false; else { LV.open = true; setCfg('lib.cat', c[0]); } renderLibList(); renderCats(); }}));
   });
   if(CFG.lib.cat !== 'all' && !cnt[CFG.lib.cat]){ CFG.lib.cat = 'all'; saveCfg(); }
 }
@@ -188,6 +190,10 @@ function thumbEl(it, cls){
 }
 function renderLibList(){
   var box = $('libList'); box.textContent = '';
+  if(!LV.open && !LV.q && !LV.selMode){
+    box.appendChild(h('div', {class: 'libClosed', html: icon('folder', 'lg') + '<b>點上方的分類顯示檔案</b><span class="sub">全部、網頁、PDF、圖片、影片、音樂庫…再點一次可以收起來</span>'}));
+    return;
+  }
   var cat = CFG.lib.cat, inFolders = cat !== 'all' && !LV.q;
   var cur = inFolders ? (LV.folder[cat] || '') : '';
   if(cur && !LF.get(cur)){ cur = ''; LV.folder[cat] = ''; }

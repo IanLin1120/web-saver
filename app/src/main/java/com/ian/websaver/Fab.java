@@ -99,7 +99,7 @@ final class Fab {
 
     private void apply() {
         boolean fs = (a.br != null && a.br.fs) || (a.yt != null && a.yt.fs);
-        boolean vis = (want || (a.br != null && a.br.popupOpen())) && !covered && !fs && !a.inPipNow;
+        boolean vis = want && !covered && !fs && !a.inPipNow;
         box.setVisibility(vis ? View.VISIBLE : View.GONE);
         if (vis) box.bringToFront();
     }

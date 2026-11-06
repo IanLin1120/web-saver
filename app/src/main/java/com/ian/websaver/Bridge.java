@@ -57,6 +57,9 @@ public class Bridge {
     }
 
     /* ---------- YouTube 分頁 ---------- */
+    /** 清空瀏覽分頁偵測到的媒體（離開網頁、回首頁時） */
+    @JavascriptInterface public void brMediaClear() { ui(new Runnable() { @Override public void run() { a.br.clearMedia(); } }); }
+
     @JavascriptInterface public void ytRect(final float top, final float bottom, final float left, final float right) {
         ui(new Runnable() { @Override public void run() { a.yt.setRect(top, bottom, left, right); } });
     }
@@ -75,6 +78,7 @@ public class Bridge {
                     case "reload": y.wv.reload(); break;
                     case "stop": y.wv.stopLoading(); break;
                     case "fsOff": y.fullscreen(false, false); a.br.fullscreen(false, false); break;
+                    case "fsOn": if (YtSniff.vidOf(y.curUrl).length() > 0) y.fullscreen(true, false); break;
                     case "pause": y.wv.evaluateJavascript("(function(){var v=document.querySelector('video');if(v)v.pause()})()", null); break;
                     default: break;
                 }
@@ -140,11 +144,21 @@ public class Bridge {
     @JavascriptInterface public String brFavicon() { return a.br.faviconB64(); }
 
     @JavascriptInterface public void brCapture(final String opts) {
-        ui(new Runnable() { @Override public void run() { try { a.br.capture(new JSONObject(opts)); } catch (Throwable t) { MainActivity.emit("cap", "{\"state\":\"error\",\"msg\":\"設定錯誤\"}"); } } });
+        ui(new Runnable() { @Override public void run() { try { JSONObject o = new JSONObject(opts); if (o.optBoolean("bg")) bgRun(o, false); else a.br.capture(o); } catch (Throwable t) { MainActivity.emit("cap", "{\"state\":\"error\",\"msg\":\"設定錯誤\"}"); } } });
     }
 
     @JavascriptInterface public void brComic(final String opts) {
-        ui(new Runnable() { @Override public void run() { try { a.br.comic(new JSONObject(opts)); } catch (Throwable t) { /* ignore */ } } });
+        ui(new Runnable() { @Override public void run() { try { JSONObject o = new JSONObject(opts); if (o.optBoolean("bg")) bgRun(o, true); else a.br.comic(o); } catch (Throwable t) { /* ignore */ } } });
+    }
+
+    /** 背景擷取：在看不到的瀏覽器裡重新開啟同一個網頁，捲動、讀取、產生檔案都在背景進行，不會動到你正在看的畫面 */
+    private void bgRun(final JSONObject o, final boolean comic) {
+        final String url = a.br.curUrl;
+        if (url == null || !url.startsWith("http")) { if (comic) a.br.comic(o); else a.br.capture(o); return; }
+        final Browser b = a.hidden("bg");
+        MainActivity.emit("cap", "{\"state\":\"progress\",\"pct\":1,\"msg\":\"在背景開啟網頁…\"}");
+        b.afterLoad = new Runnable() { @Override public void run() { if (comic) b.comic(o); else b.capture(o); } };
+        b.wv.loadUrl(url);
     }
 
     @JavascriptInterface public void libComic(String id, String opts) {

@@ -473,3 +473,6 @@ input[type=range]{width:100%;accent-color:var(--accent);padding:0;border:0;backg
 .ydMore{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--surface-2);border:1.5px dashed var(--edge);font-weight:700;font-size:13.5px;cursor:pointer;color:var(--accent)}
 .ydMoreHead{display:flex;align-items:center;gap:6px;font-size:16px;margin:-4px 0 4px}
 .ydRow.dis{opacity:.55;pointer-events:none}
+.libClosed{display:flex;flex-direction:column;align-items:center;gap:6px;padding:38px 16px 60px;color:var(--text-2);text-align:center}
+.libClosed svg{width:42px;height:42px;opacity:.55}
+.libClosed b{color:var(--text);font-size:15px}

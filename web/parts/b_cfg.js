@@ -5,7 +5,7 @@ var CFG_DEF = {
   theme: 'auto', palette: 'earth', uiScale: 100, motion: true,
   mode: 'mobile', textZoom: 100, home: '', search: 'google', popups: 'smart',
   ads: true, adHosts: '', adCss: '', adAllow: '', pw: true,
-  cap: {format: 'html', mode: 'full', removeAds: true, reader: false, embedImages: true, imgQ: 'orig', embedFonts: true, removeHidden: true, autoScroll: true, banner: true, nameTpl: '{title}', paper: 'a4', landscape: false, margin: 10},
+  cap: {format: 'html', mode: 'full', removeAds: true, reader: false, embedImages: true, imgQ: 'orig', embedFonts: true, removeHidden: true, autoScroll: true, bg: true, banner: true, nameTpl: '{title}', paper: 'a4', landscape: false, margin: 10},
   media: {imgFmt: 'orig', imgMax: 0, imgQ: 90, minPx: 120, vidQ: 'max', vidOut: 'mp4', zip: true, audFmt: 'orig', nameMode: 'orig', customName: '', seqOn: true, seqMode: 'page', seqDigits: 3, seqSep: '_'},
   ytAds: true,
   yt: {bg: true, pip: true, sb: true, q: 'max', gest: true, bar: true, speed: true, skin: true, ryd: true, noShorts: false, codec: 'vp9'},

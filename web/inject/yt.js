@@ -344,6 +344,7 @@
     pip: '<rect x="2.5" y="4" width="19" height="16" rx="2"/><rect x="12" y="11" width="7" height="6" rx="1" fill="currentColor"/>',
     dl: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/>', next: '<path d="M6 5l9 7-9 7z" fill="currentColor" stroke="none"/><path d="M18 5v14"/>',
     prev: '<path d="M18 5L9 12l9 7z" fill="currentColor" stroke="none"/><path d="M6 5v14"/>',
+    fill: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10V8.5h2M17 10V8.5h-2M7 14v1.5h2M17 14v1.5h-2"/>',
     cc: '<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M10.5 10.2a2.4 2.4 0 1 0 0 3.6M17 10.2a2.4 2.4 0 1 0 0 3.6"/>',
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
     unlock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>',
@@ -402,7 +403,8 @@
         'html.__wsskin.__wsad video{opacity:0!important}' +
         'html.__wsfs,html.__wsfs body{overflow:hidden!important;background:#000!important}' +
         'html.__wsfs .html5-video-container{position:absolute!important;inset:0!important;width:100%!important;height:100%!important}' +
-        'html.__wsfs .html5-video-player video{position:absolute!important;left:0!important;top:0!important;width:100%!important;height:100%!important;object-fit:contain!important;transform:none!important}';
+        'html.__wsfs .html5-video-player video{position:absolute!important;left:0!important;top:0!important;width:100%!important;height:100%!important;object-fit:contain!important;transform:none!important}' +
+        'html.__wsfs.__wsfill .html5-video-player video{object-fit:cover!important}';
       (document.head || document.documentElement).appendChild(skinCss);
     }
     document.documentElement.classList.add('__wsskin');
@@ -460,7 +462,7 @@
       '<button id="pp2" title="子母畫面">' + ic('pip') + '</button><button id="dl" title="下載">' + ic('dl') + '</button><button id="mo" title="更多">' + ic('more') + '</button></div>' +
       '<div class="mid"><button id="pv2" title="上一部">' + ic('prev') + '</button><button class="sk" id="rw">' + ic('rew') + '<i>10</i></button><button class="pp" id="pp">' + ic('play') + '</button><button class="sk" id="fw">' + ic('fwd') + '<i>10</i></button><button id="nx" title="下一部">' + ic('next') + '</button></div>' +
       '<div class="bot"><div class="bar" id="bar"><div class="tr"><div class="bf" id="bf"></div><div id="segs"></div><div class="pl" id="pl"></div></div><div class="kn" id="kn"></div></div>' +
-      '<div class="row"><span id="tm">0:00 / 0:00</span><span class="g"></span><span id="sb"></span><button id="lk" class="fsOnly" title="鎖定畫面">' + ic('lock') + '</button><button id="cc" title="字幕">' + ic('cc') + '</button><button id="q" title="畫質">' + ic('gear') + '</button><button id="fs" title="全螢幕">' + ic('full') + '</button></div></div></div>' +
+      '<div class="row"><span id="tm">0:00 / 0:00</span><span class="g"></span><span id="sb"></span><button id="fill" class="fsOnly" title="填滿螢幕">' + ic('fill') + '</button><button id="lk" class="fsOnly" title="鎖定畫面">' + ic('lock') + '</button><button id="cc" title="字幕">' + ic('cc') + '</button><button id="q" title="畫質">' + ic('gear') + '</button><button id="fs" title="全螢幕">' + ic('full') + '</button></div></div></div>' +
       '<div class="mini" id="mini"><i id="miniB"></i></div><button class="lockb" id="ulk">' + ic('unlock') + '</button>' +
       '<div class="scrim" id="scrim"></div><div class="sheet" id="sheet"></div><div class="prev" id="pvw"></div><div class="flash" id="flash"></div></div>');
     document.documentElement.appendChild(host);
@@ -544,6 +546,12 @@
     W.syncFs = function () { setH($('fs'), ic(isFs() ? 'exit' : 'full')); if (isFs()) host.classList.add('fs'); else { host.classList.remove('fs'); root.classList.remove('locked'); } };
     $('fs').onclick = function (e) { e.stopPropagation(); setFs(!isFs()); show(); };
     $('mn').onclick = function (e) { e.stopPropagation(); setFs(false); };
+    $('fill').onclick = function (e) {
+      e.stopPropagation(); var on = !document.documentElement.classList.contains('__wsfill');
+      document.documentElement.classList.toggle('__wsfill', on); try { localStorage.setItem('__wsFill', on ? '1' : ''); } catch (x) {}
+      W.flash(on ? '填滿螢幕（裁掉上下或左右）' : '完整畫面（保留黑邊）'); show();
+    };
+    try { if (localStorage.getItem('__wsFill')) document.documentElement.classList.add('__wsfill'); } catch (x) {}
     $('lk').onclick = function (e) { e.stopPropagation(); root.classList.add('locked'); hide(); W.flash('已鎖定畫面，點左邊的鎖頭解除'); };
     $('ulk').onclick = function (e) { e.stopPropagation(); root.classList.remove('locked'); show(); };
     /* 進度條 */
@@ -645,4 +653,173 @@
     requestAnimationFrame(upd);
     show();
   }
+  /* ============================================================
+     錄製式下載（只在 App 的背景播放器裡啟用）：
+     記錄播放器交給 MediaSource 的影像／聲音資料，依時間順序送回 App 存檔。
+     ============================================================ */
+  var GR = window.__wsCfg && window.__wsCfg.grab;
+  if (GR) (function () {
+    var KIND = new WeakMap(), MSOF = new WeakMap();
+    var T = {v: {sig: '', bytes: null, last: -1, n: 0, h: 0, other: 0}, a: {sig: '', bytes: null, last: -1, n: 0, other: 0}};
+    var phase = 'wait', t0 = Date.now(), lastData = Date.now(), finished = false, reloads = +(sessionStorage.getItem('__wsGrabR') || 0);
+    var HQ = {tiny: 144, small: 240, medium: 360, large: 480, hd720: 720, hd1080: 1080, hd1440: 1440, hd2160: 2160};
+    /* 讓播放器一開始就用指定畫質 */
+    try {
+      var now = Date.now(), qh = GR.audio ? 144 : (GR.h || 720);
+      localStorage.setItem('yt-player-quality', JSON.stringify({data: JSON.stringify({quality: qh, previousQuality: qh}), expiration: now + 30 * 864e5, creation: now}));
+    } catch (e) {}
+    function b64(u8) { var s = '', CH = 0x8000; for (var i = 0; i < u8.length; i += CH) s += String.fromCharCode.apply(null, u8.subarray(i, i + CH)); return btoa(s); }
+    function send(k, u8, reset) {
+      var SL = 384 * 1024;
+      for (var i = 0; i < u8.length; i += SL) B.grabData(k, b64(u8.subarray(i, Math.min(u8.length, i + SL))), !!reset && i === 0);
+      lastData = Date.now();
+    }
+    function sig(u8) { var h = 2166136261, n = Math.min(u8.length, 8192); for (var i = 0; i < n; i++) { h ^= u8[i]; h = Math.imul(h, 16777619); } return u8.length + ':' + (h >>> 0); }
+    function isInit(u8) {
+      if (u8.length < 8) return false;
+      if (u8[0] === 0x1A && u8[1] === 0x45 && u8[2] === 0xDF && u8[3] === 0xA3) return true;
+      var t = String.fromCharCode(u8[4], u8[5], u8[6], u8[7]);
+      return t === 'ftyp' || t === 'moov';
+    }
+    function u32(u8, i) { return ((u8[i] << 24) >>> 0) + (u8[i + 1] << 16) + (u8[i + 2] << 8) + u8[i + 3]; }
+    function boxes(u8, s, e, name) {
+      for (var i = s; i + 8 <= e;) {
+        var sz = u32(u8, i), ty = String.fromCharCode(u8[i + 4], u8[i + 5], u8[i + 6], u8[i + 7]), hd = 8;
+        if (sz === 1) { sz = u32(u8, i + 8) * 4294967296 + u32(u8, i + 12); hd = 16; } else if (sz === 0) sz = e - i;
+        if (sz < 8) return null;
+        if (ty === name) return [i + hd, Math.min(e, i + sz)];
+        i += sz;
+      }
+      return null;
+    }
+    function vint(u8, i) {
+      var b = u8[i], len = 1, m = 0x80;
+      while (len <= 8 && !(b & m)) { len++; m >>= 1; }
+      var v = b & (m - 1);
+      for (var k = 1; k < len; k++) v = v * 256 + u8[i + k];
+      return [v, len];
+    }
+    /* 這一段資料的時間（用來去除重複的片段） */
+    function segTs(u8) {
+      var mf = boxes(u8, 0, u8.length, 'moof');
+      if (mf) {
+        var tf = boxes(u8, mf[0], mf[1], 'traf'); if (!tf) return null;
+        var dt = boxes(u8, tf[0], tf[1], 'tfdt'); if (!dt) return null;
+        return u8[dt[0]] === 1 ? u32(u8, dt[0] + 4) * 4294967296 + u32(u8, dt[0] + 8) : u32(u8, dt[0] + 4);
+      }
+      for (var i = 0; i + 8 < u8.length && i < 4096; i++) {
+        if (u8[i] === 0x1F && u8[i + 1] === 0x43 && u8[i + 2] === 0xB6 && u8[i + 3] === 0x75) {
+          var j = i + 4, sz = vint(u8, j); j += sz[1];
+          if (u8[j] !== 0xE7) return null;
+          var l = vint(u8, j + 1); j += 1 + l[1];
+          var v = 0; for (var k = 0; k < l[0]; k++) v = v * 256 + u8[j + k];
+          return v;
+        }
+      }
+      return null;
+    }
+    /* 影像初始化片段裡的畫面高度 */
+    function initHeight(u8) {
+      for (var i = 0; i + 3 < u8.length; i++) {
+        if (u8[i] === 0xBA && (u8[i + 1] & 0x80) && i > 0) {
+          var l = u8[i + 1] & 0x7F; if (l < 1 || l > 2) continue;
+          var v = l === 1 ? u8[i + 2] : u8[i + 2] * 256 + u8[i + 3];
+          if (v >= 90 && v <= 4400 && u8[i - 1] !== 0xBA) { for (var j = Math.max(0, i - 24); j < i; j++) if (u8[j] === 0xB0) return v; }
+        }
+      }
+      var mv = boxes(u8, 0, u8.length, 'moov'); if (!mv) return 0;
+      for (var p = mv[0]; p < mv[1];) {
+        var tk = boxes(u8, p, mv[1], 'trak'); if (!tk) break;
+        var th = boxes(u8, tk[0], tk[1], 'tkhd');
+        if (th) { var hh = u32(u8, th[1] - 4) >>> 16; if (hh) return hh; }
+        p = tk[1];
+      }
+      return 0;
+    }
+    function take(sb, data) {
+      if (finished) return;
+      var k = KIND.get(sb); if (!k) return;
+      var ms = MSOF.get(sb);
+      if (GR.len && ms && isFinite(ms.duration) && ms.duration > 0 && Math.abs(ms.duration - GR.len) > 3) return; /* 廣告 */
+      var u8 = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+      var t = T[k];
+      if (isInit(u8)) {
+        var sg = sig(u8);
+        if (sg === t.sig) return;
+        if (k === 'v') t.h = initHeight(u8);
+        if (phase === 'run' && t.sig) { t.other++; return; } /* 執行中換了格式：不要混進來 */
+        t.sig = sg; t.bytes = new Uint8Array(u8); t.last = -1; t.n = 0; t.first = null;
+        send(k, u8, true);
+        var ts0 = segTs(u8); if (ts0 != null) t.last = ts0;
+        return;
+      }
+      if (!t.sig) return;
+      if (phase === 'run' && t.other) { /* 正在收別的格式：檢查是不是回到原本格式 */ }
+      var ts = segTs(u8);
+      if (ts != null) { if (ts <= t.last) return; t.last = ts; if (t.first == null) t.first = ts; }
+      send(k, u8, false); t.n++;
+    }
+    function hookMS(MS) {
+      if (!MS || !MS.prototype || MS.prototype.__wsGrab) return;
+      var add = MS.prototype.addSourceBuffer;
+      MS.prototype.addSourceBuffer = function (mime) {
+        var sb = add.apply(this, arguments), k = /audio/i.test(mime) ? 'a' : 'v';
+        KIND.set(sb, k); MSOF.set(sb, this);
+        try { B.grabMime(k, String(mime)); } catch (e) {}
+        return sb;
+      };
+      MS.prototype.__wsGrab = 1;
+    }
+    hookMS(window.MediaSource); hookMS(window.ManagedMediaSource);
+    if (window.SourceBuffer) {
+      var app = SourceBuffer.prototype.appendBuffer;
+      SourceBuffer.prototype.appendBuffer = function (d) { try { take(this, d); } catch (e) {} return app.apply(this, arguments); };
+    }
+    function done(err) {
+      if (finished) return; finished = true;
+      sessionStorage.removeItem('__wsGrabR');
+      var v = vid(); if (v) v.pause();
+      try { B.grabDone(err || ''); } catch (e) {}
+    }
+    function bufEnd(v) {
+      var b = v.buffered, t = v.currentTime;
+      for (var i = 0; i < b.length; i++) if (b.start(i) <= t + 0.3 && b.end(i) >= t) return b.end(i);
+      return t;
+    }
+    var stuck = 0, lastBe = -1, qSet = 0, ending = false;
+    setInterval(function () {
+      if (finished || ending) return;
+      var v = vid(), p = ytp(), now = Date.now();
+      if (now - lastData > 60000) { done(T.v.n + T.a.n ? '背景播放器 60 秒沒有收到新資料' : '背景播放器沒有開始播放（可能需要登入或影片有年齡、地區限制）'); return; }
+      if (!v) return;
+      v.muted = true;
+      if (v.paused && !(v.ended)) { var pr = v.play(); if (pr && pr.catch) pr.catch(function () {}); }
+      if (!document.querySelector('.ad-showing') && p && p.setPlaybackQualityRange && now - qSet > 4000) { qSet = now; try { var q = GR.audio ? 'tiny' : GR.q; p.setPlaybackQualityRange(q, q); } catch (e) {} }
+      var d = v.duration;
+      if (!d || !isFinite(d) || document.querySelector('.ad-showing')) { B.grabProg(0, '等待播放器'); return; }
+      if (phase === 'wait') {
+        var vOk = GR.audio || (T.v.sig && T.v.n > 0), aOk = T.a.sig && T.a.n > 0;
+        if (!vOk || !aOk) { B.grabProg(0, '等待播放器'); return; }
+        if (!GR.audio && T.v.h && GR.h && T.v.h < GR.h * 0.9) {
+          /* 播放器一開始不是要的畫質：重新載入（最多兩次），讓它直接用指定畫質開始 */
+          var lv = []; try { lv = p.getAvailableQualityLevels(); } catch (e) {}
+          var can = lv.some(function (q) { return (HQ[q] || 0) >= GR.h; });
+          if (can && reloads < 2) { sessionStorage.setItem('__wsGrabR', reloads + 1); finished = true; location.reload(); return; }
+        }
+        /* 必須從開頭收：播放器如果不是從 0 秒開始（例如接續上次觀看位置），清掉重收並跳回開頭 */
+        ['v', 'a'].forEach(function (k) {
+          var t = T[k];
+          if (t.sig && t.first != null && t.first > 50) { send(k, t.bytes, true); t.last = -1; t.first = null; t.n = 0; }
+        });
+        phase = 'run'; try { v.currentTime = 0; } catch (e) {}
+      }
+      var be = bufEnd(v);
+      B.grabProg(Math.min(0.99, be / d), GR.audio ? '背景錄製音軌' : '背景錄製 ' + (T.v.h ? T.v.h + 'p' : ''));
+      if (be >= d - 0.6) { if (!ending) { ending = true; setTimeout(function () { done(''); }, 2000); } return; }
+      if (be - v.currentTime > 3) { try { v.currentTime = Math.max(v.currentTime, be - 1); } catch (e) {} }
+      if (Math.abs(be - lastBe) < 0.01) stuck++; else stuck = 0;
+      lastBe = be;
+      if (stuck > 20) { stuck = 0; try { v.currentTime = Math.min(d - 0.2, be + 0.05); } catch (e) {} }
+    }, 500);
+  })();
 })();

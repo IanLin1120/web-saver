@@ -367,7 +367,7 @@ async function openYt(id){
     var nameRow = h('details', {class: 'ydName'}, h('summary', {text: '檔名：' + nm()}), h('div', {class: 'field', style: {marginTop: '8px'}}, name));
     name.oninput = function(){ nameRow.firstChild.textContent = '檔名：' + nm(); };
     body.appendChild(nameRow);
-    if(!more) body.appendChild(h('div', {class: 'sub', style: {fontSize: '11.5px', margin: '8px 2px', lineHeight: '1.6'}, html: d.page ? '✓ 使用 App 內 YouTube 播放器的串流下載。下載時播放器會靜音切換畫質幾秒。' : '來源：' + esc(d.src)}));
+    if(!more) body.appendChild(h('div', {class: 'sub', style: {fontSize: '11.5px', margin: '8px 2px', lineHeight: '1.6'}, html: d.page ? '✓ 在背景用看不到的播放器錄製下載（不受 403、機器人驗證影響），下載時可以繼續看影片。' : '來源：' + esc(d.src)}));
     var rows = qsa('.ydRow', body), last = lsGet('ws.ytLastK', '');
     var pre = rows.filter(function(r){ return r.dataset.k === last; })[0] || rows.filter(function(r){ return /^v/.test(r.dataset.k || ''); }).pop() || rows[0];
     if(pre && pre.dataset.k) pre.click();
@@ -381,25 +381,27 @@ async function openYt(id){
 /* 用 App 內播放器的串流下載 */
 async function ytStartPage(d, meta, ch, retry){
   var audioOnly = ch.type === 'audio';
-  dlCard(0, 1, '準備下載：' + (audioOnly ? '取得音軌…' : ch.h + 'p…'), 0);
-  var r = await ytPageStreams(d, ch.h, audioOnly, function(t){ dlCard(0, 1, t, 0); });
-  if(!r.a || (!audioOnly && !r.v)){
-    Dock.remove('dl');
-    var why = r.sabrOnly ? 'YouTube 對這部影片使用新的「SABR」串流格式，目前無法直接取得完整檔案。' : '播放器沒有載入' + (audioOnly ? '音軌' : ' ' + ch.h + 'p 的畫面') + '。';
-    dialog('無法取得串流', why + '<br><br>請在「YouTube」分頁讓影片<b>播放幾秒</b>（不要停在廣告），再按一次下載；或改選其他畫質。', [['用其他來源試試', function(){ ytLegacy(d.id, meta, ch); }], ['好', null]]);
-    return;
-  }
   var base = {src: 'https://www.youtube.com/watch?v=' + d.id, title: meta.title, thumbUrl: meta.thumb, ua: '', noCookie: true, referer: 'https://m.youtube.com/'};
   YTJOB = {id: d.id, meta: meta, ch: ch, page: true, d: d, tries: retry || 0, skip: []};
-  if(audioOnly){
-    var ext = /webm/.test(sMime(r.a)) ? 'webm' : 'mp4', extra = Object.assign({}, ch.extra || {});
-    if(extra.audioOut === 'opus' && ext !== 'webm') extra.audioOut = 'm4a';
-    if(extra.audioOut === 'm4a' && ext !== 'mp4') extra.audioOut = 'opus';
-    ytDl([Object.assign({}, base, {kind: 'audio', url: r.a.url, ext: ext, name: ch.name, artist: meta.artist}, extra, {title: meta.song})], meta, 'mp4');
-  } else {
-    lsSet('ws.ytLastH', ch.h);
-    ytDl([Object.assign({}, base, {kind: 'merge', url: r.v.url, audioUrl: r.a.url, container: r.cont, name: ch.name})], meta, 'mp4');
+  var extra = Object.assign({}, ch.extra || {});
+  if(!audioOnly) lsSet('ws.ytLastH', ch.h);
+  /* 1. 播放器剛好用一般網址在播：直接下載（最快） */
+  var r = retry ? {} : ytPickStreams(d, NAT.json('ytSniff', d.id), ch.h, audioOnly);
+  if(r.a && (audioOnly || r.v)){
+    if(audioOnly){
+      var ext = /webm/.test(sMime(r.a)) ? 'webm' : 'mp4';
+      if(extra.audioOut === 'opus' && ext !== 'webm') extra.audioOut = 'm4a';
+      if(extra.audioOut === 'm4a' && ext !== 'mp4') extra.audioOut = 'opus';
+      ytDl([Object.assign({}, base, {kind: 'audio', url: r.a.url, ext: ext, name: ch.name, artist: meta.artist}, extra, {title: meta.song})], meta, 'mp4');
+    } else ytDl([Object.assign({}, base, {kind: 'merge', url: r.v.url, audioUrl: r.a.url, container: r.cont, name: ch.name})], meta, 'mp4');
+    return;
   }
+  /* 2. 錄製式下載：背景播放器（靜音、看不到）播放這部影片，把播放器收到的資料存下來。
+        不需要下載網址，所以不會被 403／機器人驗證／SABR 擋住。 */
+  var g = {kind: 'grab', vid: d.id, h: audioOnly ? 144 : ch.h, q: audioOnly ? 'tiny' : (QKEY[ch.h] || 'hd720'), audioOnly: audioOnly, len: +meta.dur || +(d.details.lengthSeconds || 0), name: ch.name};
+  if(audioOnly) ytDl([Object.assign({}, base, g, {artist: meta.artist}, extra, {title: meta.song})], meta, 'mp4');
+  else ytDl([Object.assign({}, base, g)], meta, 'mp4');
+  toast('在背景下載中，可以繼續看影片或做其他事');
 }
 /* 舊的多來源解析（備用） */
 async function ytLegacy(id, meta, ch){

@@ -49,12 +49,19 @@ final class Browser {
     /** "br"＝瀏覽分頁；"yt"＝YouTube 分頁（固定手機版、專用播放器） */
     final String tag;
     final boolean ytTab;
+    /** 在背景執行的隱藏瀏覽器（背景擷取、YouTube 錄製下載），放在畫面最底層使用者看不到 */
+    final boolean hiddenBr;
+    /** 頁面載入完成後要做的事（背景擷取用） */
+    Runnable afterLoad;
+    /** YouTube 錄製下載的設定，會放進 __wsCfg.grab */
+    JSONObject grabOpts;
     WebView wv;
     private FrameLayout popupHost;
     private WebView popup;
     private TextView popupTitle;
     volatile String curUrl = "", curHost = "", curTitle = "";
-    private boolean shown = false, covered = false;
+    boolean shown = false;
+    private boolean covered = false;
     int progress = 100;
     private int lastInjectBucket = -1;
     Bitmap favicon;
@@ -170,7 +177,8 @@ final class Browser {
     Browser(MainActivity act, String tg) {
         a = act;
         tag = tg;
-        ytTab = "yt".equals(tg);
+        ytTab = "yt".equals(tg) || "grab".equals(tg);
+        hiddenBr = "grab".equals(tg) || "bg".equals(tg);
         android.content.SharedPreferences p = a.prefs;
         mode = p.getString("brMode", "mobile");
         popups = p.getString("brPopups", "smart");
@@ -253,7 +261,7 @@ final class Browser {
             if (scheme == null || !scheme.startsWith("http")) return null;
             String host = u.getHost();
             if (host != null && host.endsWith("googlevideo.com") && "/videoplayback".equals(u.getPath())) YtSniff.note(Browser.this, u.toString());
-            if (ytAds && !isPopup && r.isForMainFrame() && "GET".equalsIgnoreCase(r.getMethod()) && isYt(host)) {
+            if ((ytAds || "grab".equals(tag)) && !isPopup && r.isForMainFrame() && "GET".equalsIgnoreCase(r.getMethod()) && isYt(host)) {
                 WebResourceResponse x = ytPage(u.toString(), r.getRequestHeaders());
                 if (x != null) return x;
             }
@@ -334,6 +342,11 @@ final class Browser {
             }
             emitState();
             emitMediaCount();
+            if (afterLoad != null && url != null && url.startsWith("http")) {
+                final Runnable r = afterLoad;
+                afterLoad = null;
+                Util.MAIN.postDelayed(r, 1500);
+            }
         }
 
         @Override public void doUpdateVisitedHistory(WebView v, String url, boolean reload) {
@@ -418,6 +431,7 @@ final class Browser {
             c.put("css", AdBlock.css);
             c.put("pw", pw);
             if (ytOpts != null) c.put("yt", ytOpts);
+            if (grabOpts != null) c.put("grab", grabOpts);
             return "window.__wsCfg=" + c.toString() + ";";
         } catch (Throwable t) { return "window.__wsCfg={};"; }
     }
@@ -452,11 +466,16 @@ final class Browser {
     void cover(boolean on) {
         covered = on;
         if (on) {
-            if (wv.getVisibility() == View.VISIBLE && !fs) MainActivity.emit(ytTab ? "snapYt" : "snap", snapshot(wv, 0.5f, 62));
-            if (!fs) wv.setVisibility(View.GONE);
+            if (wv.getVisibility() == View.VISIBLE && !fs) {
+                MainActivity.emit("yt".equals(tag) ? "snapYt" : "snap", snapshot(wv, 0.5f, 62));
+                /* 影片用硬體圖層顯示，直接隱藏 WebView 時畫面可能殘留在最上層（蓋住面板）：先把影片藏起來再隱藏 */
+                wv.evaluateJavascript("(function(){var s=document.getElementById('__wscv');if(!s){s=document.createElement('style');s.id='__wscv';s.textContent='html.__wscover video{visibility:hidden!important}';(document.head||document.documentElement).appendChild(s)}document.documentElement.classList.add('__wscover')})()", null);
+                Util.MAIN.postDelayed(new Runnable() { @Override public void run() { if (covered && !fs) wv.setVisibility(View.GONE); } }, 120);
+            }
             if (popupHost != null) popupHost.setVisibility(View.GONE);
         } else {
             wv.setVisibility(shown || fs ? View.VISIBLE : View.GONE);
+            wv.evaluateJavascript("document.documentElement.classList.remove('__wscover')", null);
             if (popupHost != null) popupHost.setVisibility(View.VISIBLE);
         }
     }
@@ -585,7 +604,7 @@ final class Browser {
             o.put("mode", mode);
             o.put("secure", curUrl.startsWith("https:"));
             o.put("fs", fs);
-            MainActivity.emit(ytTab ? "ytbr" : "br", o.toString());
+            if (!hiddenBr) MainActivity.emit("yt".equals(tag) ? "ytbr" : "br", o.toString());
         } catch (Throwable t) { /* ignore */ }
     }
 
@@ -869,7 +888,7 @@ final class Browser {
     }
 
     void emitMediaCount() {
-        if (ytTab) return;
+        if (!"br".equals(tag)) return;
         Util.ui(new Runnable() {
             @Override public void run() {
                 wv.evaluateJavascript("(function(){try{return document.querySelectorAll('img,video,audio').length}catch(e){return 0}})()", new ValueCallback<String>() {
@@ -950,6 +969,11 @@ final class Browser {
     ViewGroup.LayoutParams lp() { return wv.getLayoutParams(); }
 
     boolean popupOpen() { return popup != null; }
+
+    void clearMedia() {
+        synchronized (netMedia) { netMedia.clear(); }
+        emitMediaCount();
+    }
 
     int netVideoCount() {
         int n = 0;

@@ -31,6 +31,15 @@ public class PageBridge {
 
     @JavascriptInterface public void ytDl(String id) { MainActivity.emit("ytdl", id); }
 
+    /* YouTube 錄製下載（背景播放器） */
+    @JavascriptInterface public void grabMime(String kind, String mime) { YtGrab.mime(kind, mime); }
+
+    @JavascriptInterface public void grabData(String kind, String b64, boolean reset) { YtGrab.data(kind, b64, reset); }
+
+    @JavascriptInterface public void grabProg(double pct, String note) { YtGrab.progress(pct, note); }
+
+    @JavascriptInterface public void grabDone(String err) { YtGrab.finish(err); }
+
     @JavascriptInterface public void ytStream(String url) { if (url != null && url.contains("googlevideo.com/videoplayback")) YtSniff.note(b, url); }
 
     @JavascriptInterface public void ytInfo(String vid, String json) { YtSniff.info(vid, json); MainActivity.emit("ytInfo", vid); }

@@ -75,6 +75,7 @@ function navigate(url){
 }
 function goHome(){
   BR.home = true;
+  if(typeof fabClear === 'function') fabClear();
   $('startPage').classList.remove('hide');
   renderStart();
   updateBrVisible();
