@@ -107,7 +107,7 @@ Music.load = async function(play){
   var it = this.cur(); if(!it) return;
   try{ this.el.src = await Lib.src(it); if(play) await this.el.play(); }catch(e){ if(play) toast('無法播放：' + it.name, true); }
   this.mini();
-  if(CFG.lyr && CFG.lyr.auto && !Lyrics.of(it)){ var self0 = this; Lyrics.auto(it).then(function(l){ if(l && self0.cur() === it) self0.drawPlayer(); }).catch(function(){}); }
+  if(CFG.lyr && CFG.lyr.auto && !Lyrics.of(it) && !it.lrcOff){ var self0 = this; Lyrics.auto(it).then(function(l){ if(l && self0.cur() === it) self0.drawPlayer(); }).catch(function(){}); }
   if('mediaSession' in navigator) try{
     navigator.mediaSession.metadata = new MediaMetadata({title: songTitle(it), artist: it.artist || '', artwork: Lib.thumb(it) ? [{src: Lib.thumb(it), sizes: '360x360', type: 'image/jpeg'}] : []});
     navigator.mediaSession.setActionHandler('nexttrack', function(){ Music.next(); });
@@ -176,7 +176,7 @@ Music.drawPlayer = function(){
   var it = this.cur(); body.textContent = '';
   if(!it){ body.appendChild(h('div', {class: 'empty', text: '沒有播放中的歌曲'})); return; }
   var th = Lib.thumb(it), playing = !this.el.paused, self = this;
-  var showLyr = CFG.lyr.view !== 'cover';
+  var showLyr = CFG.lyr.show !== false && CFG.lyr.view !== 'cover' && !it.lrcOff;
   var stage = h('div', {class: 'mpStage'});
   if(showLyr) LyrView.mount(stage, it);
   else stage.appendChild(h('div', {class: 'art', style: th ? {backgroundImage: 'url("' + th + '")'} : null, html: th ? '' : icon('audio', 'lg'), onclick: function(){ CFG.lyr.view = 'lyrics'; saveCfg(); self.drawPlayer(); }}));
@@ -187,7 +187,14 @@ Music.drawPlayer = function(){
   var tb = h('div', {class: 'mpTools'});
   var tbtn = function(ic, label, fn, on){ tb.appendChild(h('button', {class: 'chip' + (on ? ' pri' : ''), style: on ? null : {background: 'var(--surface-3)', color: 'var(--text)', border: '1px solid var(--border-soft)'}, html: icon(ic, 'sm') + label, onclick: fn})); };
   tbtn(showLyr ? 'image' : 'type', showLyr ? '封面' : '歌詞', function(){ CFG.lyr.view = showLyr ? 'cover' : 'lyrics'; saveCfg(); self.drawPlayer(); });
-  tbtn('search', '找歌詞', function(){ lyricsSearchSheet(it, function(){ self.drawPlayer(); }); });
+  tbtn('search', '找歌詞', function(){ delete it.lrcOff; if(isApp) NAT.call('libMeta', it.id, JSON.stringify({lrcOff: false})); lyricsSearchSheet(it, function(){ self.drawPlayer(); }); });
+  if(Lyrics.of(it)) tbtn('trash', '移除歌詞', async function(){
+    if(!await confirmDlg('移除這首歌的歌詞？', '歌詞抓錯時用：移除後這首歌不會再自動找歌詞，之後可以按「找歌詞」手動選正確的。', '移除', true)) return;
+    Lyrics.save(it, '', ''); it.lrcOff = true;
+    var li = Lib.byId(it.id); if(li) li.lrcOff = true;
+    if(isApp) NAT.call('libMeta', it.id, JSON.stringify({lrcOff: true}));
+    toast('已移除歌詞'); self.drawPlayer();
+  });
   tbtn('palette', '樣式', function(){ lyricsStyleSheet(function(){ if(LyrView.el) LyrView.el.setAttribute('style', lyrStyle()); }); });
   if(Lyrics.isSynced(Lyrics.of(it))){
     tbtn('back', '早 0.5 秒', function(){ it.lrcOffset = Math.round(((it.lrcOffset || 0) - 0.5) * 10) / 10; if(isApp) NAT.call('libMeta', it.id, JSON.stringify({lrcOffset: it.lrcOffset})); toast('歌詞時間 ' + (it.lrcOffset > 0 ? '+' : '') + it.lrcOffset + ' 秒'); LyrView.idx = -2; });

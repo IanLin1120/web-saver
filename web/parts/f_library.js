@@ -296,6 +296,8 @@ function renderSelBar(){
     if(!oneCat){ toast('資料夾是依種類分開的，請只選同一種類的檔案', true); return; }
     folderPicker(oneCat, '移到資料夾', function(fid){ LF.setItems(picked.map(function(x){ return x.id; }), fid); LV.sel.clear(); LV.selMode = false; toast('已移動'); renderLib(); }, {cur: LV.folder[oneCat] || ''});
   }}));
+  var htmls = picked.filter(function(x){ return x.cat === 'html'; });
+  if(htmls.length) bar.appendChild(h('button', {class: 'ib', html: icon('pdf'), title: '轉成 PDF', onclick: function(){ batchPdfDlg(htmls); }}));
   bar.appendChild(h('button', {class: 'ib', html: icon('edit'), title: '重新命名', disabled: !n, onclick: function(){ renameItems(picked); }}));
   bar.appendChild(h('button', {class: 'ib', html: icon('share'), title: '匯出', disabled: !n, onclick: function(){ exportSheet(picked); }}));
   bar.appendChild(h('button', {class: 'ib', html: icon('trash'), title: '刪除', disabled: !n, style: {color: 'var(--danger)'}, onclick: async function(){
@@ -400,4 +402,56 @@ async function renameItems(picked){
     await Lib.refresh(); LV.sel.clear(); LV.selMode = false; s.close(); renderLib(); toast('已重新命名 ' + order.length + ' 個檔案');
   };
   upd();
+}
+
+/* 批次轉 PDF：選多個離線網頁，一個接一個轉（一般 PDF 或無縫圖片 PDF） */
+var BATCH_PDF = null;
+function waitEv(name, pred, ms){
+  return new Promise(function(res){
+    var done = false, tm = setTimeout(function(){ fin({timeout: true}); }, ms || 600000);
+    function fin(d){ if(done) return; done = true; clearTimeout(tm); BUS[name] = (BUS[name] || []).filter(function(f){ return f !== once; }); res(d); }
+    function once(d){ if(!pred || pred(d)) fin(d); }
+    on(name, once);
+  });
+}
+function batchPdfDlg(items){
+  if(!isApp){ toast('批次轉 PDF 需要 APK 版', true); return; }
+  if(BATCH_PDF){ toast('已經有批次轉換在進行中', true); return; }
+  var mode = lsGet('ws.batchPdf', 'seamless');
+  var opts = h('div', {class: 'opts'});
+  [['seamless', '無縫圖片 PDF（長條漫畫）', '只留內容圖片，上下接起來，去掉按鈕與選單'], ['page', '一般 PDF（網頁排版）', '保留文字與版面，紙張設定依「擷取設定」']].forEach(function(x){
+    opts.appendChild(h('label', {class: 'opt radio'}, h('input', {type: 'radio', name: 'bpdf', checked: mode === x[0], onchange: function(){ mode = x[0]; }}), h('div', {class: 'grow'}, h('b', {text: x[1]}), h('div', {class: 'sub', text: x[2]}))));
+  });
+  var go = h('button', {class: 'btn pri', html: icon('pdf', 'sm') + '開始轉換（' + items.length + ' 個）'});
+  var s = openSheet({title: '批次轉成 PDF', icon: 'pdf', body: h('div', null, opts, h('div', {class: 'sub', style: {marginTop: '10px'}, text: '會依序一個一個轉換，可以切到其他 App 或關閉螢幕，全部完成時手機會震動提醒。'})), foot: go});
+  go.onclick = function(){ lsSet('ws.batchPdf', mode); s.close(); LV.sel.clear(); LV.selMode = false; renderLib(); runBatchPdf(items.slice(), mode); };
+}
+async function runBatchPdf(items, mode){
+  BATCH_PDF = {n: items.length, ok: 0, fail: 0};
+  NAT.call('keep', 'cap', '批次轉 PDF');
+  for(var i = 0; i < items.length; i++){
+    var it = items[i];
+    Dock.set('bpdf', h('div', {class: 'dockCard glass'}, h('span', {html: ring(i / items.length)}),
+      h('div', {class: 't'}, h('b', {text: '批次轉 PDF ' + (i + 1) + ' / ' + items.length}), h('div', {class: 'sub ell', text: it.name}))));
+    var d;
+    if(mode === 'seamless'){
+      CAPTURING = true;
+      var w = waitEv('cap', function(x){ return x && (x.state === 'done' || x.state === 'error'); });
+      NAT.call('libComic', it.id, '{}');
+      d = await w;
+      CAPTURING = false;
+      if(d && d.state === 'done') BATCH_PDF.ok++; else BATCH_PDF.fail++;
+    } else {
+      var w2 = waitEv('pdf');
+      NAT.call('libToPdf', it.id, JSON.stringify({paper: CFG.cap.paper, landscape: !!CFG.cap.landscape, margin: +CFG.cap.margin || 0}));
+      d = await w2;
+      if(d && d.ok) BATCH_PDF.ok++; else BATCH_PDF.fail++;
+    }
+  }
+  Dock.remove('bpdf');
+  NAT.call('keep', 'cap', '');
+  var r = BATCH_PDF; BATCH_PDF = null;
+  await Lib.refresh(); renderLib();
+  NAT.call('doneBuzz', '批次轉 PDF：成功 ' + r.ok + ' 個' + (r.fail ? '，失敗 ' + r.fail + ' 個' : ''));
+  toast('✓ 批次轉 PDF 完成：成功 ' + r.ok + ' 個' + (r.fail ? '，失敗 ' + r.fail + ' 個' : ''), !!r.fail);
 }

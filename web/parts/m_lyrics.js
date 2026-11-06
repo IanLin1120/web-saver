@@ -60,9 +60,19 @@ Lyrics.save = function(it, lrc, src){
 };
 Lyrics.auto = async function(it){
   if(Lyrics.of(it)) return Lyrics.of(it);
-  var L = await Lyrics.search(it.title && it.title !== it.name ? it.title : it.name, it.artist || '', it.dur || 0);
-  var best = L.filter(function(x){ return x.lrc; })[0] || L[0];
-  if(best && best.score >= 45){ var l = best.lrc || best.plain; Lyrics.save(it, l, best.src + '：' + best.name + ' - ' + best.artist); return l; }
+  if(it.lrcOff) return '';
+  var q = it.title && it.title !== it.name ? it.title : it.name;
+  var L = await Lyrics.search(q, it.artist || '', it.dur || 0);
+  /* 自動套用要嚴格：歌名要吻合、長度差 5 秒內，避免抓到別首歌（不確定的就不套用，讓你手動選） */
+  var tl = cleanSong(q).toLowerCase();
+  var ok = function(x){
+    var n = cleanSong(String(x.name || '')).toLowerCase();
+    var nameOk = n && (n === tl || (n.length >= 2 && tl.indexOf(n) >= 0) || (tl.length >= 2 && n.indexOf(tl) >= 0));
+    var durOk = !(it.dur && x.dur) || Math.abs(x.dur - it.dur) <= 5;
+    return nameOk && durOk;
+  };
+  var best = L.filter(function(x){ return x.lrc && ok(x); })[0] || L.filter(ok)[0];
+  if(best){ var l = best.lrc || best.plain; Lyrics.save(it, l, best.src + '：' + best.name + ' - ' + best.artist); return l; }
   return '';
 };
 
@@ -116,6 +126,9 @@ function lyrStyle(){
 }
 function lyricsStyleSheet(after){
   var c = CFG.lyr, body = h('div');
+  body.appendChild(h('div', {class: 'card glass', style: {padding: '4px 12px', marginBottom: '12px'}},
+    swRow('播放時顯示歌詞', '關閉時只顯示封面（每首歌也可以在播放畫面切換）', 'lyr.show', function(){ c.view = c.show === false ? 'cover' : 'lyrics'; saveCfg(); if(after) after(); if(Music.sheet) Music.drawPlayer(); }),
+    swRow('自動搜尋歌詞', '下載、轉檔、播放時自動找歌詞（只套用歌名與長度都吻合的）', 'lyr.auto')));
   var prev = h('div', {class: 'lyrView', style: 'height:150px;' + lyrStyle()}, h('div', {class: 'lyrLine', text: '上一句歌詞'}), h('div', {class: 'lyrLine on', text: '正在唱的這一句'}), h('div', {class: 'lyrLine', text: '下一句歌詞'}));
   function upd(){ prev.setAttribute('style', 'height:150px;' + lyrStyle()); saveCfg(); if(after) after(); }
   body.appendChild(prev);

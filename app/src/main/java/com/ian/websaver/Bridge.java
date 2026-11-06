@@ -272,7 +272,7 @@ public class Bridge {
             java.util.Iterator<String> it = m.keys();
             while (it.hasNext()) {
                 String k = it.next();
-                if (k.equals("artist") || k.equals("album") || k.equals("folder") || k.equals("seq") || k.equals("lrc") || k.equals("lrcSrc") || k.equals("dur")) { Lib.get(a).touch(o.getString("id"), k, m.get(k)); o.put(k, m.get(k)); }
+                if (k.equals("artist") || k.equals("album") || k.equals("folder") || k.equals("seq") || k.equals("lrc") || k.equals("lrcSrc") || k.equals("dur") || k.equals("lrcOff")) { Lib.get(a).touch(o.getString("id"), k, m.get(k)); o.put(k, m.get(k)); }
             }
             return new JSONObject().put("ok", true).put("item", o).toString();
         } catch (Throwable t) { return err(t); }

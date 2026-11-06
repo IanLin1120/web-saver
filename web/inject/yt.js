@@ -819,11 +819,14 @@
       }
       var be = bufEnd(v);
       B.grabProg(Math.min(0.99, be / d), GR.audio ? '背景錄製音軌' : '背景錄製 ' + (T.v.h ? T.v.h + 'p' : ''));
-      if (be >= d - 0.6) { if (!ending) { ending = true; setTimeout(function () { done(''); }, 2000); } return; }
-      if (be - v.currentTime > 3) { try { v.currentTime = Math.max(v.currentTime, be - 1); } catch (e) {} }
+      /* 結束：緩衝到尾端、影片播完，或已到最後幾秒且 3 秒沒有新資料（避免卡在 99%） */
+      if (be >= d - 0.6 || v.ended || (d - be < 4 && now - lastData > 3000)) { if (!ending) { ending = true; setTimeout(function () { done(''); }, 1200); } return; }
+      /* 加速：16 倍速靜音播放，並一直跳到緩衝的最前端，讓播放器不停地抓下一段 */
+      try { if (v.playbackRate !== 16) v.playbackRate = 16; } catch (e) {}
+      if (be - v.currentTime > 1.2) { try { v.currentTime = Math.max(v.currentTime, be - 0.4); } catch (e) {} }
       if (Math.abs(be - lastBe) < 0.01) stuck++; else stuck = 0;
       lastBe = be;
-      if (stuck > 20) { stuck = 0; try { v.currentTime = Math.min(d - 0.2, be + 0.05); } catch (e) {} }
-    }, 500);
+      if (stuck > 24) { stuck = 0; try { v.currentTime = Math.min(d - 0.2, be + 0.05); } catch (e) {} }
+    }, 250);
   })();
 })();

@@ -221,7 +221,29 @@ var AudioEnc = (function(){
     frames.forEach(function(f){ for(var i = 0; i < 4; i++) out[p + i] = f[0].charCodeAt(i); dv.setUint32(p + 4, f[1].length); p += 10; out.set(f[1], p); p += f[1].length; });
     return out;
   }
+  /* WASM 版 LAME：比 JavaScript 版快十幾倍 */
+  var W_MOD = null;
+  async function wasmMp3(pcm, kbps, tags, onp){
+    if(!window.WasmMediaEncoder || !window.MP3_WASM_B64) return null;
+    if(!W_MOD){ var bin = atob(window.MP3_WASM_B64), u = new Uint8Array(bin.length); for(var k = 0; k < bin.length; k++) u[k] = bin.charCodeAt(k); W_MOD = u.buffer; }
+    var ch = Math.min(2, pcm.channels.length), N = pcm.channels[0].length;
+    var enc = await WasmMediaEncoder.createEncoder('audio/mpeg', W_MOD.slice(0));
+    enc.configure({channels: ch, sampleRate: pcm.sampleRate, bitrate: kbps || 192});
+    var out = [], tg = id3(tags); if(tg) out.push(tg);
+    var B = 1152 * 256;
+    for(var pos = 0; pos < N; pos += B){
+      var e = Math.min(N, pos + B), bufs = [pcm.channels[0].subarray(pos, e)];
+      if(ch > 1) bufs.push(pcm.channels[1].subarray(pos, e));
+      var d = enc.encode(bufs); if(d.length) out.push(d.slice());
+      if(onp) onp(pos / N);
+      if((pos / B) % 4 === 0) await tick();
+    }
+    var f = enc.finalize(); if(f.length) out.push(f.slice());
+    if(onp) onp(1);
+    return new Blob(out, {type: 'audio/mpeg'});
+  }
   async function mp3(pcm, kbps, tags, onp){
+    try{ var w = await wasmMp3(pcm, kbps, tags, onp); if(w) return w; }catch(e){ console.warn('wasm mp3', e); }
     if(!window.lamejs) throw new Error('MP3 編碼元件沒有載入');
     var ch = Math.min(2, pcm.channels.length), N = pcm.channels[0].length, sr = pcm.sampleRate;
     if([8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000].indexOf(sr) < 0) throw new Error('不支援的取樣率 ' + sr);
