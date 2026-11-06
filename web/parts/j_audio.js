@@ -258,6 +258,7 @@ Conv.next = async function(){
   if(this.busy || !this.q.length) return;
   this.busy = true;
   var job = this.q.shift(), it = job.item, f = AUDIO_FMTS[job.fmt];
+  if(isApp) NAT.call('keep', 'conv', '轉檔中：' + (it.title || it.name));
   try{
     this.card(job, 0, '解碼音訊…');
     var blob = await Lib.blob(it);
@@ -282,11 +283,14 @@ Conv.next = async function(){
     var nu = await saveBigBlob(out, name, meta);
     if(LF.map[it.id]){ LF.map[nu.id] = LF.map[it.id]; LF.save(); }
     if(!job.opts.keep) await Lib.del([it.id]); else await Lib.refresh();
+    if(isApp) NAT.call('doneBuzz', name);
     toast('✓ 已轉成 ' + f.name + '（' + fmtSize(out.size) + '）', false, ['播放', function(){ Music.playItem(Lib.byId(nu.id) || nu); }]);
   }catch(e){
     toast('轉檔失敗：' + (e && e.message || e), true);
   }finally{
-    Dock.remove('conv'); this.busy = false; this.next();
+    Dock.remove('conv'); this.busy = false;
+    if(isApp && !this.q.length) NAT.call('keep', 'conv', '');
+    this.next();
   }
 };
 async function fetchAny(u){

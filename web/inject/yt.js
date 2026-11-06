@@ -587,7 +587,7 @@
       if (!G) return;
       var dx = e.clientX - G.x, dy = G.y - e.clientY;
       if (!G.mode) {
-        if (Math.abs(dy) > 20 && Math.abs(dy) > Math.abs(dx) * 1.4) G.mode = G.zone === 'l' ? 'bright' : G.zone === 'r' ? 'vol' : 'fsSwipe';
+        if (Math.abs(dy) > 20 && Math.abs(dy) > Math.abs(dx) * 1.4) G.mode = 'fsSwipe'; /* 上下滑：只用來進入／離開全螢幕（不調音量、亮度） */
         else if (Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy) * 1.4) G.mode = 'seek';
         if (G.mode) { clearTimeout(G.lp); if (G.mode !== 'fsSwipe') hide(); }
       }

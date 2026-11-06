@@ -85,6 +85,7 @@ final class MediaDl {
         StringBuilder errs = new StringBuilder();
         final int n = items.length();
         try { emit(new JSONObject().put("state", "start").put("n", n)); } catch (Throwable t) { /* ignore */ }
+        KeepAlive.set(a, "dl", "下載中（" + n + " 個）");
         Set<String> usedNames = new HashSet<>();
         for (int i = 0; i < n; i++) {
             if (cancel[0]) break;
@@ -175,6 +176,7 @@ final class MediaDl {
             } catch (Throwable e) { errs.append("ZIP：").append(e.getMessage()).append('\n'); }
         }
         if (a.prefs.getBoolean("autoExport", false) && saved.length() > 0) Exporter.toDownloads(a, saved, true);
+        KeepAlive.set(a, "dl", null);
         try { emit(new JSONObject().put("state", "done").put("ok", ok).put("fail", fail).put("cancel", cancel[0]).put("msg", errs.toString().trim()).put("items", saved)); } catch (Throwable t) { /* ignore */ }
         MainActivity.emit("lib", "");
     }

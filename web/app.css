@@ -477,3 +477,5 @@ input[type=range]{width:100%;accent-color:var(--accent);padding:0;border:0;backg
 .libClosed svg{width:42px;height:42px;opacity:.55}
 .libClosed b{color:var(--text);font-size:15px}
 .ydFmt{margin:12px 0 2px}
+.pdfTile{position:absolute;left:0;right:0;overflow:hidden}
+.pdfTile canvas{display:block;width:100%;height:100%}

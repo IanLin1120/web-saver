@@ -67,6 +67,12 @@ public class Bridge {
         return false;
     }
 
+    /** 讓 App 在背景繼續執行（轉檔、音樂播放）：key＝conv／music／cap，text＝null 代表結束 */
+    @JavascriptInterface public void keep(String key, String text) { KeepAlive.set(a, key, text == null || text.isEmpty() ? null : text); }
+
+    /** 震動＋通知（App 內轉檔完成時用） */
+    @JavascriptInterface public void doneBuzz(String title) { KeepAlive.done(a, title); }
+
     /** 清空瀏覽分頁偵測到的媒體（離開網頁、回首頁時） */
     @JavascriptInterface public void brMediaClear() { ui(new Runnable() { @Override public void run() { a.br.clearMedia(); } }); }
 

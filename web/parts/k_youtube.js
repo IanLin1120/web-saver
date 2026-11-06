@@ -402,7 +402,8 @@ async function ytStartPage(d, meta, ch, retry){
   var extra = Object.assign({}, ch.extra || {});
   if(!audioOnly) lsSet('ws.ytLastH', ch.h);
   /* 1. 播放器剛好用一般網址在播：直接下載（最快） */
-  var r = retry ? {} : ytPickStreams(d, NAT.json('ytSniff', d.id), ch.h, audioOnly);
+  /* 音樂一律用錄製式下載（直接網址常被 YouTube 拒絕） */
+  var r = (retry || audioOnly) ? {} : ytPickStreams(d, NAT.json('ytSniff', d.id), ch.h, audioOnly);
   if(r.a && (audioOnly || (r.v && r.cont === (ch.codec || ytFmtMode())))){
     if(audioOnly){
       var ext = /webm/.test(sMime(r.a)) ? 'webm' : 'mp4';

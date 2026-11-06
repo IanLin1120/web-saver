@@ -52,7 +52,10 @@ public class MainActivity extends Activity {
 
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.parseColor(bar));
-        ui = new WebView(this);
+        ui = new KeepWebView(this, true);
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            try { requestPermissions(new String[] {"android.permission.POST_NOTIFICATIONS"}, 41); } catch (Throwable t) { /* ignore */ }
+        }
         ui.setBackgroundColor(Color.parseColor(bar));
         root.addView(ui, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
@@ -127,6 +130,21 @@ public class MainActivity extends Activity {
     }
 
     private Browser pipBr;
+
+    /** 通知列的「播放／暫停」「下一首」：YouTube 分頁有影片時控制影片，否則交給 App 內音樂播放器 */
+    void mediaCmd(final String cmd) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                Browser b = yt != null && yt.videoPlaying ? yt : (br != null && br.videoPlaying ? br : null);
+                if (b == null && KeepAlive.musicOn()) return; /* App 內音樂播放器自己處理 */
+                if (b == null && yt != null && YtSniff.vidOf(yt.curUrl).length() > 0) b = yt;
+                if (b == null) return;
+                String js = "toggle".equals(cmd) ? "(function(){var v=document.querySelector('video');if(v){if(v.paused)v.play();else v.pause();}})()"
+                    : "next".equals(cmd) ? "(function(){var p=document.getElementById('movie_player');if(p&&p.nextVideo)p.nextVideo();})()" : "";
+                if (!js.isEmpty()) b.wv.evaluateJavascript(js, null);
+            }
+        });
+    }
     private Browser grabBr, bgBr;
 
     /** 背景用的隱藏瀏覽器：放在最底層（被 App 介面蓋住），照常載入與播放，但使用者看不到 */
@@ -233,6 +251,18 @@ public class MainActivity extends Activity {
     static void emit(String type, String json) {
         MainActivity a = cur;
         if (a == null) return;
+        /* 下載、擷取完成：震動＋通知（要轉 MP3／FLAC 的音樂等轉檔完成才提醒） */
+        if (json != null && ("dl".equals(type) || "cap".equals(type)) && json.contains("\"state\":\"done\"")) {
+            try {
+                JSONObject o = new JSONObject(json);
+                org.json.JSONArray it = o.optJSONArray("items");
+                boolean conv = it != null && it.length() > 0 && it.optJSONObject(0) != null && it.optJSONObject(0).has("convert");
+                if ((it != null && it.length() > 0) && !conv) {
+                    JSONObject f = it.optJSONObject(0);
+                    KeepAlive.done(a, (f == null ? "" : f.optString("name")) + (it.length() > 1 ? " 等 " + it.length() + " 個檔案" : ""));
+                }
+            } catch (Throwable t) { /* ignore */ }
+        }
         a.js("window.onNativeEvent&&onNativeEvent(" + JSONObject.quote(type) + "," + JSONObject.quote(json == null ? "" : json) + ")");
     }
 

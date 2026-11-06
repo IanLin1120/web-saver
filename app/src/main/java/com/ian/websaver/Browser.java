@@ -216,7 +216,7 @@ final class Browser {
 
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     private WebView makeWebView(final boolean isPopup) {
-        final WebView w = new WebView(a);
+        final WebView w = new KeepWebView(a, !isPopup && (ytTab || hiddenBr));
         WebSettings s = w.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -535,6 +535,7 @@ final class Browser {
     boolean inPip = false;
 
     void videoState(boolean playing, int w, int h) {
+        if (!hiddenBr && playing != videoPlaying) KeepAlive.set(a, "yt", playing && isYt(curHost) ? "正在播放 YouTube" : null);
         videoPlaying = playing;
         if (w > 0 && h > 0) videoRatio = Math.max(0.42f, Math.min(2.38f, (float) w / h));
         a.updatePipParams();

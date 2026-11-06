@@ -253,24 +253,56 @@ async function viewPdf(it, body){
   }
   layout();
   var dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-  async function render(p){
-    var want = base * Z * dpr;
-    if(p.rendered && Math.abs(p.rendered - want) < 4) return;
-    if(p.task){ try{ p.task.cancel(); }catch(e){} }
-    var pg = await doc.getPage(+p.el.dataset.p);
-    var vp0 = pg.getViewport({scale: 1});
-    if(Math.abs(vp0.height / vp0.width - p.ratio) > .01){ p.ratio = vp0.height / vp0.width; p.el.style.height = (base * Z * p.ratio) + 'px'; }
-    var vp = pg.getViewport({scale: Math.min(want / vp0.width, 4096 / vp0.width * (vp0.width > vp0.height ? 1 : vp0.width / vp0.height) * 1.5)});
-    var c = document.createElement('canvas'); c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
-    p.task = pg.render({canvasContext: c.getContext('2d'), viewport: vp});
-    try{ await p.task.promise; }catch(e){ return; }
-    p.task = null; p.rendered = want;
-    var old = p.el.querySelector('canvas'); if(old) old.remove();
-    p.el.insertBefore(c, p.el.firstChild);
+  /* 分塊繪製：長頁（無縫 PDF 一頁可能接了十幾張圖）切成多塊各自用完整解析度畫，不會因為畫布上限而變模糊 */
+  var TILE = 1100;
+  function mkTiles(p){
+    var Hc = base * Z * p.ratio, nT = Math.max(1, Math.ceil(Hc / TILE));
+    if(p.tiles && p.tz === Z && p.tiles.length === nT) return;
+    (p.tiles || []).forEach(function(t){ tio.unobserve(t.el); t.el.remove(); });
+    p.tz = Z; p.tiles = [];
+    for(var k = 0; k < nT; k++){
+      var el = h('div', {class: 'pdfTile'});
+      el.style.top = (k * TILE) + 'px'; el.style.height = Math.min(TILE, Hc - k * TILE) + 'px';
+      el.__p = p; el.__k = k;
+      p.el.appendChild(el);
+      var t = {el: el, k: k, rendered: 0, busy: false}; el.__t = t;
+      p.tiles.push(t); tio.observe(el);
+    }
   }
+  async function renderTile(p, t){
+    var want = base * Z * dpr;
+    if(t.busy || (t.rendered && Math.abs(t.rendered - want) < 4)) return;
+    t.busy = true;
+    try{
+      var pg = await doc.getPage(+p.el.dataset.p);
+      var vp0 = pg.getViewport({scale: 1});
+      if(Math.abs(vp0.height / vp0.width - p.ratio) > .01){ p.ratio = vp0.height / vp0.width; p.el.style.height = (base * Z * p.ratio) + 'px'; t.busy = false; p.tiles = null; mkTiles(p); return; }
+      var vp = pg.getViewport({scale: want / vp0.width});
+      var cssH = parseFloat(t.el.style.height), c = document.createElement('canvas');
+      c.width = Math.floor(vp.width); c.height = Math.max(1, Math.ceil(cssH * dpr));
+      var task = pg.render({canvasContext: c.getContext('2d'), viewport: vp, transform: [1, 0, 0, 1, 0, -t.k * TILE * dpr]});
+      await task.promise;
+      t.rendered = want;
+      var old = t.el.querySelector('canvas'); if(old) old.remove();
+      t.el.appendChild(c);
+    }catch(e){}
+    t.busy = false;
+  }
+  function render(p){ mkTiles(p); }
+  var tio = new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting && e.target.__t) renderTile(e.target.__p, e.target.__t); }); }, {root: wrap, rootMargin: '900px 0px'});
   var io = new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting) render(info[+e.target.dataset.p - 1]); }); }, {root: wrap, rootMargin: '600px 0px'});
   info.forEach(function(p){ io.observe(p.el); });
-  function visibleRerender(){ var r = wrap.getBoundingClientRect(); info.forEach(function(p){ var b = p.el.getBoundingClientRect(); if(b.bottom > r.top - 600 && b.top < r.bottom + 600) render(p); else if(p.rendered){ var cv = p.el.querySelector('canvas'); if(cv && Math.abs(p.rendered - base * Z * dpr) > 4){ cv.remove(); p.rendered = 0; } } }); }
+  function visibleRerender(){
+    var r = wrap.getBoundingClientRect();
+    info.forEach(function(p){
+      var b = p.el.getBoundingClientRect();
+      if(b.bottom > r.top - 900 && b.top < r.bottom + 900){
+        mkTiles(p);
+        p.tiles.forEach(function(t){ var tb = t.el.getBoundingClientRect(); if(tb.bottom > r.top - 900 && tb.top < r.bottom + 900) renderTile(p, t); else if(t.rendered){ var cv = t.el.querySelector('canvas'); if(cv) cv.remove(); t.rendered = 0; } });
+      } else if(p.tiles){ p.tiles.forEach(function(t){ if(t.rendered){ var cv = t.el.querySelector('canvas'); if(cv) cv.remove(); t.rendered = 0; } }); }
+    });
+  }
+  wrap.addEventListener('scroll', function(){ clearTimeout(visibleRerender.t); visibleRerender.t = setTimeout(visibleRerender, 250); }, {passive: true});
   function curPage(){ var r = wrap.getBoundingClientRect(), mid = r.top + r.height / 3; for(var i = 0; i < info.length; i++){ var b = info[i].el.getBoundingClientRect(); if(b.bottom > mid) return i + 1; } return n; }
   var bt = 0;
   wrap.addEventListener('scroll', function(){ badge.textContent = curPage() + ' / ' + n + (Z !== 1 ? '・' + Math.round(Z * 100) + '%' : ''); badge.style.opacity = 1; clearTimeout(bt); bt = setTimeout(function(){ badge.style.opacity = .55; }, 1200); }, {passive: true});

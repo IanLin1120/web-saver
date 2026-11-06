@@ -127,6 +127,22 @@ Music.next = function(auto){
 Music.prev = function(){ if(this.el.currentTime > 4){ this.el.currentTime = 0; return; } this.idx = (this.idx - 1 + this.queue.length) % this.queue.length; this.load(true); };
 Music.stop = function(){ this.el.pause(); this.el.removeAttribute('src'); this.queue = []; this.idx = -1; Dock.remove('music'); if(this.sheet) this.sheet.close(); };
 Music.el.addEventListener('ended', function(){ Music.next(true); });
+/* 播放中讓 App 在背景繼續執行（切到主畫面、關螢幕也不會停） */
+Music.el.addEventListener('play', function(){ var it = Music.queue[Music.idx]; if(isApp) NAT.call('keep', 'music', '正在播放：' + (it ? (it.title || it.name) : '音樂')); });
+Music.el.addEventListener('pause', function(){ if(isApp && !Music.el.ended) NAT.call('keep', 'music', ''); });
+on('mediaCmd', function(c){
+  if(!Music.queue.length) return;
+  if(c === 'toggle'){ if(Music.el.paused) Music.el.play(); else Music.el.pause(); }
+  else if(c === 'next') Music.next();
+});
+if('mediaSession' in navigator){
+  try{
+    navigator.mediaSession.setActionHandler('play', function(){ Music.el.play(); });
+    navigator.mediaSession.setActionHandler('pause', function(){ Music.el.pause(); });
+    navigator.mediaSession.setActionHandler('nexttrack', function(){ Music.next(); });
+    navigator.mediaSession.setActionHandler('previoustrack', function(){ if(Music.prev) Music.prev(); });
+  }catch(e){}
+}
 ['play', 'pause'].forEach(function(ev){ Music.el.addEventListener(ev, function(){ Music.mini(); Music.drawPlayer(); }); });
 Music.el.addEventListener('timeupdate', function(){
   var t = Music.el.currentTime, d = Music.el.duration || 0;
