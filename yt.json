@@ -1,5 +1,5 @@
 {
- "v": 2,
+ "v": 3,
  "note": "YouTube 解析設定：App 會依序嘗試以下用戶端。YouTube 改版導致無法下載時，更新這裡的版本號即可（不用重裝 App）。",
  "endpoint": "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
  "clients": [
@@ -73,5 +73,17 @@
    "ctx": {},
    "embed": true
   }
+ ],
+ "piped": [
+  "https://pipedapi.kavin.rocks",
+  "https://pipedapi.adminforge.de",
+  "https://api.piped.private.coffee",
+  "https://pipedapi.reallyaweso.me"
+ ],
+ "invidious": [
+  "https://inv.nadeko.net",
+  "https://invidious.nerdvpn.de",
+  "https://yewtu.be",
+  "https://invidious.f5.si"
  ]
 }

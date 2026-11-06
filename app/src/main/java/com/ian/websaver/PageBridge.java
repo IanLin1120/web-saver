@@ -35,6 +35,8 @@ public class PageBridge {
 
     @JavascriptInterface public void pip() { Util.ui(new Runnable() { @Override public void run() { b.a.enterPip(true); } }); }
 
+    @JavascriptInterface public void comicList(String token, String json) { b.comicList(token, json); }
+
     @JavascriptInterface public void zapCount(int n) { MainActivity.emit("zap", "{\"n\":" + n + ",\"on\":true}"); }
 
     @JavascriptInterface public void zapDone(int n) { MainActivity.emit("zap", "{\"n\":" + n + ",\"on\":false}"); }

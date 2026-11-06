@@ -90,6 +90,16 @@ public class Bridge {
         ui(new Runnable() { @Override public void run() { try { a.br.capture(new JSONObject(opts)); } catch (Throwable t) { MainActivity.emit("cap", "{\"state\":\"error\",\"msg\":\"設定錯誤\"}"); } } });
     }
 
+    @JavascriptInterface public void brComic(final String opts) {
+        ui(new Runnable() { @Override public void run() { try { a.br.comic(new JSONObject(opts)); } catch (Throwable t) { /* ignore */ } } });
+    }
+
+    @JavascriptInterface public void libComic(String id, String opts) {
+        try { Comic.fromHtml(a, id, new JSONObject(opts == null || opts.isEmpty() ? "{}" : opts)); } catch (Throwable t) { MainActivity.toast("設定錯誤"); }
+    }
+
+    @JavascriptInterface public void setInject(final String name, final String code) { ui(new Runnable() { @Override public void run() { a.br.setInject(name, code); } }); }
+
     @JavascriptInterface public void brMedia(final int minPx) { ui(new Runnable() { @Override public void run() { a.br.scanMedia(minPx); } }); }
 
     @JavascriptInterface public void brZap(final boolean on) { ui(new Runnable() { @Override public void run() { a.br.zap(on); } }); }

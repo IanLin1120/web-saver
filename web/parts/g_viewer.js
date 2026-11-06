@@ -46,7 +46,9 @@ $('vwMore').addEventListener('click', function(){
   var it = Viewer.cur; if(!it) return;
   menu(it.name, [
     it.cat === 'html' ? ['pdf', isApp ? '轉成 PDF（存入檔案庫）' : '列印／另存為 PDF', function(){ toPdf(it); }] : null,
+    it.cat === 'html' && isApp ? ['image', '轉成無縫圖片 PDF（長條漫畫）', function(){ CAPTURING = true; capCard(1, '整理網頁裡的圖片…'); NAT.call('libComic', it.id, '{}'); }, false, '只留內容圖片，上下無縫接起來，去掉按鈕與選單'] : null,
     it.cat === 'html' && isApp ? ['printer', '系統列印（可存成文字可選取的 PDF）', function(){ NAT.call('libPrint', it.id); }] : null,
+    it.cat === 'pdf' ? ['layers', (pdfSeamless(it) ? '✓ ' : '') + '頁面無縫顯示（漫畫）', function(){ lsSet('ws.seam:' + it.id, !pdfSeamless(it)); Viewer.open(it, Viewer.list); }] : null,
     it.src ? ['globe', '開啟原網頁', function(){ Viewer.close(); navigate(it.src); }] : null,
     ['edit', '重新命名', async function(){ var n = await promptDlg('重新命名', it.name.replace(/\.[a-z0-9]+$/i, '')); if(n){ await Lib.rename(it, n); var nw = Lib.byId(it.id); if(nw){ Viewer.cur = nw; $('vwTitle').textContent = nw.name; } toast('已重新命名'); } }],
     ['info', '檔案資訊', function(){ fileInfo(it); }],
@@ -229,15 +231,16 @@ async function viewAudio(it, body){
 }
 
 /* ---------- PDF（pdf.js，依捲動位置即時繪製，雙指縮放） ---------- */
+function pdfSeamless(it){ var v = lsGet('ws.seam:' + it.id, null); return v == null ? !!it.seamless : v; }
 async function viewPdf(it, body){
   if(!window.pdfjsLib) throw new Error('PDF 元件沒有載入');
   pdfjsLib.GlobalWorkerOptions.workerSrc = window.PDF_WORKER_URL;
-  var wrap = h('div', {class: 'pdfWrap'}), pages = h('div', {class: 'pdfPages'}), badge = h('div', {class: 'pdfBadge', text: '載入中…'});
+  var wrap = h('div', {class: 'pdfWrap'}), pages = h('div', {class: 'pdfPages' + (pdfSeamless(it) ? ' seamless' : '')}), badge = h('div', {class: 'pdfBadge', text: '載入中…'});
   wrap.appendChild(pages); body.appendChild(wrap); body.appendChild(badge);
   var data = new Uint8Array(await (await Lib.blob(it)).arrayBuffer());
   var task = pdfjsLib.getDocument({data: data});
   var doc = await task.promise;
-  var n = doc.numPages, Z = 1, base = Math.min(wrap.clientWidth - 16, 980);
+  var n = doc.numPages, Z = 1, base = pdfSeamless(it) ? Math.min(wrap.clientWidth, 1100) : Math.min(wrap.clientWidth - 16, 980);
   var p1 = await doc.getPage(1), vp1 = p1.getViewport({scale: 1}), ratio = vp1.height / vp1.width;
   var info = [];
   for(var i = 1; i <= n; i++){

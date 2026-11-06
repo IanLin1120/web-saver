@@ -83,6 +83,19 @@ final class Browser {
 
     private String injectBase, injectCapture, injectMedia, injectReader, injectYt;
 
+    /** 介面線上更新時，把最新的頁面腳本交給原生（不用重裝 APK 也能更新去廣告／播放器／擷取程式） */
+    void setInject(String name, String code) {
+        if (code == null || code.length() < 50) return;
+        switch (name) {
+            case "page": injectBase = code; break;
+            case "capture": injectCapture = code; break;
+            case "media": injectMedia = code; break;
+            case "reader": injectReader = code; break;
+            case "yt": injectYt = code; break;
+            default: break;
+        }
+    }
+
     static boolean isYt(String host) {
         if (host == null) return false;
         String h = host.toLowerCase();
@@ -114,11 +127,26 @@ final class Browser {
             String cs = "UTF-8";
             int ci = ct.toLowerCase().indexOf("charset=");
             if (ci >= 0) cs = ct.substring(ci + 8).replace("\"", "").trim();
-            String html = new String(Util.readAllBytes(c.getInputStream(), 20L << 20), cs);
-            String tag = "<script>" + cfgJs() + injectYt + "</script>";
-            int hi = html.toLowerCase().indexOf("<head");
-            int he = hi >= 0 ? html.indexOf('>', hi) : -1;
-            html = he > 0 ? html.substring(0, he + 1) + tag + html.substring(he + 1) : tag + html;
+            /* 串流方式：只讀到 <head> 就插入腳本，其餘邊下載邊交給瀏覽器（不用等整頁下載完） */
+            java.io.InputStream in = c.getInputStream();
+            byte[] tag = ("<script>" + cfgJs() + injectYt + "</script>").getBytes("UTF-8");
+            java.io.ByteArrayOutputStream head = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[16384];
+            int n, he = -1;
+            while (he < 0 && head.size() < 262144 && (n = in.read(buf)) > 0) {
+                head.write(buf, 0, n);
+                byte[] hb = head.toByteArray();
+                for (int i = 0; i + 5 < hb.length; i++) {
+                    if (hb[i] == '<' && (hb[i + 1] | 32) == 'h' && (hb[i + 2] | 32) == 'e' && (hb[i + 3] | 32) == 'a' && (hb[i + 4] | 32) == 'd' && (hb[i + 5] == '>' || hb[i + 5] == ' ')) {
+                        for (int j = i + 5; j < hb.length; j++) if (hb[j] == '>') { he = j; break; }
+                        break;
+                    }
+                }
+            }
+            byte[] hb = head.toByteArray();
+            java.io.ByteArrayOutputStream pre = new java.io.ByteArrayOutputStream();
+            if (he >= 0) { pre.write(hb, 0, he + 1); pre.write(tag); pre.write(hb, he + 1, hb.length - he - 1); }
+            else { pre.write(tag); pre.write(hb); }
             Map<String, String> h = new HashMap<>();
             for (Map.Entry<String, java.util.List<String>> e : c.getHeaderFields().entrySet()) {
                 String k = e.getKey();
@@ -127,8 +155,7 @@ final class Browser {
                 if (kl.startsWith("content-security-policy") || kl.equals("content-length") || kl.equals("content-encoding") || kl.equals("set-cookie") || kl.equals("content-type") || kl.equals("transfer-encoding")) continue;
                 h.put(k, e.getValue().get(0));
             }
-            c.disconnect();
-            return new WebResourceResponse("text/html", "utf-8", 200, "OK", h, new ByteArrayInputStream(html.getBytes("UTF-8")));
+            return new WebResourceResponse("text/html", cs, 200, "OK", h, new java.io.SequenceInputStream(new ByteArrayInputStream(pre.toByteArray()), in));
         } catch (Throwable t) {
             if (c != null) try { c.disconnect(); } catch (Throwable x) { /* ignore */ }
             return null;
@@ -645,6 +672,27 @@ final class Browser {
         String code = cfgJs() + adJs + injectBase + ";" + injectCapture + ";" + injectReader + ";__wsPage.capture(" + JSONObject.quote(capToken) + "," + JSONObject.quote(opts.toString()) + ");";
         MainActivity.emit("cap", "{\"state\":\"progress\",\"pct\":1,\"msg\":\"準備擷取…\"}");
         wv.evaluateJavascript(code, null);
+    }
+
+    /* ---------- 長條漫畫模式：收集頁面上的內容圖片 ---------- */
+    private JSONObject comicOpts;
+    void comic(JSONObject opts) {
+        if (curUrl.isEmpty()) { MainActivity.emit("cap", "{\"state\":\"error\",\"msg\":\"請先開啟一個網頁\"}"); return; }
+        capToken = Long.toString(System.nanoTime(), 36) + Long.toString((long) (Math.random() * 1e12), 36);
+        comicOpts = opts;
+        capThumb = thumbBitmap();
+        capUrl = curUrl;
+        String adJs = "window.WS_AD={hosts:" + AdBlock.hostsJson + ",css:" + JSONObject.quote(AdBlock.css) + "};";
+        String code = cfgJs() + adJs + injectBase + ";" + injectCapture + ";" + injectMedia + ";__wsPage.comic(" + JSONObject.quote(capToken) + "," + JSONObject.quote(opts.toString()) + ");";
+        MainActivity.emit("cap", "{\"state\":\"progress\",\"pct\":1,\"msg\":\"載入所有圖片…\"}");
+        wv.evaluateJavascript(code, null);
+    }
+
+    void comicList(String token, String json) {
+        if (!token.equals(capToken)) return;
+        capToken = "";
+        try { Comic.fromUrls(a, new JSONArray(json), capUrl, comicOpts, curTitle.isEmpty() ? curHost : curTitle, capThumb); }
+        catch (Throwable t) { MainActivity.emit("cap", "{\"state\":\"error\",\"msg\":\"圖片清單錯誤\"}"); }
     }
 
     void capResult(String token, int i, int n, String chunk, String title) {

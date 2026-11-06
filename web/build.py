@@ -18,7 +18,9 @@ def inline(src):            # 避免 </script> 提早結束標籤
 
 vend = ''.join('<script>' + inline(R('vendor', n + '.js')) + '</script>\n' for n in ['jszip', 'pdf', 'lame.min'])
 worker = json.dumps(R('vendor', 'pdf.worker.js')).replace('</', '<\\/')
-inject = ''.join('<script>' + inline(R('inject', n + '.js')) + '</script>\n' for n in ['capture', 'reader', 'media'])
+inject_src = {n: R('inject', n + '.js') for n in ['page', 'capture', 'reader', 'media', 'yt']}
+inject_js = 'window.WS_INJECT=' + json.dumps(inject_src, ensure_ascii=False).replace('</', '<\\/') + ';'
+inject = '<script>' + inject_js + '</script>\n' + ''.join('<script>' + inline(R('inject', n + '.js')) + '</script>\n' for n in ['capture', 'reader', 'media'])
 shell = R('shell.html')
 assert shell.startswith('<body>')
 html = ('<!DOCTYPE html>\n<html lang="zh-Hant">\n<head>\n<script>' + R('ota_boot.js').replace('__VER__', ver) + '</script>\n'

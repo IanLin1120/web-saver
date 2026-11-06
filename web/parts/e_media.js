@@ -209,6 +209,7 @@ on('dl', function(d){
   else if(d.state === 'done'){
     Dock.remove('dl'); Lib.refresh(); flashLib();
     var items = d.items || [];
+    if(d.fail && !d.ok && typeof ytWillRetry === 'function' && ytWillRetry(d)) return;
     if(d.fail && !d.ok) dialog('下載失敗', esc(d.msg || '').replace(/\n/g, '<br>'), [['好', null]]);
     else toast((d.cancel ? '已取消・' : '') + '✓ 已存入檔案庫 ' + (d.ok || 0) + ' 個' + (d.fail ? '，' + d.fail + ' 個失敗' : ''), !!d.fail,
       items.length ? ['查看', function(){ if(items.length === 1) Viewer.open(Lib.byId(items[0].id) || items[0]); else showView('lib'); }] : null);

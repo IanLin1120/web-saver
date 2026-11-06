@@ -13,6 +13,8 @@ on('snap', function(d){ if(d && CAP_SNAP && !CAP_SNAP.s.closed) CAP_SNAP.el.styl
 function openCapture(){
   if(CAPTURING){ toast('正在擷取中，請稍候'); return; }
   var c = CFG.cap;
+  if(!c.mode) c.mode = c.reader ? 'reader' : 'full';
+  var comicNote = h('div', {class: 'note' + (c.mode === 'comic' ? '' : ' hide'), html: '🖼 <b>長條漫畫／圖集模式</b>：會先自動捲動載入整頁，只取出網頁裡的<b>內容圖片</b>（漫畫頁、相片），依順序<b>無縫接起來</b>，首頁按鈕、選單、留言、廣告等都不會出現。PDF 每張圖一頁、頁寬一致，圖片不重新壓縮。'});
   var name = h('input', {type: 'text', value: capName(c.nameTpl)});
   var snap = h('div', {class: 'snap'});
   var fmts = [['html', 'HTML', '離線網頁', 'html', 'var(--c-html)'], ['pdf', 'PDF', '文件', 'pdf', 'var(--c-pdf)'], ['both', '兩者', 'HTML＋PDF', 'layers', 'var(--olive)']];
@@ -32,7 +34,8 @@ function openCapture(){
       isApp ? h('div', {class: 'sub', style: {marginTop: '4px'}, html: icon('shield', 'sm') + ' 本頁已阻擋 ' + BR.blocked + ' 個廣告請求'}) : null)),
     h('div', {class: 'field'}, h('div', {class: 'lbl'}, '檔名'), name),
     h('div', {class: 'field'}, h('div', {class: 'lbl'}, '輸出格式'), fmtBox),
-    h('div', {class: 'field'}, h('div', {class: 'lbl'}, '擷取內容'), segRow([[false, '完整頁面（去廣告）', 'globe'], [true, '只要文章（閱讀模式）', 'book']], 'cap.reader')),
+    h('div', {class: 'field'}, h('div', {class: 'lbl'}, '擷取內容'), segRow([['full', '完整頁面', 'globe'], ['reader', '只要文章', 'book'], ['comic', '只要圖片（漫畫）', 'image']], 'cap.mode', function(v){ CFG.cap.reader = v === 'reader'; saveCfg(); comicNote.classList.toggle('hide', v !== 'comic'); })),
+    comicNote,
     h('div', {class: 'card glass', style: {padding: '4px 12px', marginTop: '12px'}},
       swRow('移除廣告', '依內建規則＋你的自訂規則移除廣告區塊', 'cap.removeAds'),
       swRow('嵌入圖片', '圖片存進檔案裡，離線也看得到', 'cap.embedImages'),
@@ -62,7 +65,7 @@ $('bCap').addEventListener('click', openCapture);
 
 function capOpts(nm){
   var c = CFG.cap, q = IMGQ.filter(function(x){ return x[0] === c.imgQ; })[0] || IMGQ[0];
-  return {name: nm, format: c.format, reader: !!c.reader, removeAds: !!c.removeAds, removeHidden: !!c.removeHidden, embedImages: !!c.embedImages, embedFonts: !!c.embedFonts,
+  return {name: nm, mode: c.mode || (c.reader ? 'reader' : 'full'), minRatio: 0.6, format: c.format, reader: c.mode === 'reader' || (!c.mode && !!c.reader), removeAds: !!c.removeAds, removeHidden: !!c.removeHidden, embedImages: !!c.embedImages, embedFonts: !!c.embedFonts,
     imgMaxPx: q[2], imgQuality: 0.85, pruneCss: true, autoScroll: !!c.autoScroll, banner: !!c.banner,
     extraCss: (CFG.adCss || '').split(/\n+/).map(function(x){ return x.trim(); }).filter(Boolean).join(','),
     paper: c.paper, landscape: !!c.landscape, margin: +c.margin || 0};
@@ -75,6 +78,7 @@ function runCapture(nm){
   CAPTURING = true;
   capCard(1, '準備擷取…');
   var o = capOpts(nm);
+  if(o.mode === 'comic'){ if(isApp) setTimeout(function(){ NAT.call('brComic', JSON.stringify(o)); }, 380); else webComic(o); return; }
   if(isApp){ setTimeout(function(){ NAT.call('brCapture', JSON.stringify(o)); }, 380); return; }
   webCapture(o);
 }
@@ -133,4 +137,65 @@ function printHtml(html, o){
   var page = '@page{size:' + (o.paper || 'a4') + (o.landscape ? ' landscape' : '') + ';margin:' + (o.margin || 10) + 'mm}';
   fr.srcdoc = html.replace('</head>', '<style>' + page + '</style></head>');
   fr.onload = function(){ setTimeout(function(){ try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){ toast('無法開啟列印視窗', true); } setTimeout(function(){ fr.remove(); }, 60000); }, 600); };
+}
+
+/* ---------- 網頁版的長條漫畫模式：抓圖片 → JPEG → 自己寫 PDF ---------- */
+function jsComicPdf(pages, title){
+  /* pages: [{jpg: Uint8Array, w, h}] */
+  var enc = new TextEncoder(), parts = [], pos = 0, off = [];
+  function add(x){ var b = typeof x === 'string' ? latin(x) : x; parts.push(b); pos += b.length; }
+  function latin(s){ var u = new Uint8Array(s.length); for(var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i) & 0xff; return u; }
+  var n = pages.length, info = 3 + n * 3;
+  add('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n');
+  off[1] = pos; add('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+  var kids = []; for(var i = 0; i < n; i++) kids.push((3 + i * 3) + ' 0 R');
+  off[2] = pos; add('2 0 obj\n<< /Type /Pages /Count ' + n + ' /Kids [' + kids.join(' ') + '] >>\nendobj\n');
+  pages.forEach(function(p, i){
+    var po = 3 + i * 3, ph = Math.max(10, 595 * p.h / p.w).toFixed(2), cs = 'q 595 0 0 ' + ph + ' 0 0 cm /Im0 Do Q';
+    off[po] = pos; add(po + ' 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 ' + ph + '] /Resources << /XObject << /Im0 ' + (po + 2) + ' 0 R >> >> /Contents ' + (po + 1) + ' 0 R >>\nendobj\n');
+    off[po + 1] = pos; add((po + 1) + ' 0 obj\n<< /Length ' + cs.length + ' >>\nstream\n' + cs + '\nendstream\nendobj\n');
+    off[po + 2] = pos; add((po + 2) + ' 0 obj\n<< /Type /XObject /Subtype /Image /Width ' + p.w + ' /Height ' + p.h + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + p.jpg.length + ' >>\nstream\n'); add(p.jpg); add('\nendstream\nendobj\n');
+  });
+  var t = '<FEFF' + Array.prototype.map.call(String(title || ''), function(c){ return ('000' + c.charCodeAt(0).toString(16).toUpperCase()).slice(-4); }).join('') + '>';
+  off[info] = pos; add(info + ' 0 obj\n<< /Title ' + t + ' /Producer (WebSaver) >>\nendobj\n');
+  var xref = pos, x = 'xref\n0 ' + (info + 1) + '\n0000000000 65535 f \n';
+  for(var k = 1; k <= info; k++) x += ('0000000000' + off[k]).slice(-10) + ' 00000 n \n';
+  add(x + 'trailer\n<< /Size ' + (info + 1) + ' /Root 1 0 R /Info ' + info + ' 0 R >>\nstartxref\n' + xref + '\n%%EOF\n');
+  return new Blob(parts, {type: 'application/pdf'});
+}
+async function webComic(o){
+  try{
+    if(!WEB.doc) throw new Error('請先開啟一個網頁');
+    var urls = [], seen = {};
+    WEB.doc.querySelectorAll('img').forEach(function(img){
+      var u = WSCapture.lazySrc(img, WEB.url) || img.getAttribute('src'); if(!u) return;
+      try{ u = new URL(u, WEB.url).href; }catch(e){ return; }
+      if(/^data:image\/(gif|svg)/.test(u) || seen[u]) return; seen[u] = 1; urls.push(u);
+    });
+    var got = [];
+    for(var i = 0; i < urls.length; i++){
+      capCard(5 + 70 * i / urls.length, '下載圖片 ' + (i + 1) + '/' + urls.length);
+      try{ var b = (await proxyFetch(urls[i], 'blob')).blob; var bmp = await createImageBitmap(b); got.push({bmp: bmp, w: bmp.width, h: bmp.height}); }catch(e){}
+    }
+    var maxW = Math.max.apply(null, got.map(function(g){ return g.w; }).concat([1]));
+    got = got.filter(function(g){ return g.w >= maxW * (o.minRatio || 0.6) && g.h >= 80; });
+    if(!got.length) throw new Error('沒有找到內容圖片');
+    var pages = [];
+    for(var j = 0; j < got.length; j++){
+      capCard(78 + 15 * j / got.length, '整理圖片 ' + (j + 1) + '/' + got.length);
+      var g = got[j], s = Math.min(1, 1600 / g.w), c = document.createElement('canvas'); c.width = Math.round(g.w * s); c.height = Math.round(g.h * s);
+      var x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(g.bmp, 0, 0, c.width, c.height);
+      var jb = await new Promise(function(r){ c.toBlob(r, 'image/jpeg', .92); });
+      pages.push({jpg: new Uint8Array(await jb.arrayBuffer()), w: c.width, h: c.height});
+    }
+    var items = [];
+    if(o.format !== 'html'){ var pdf = await Lib.addBlob(jsComicPdf(pages, BR.title), o.name + '.pdf', {src: WEB.url, title: BR.title}); pdf.seamless = true; lsSet('ws.seam:' + pdf.id, true); items.push(pdf); }
+    if(o.format !== 'pdf'){
+      var html = '<!DOCTYPE html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + esc(BR.title) + '</title><style>html,body{margin:0;background:#111}img{display:block;width:100%;max-width:900px;margin:0 auto}</style>';
+      var hp = [html];
+      for(var k = 0; k < pages.length; k++) hp.push('<img src="data:image/jpeg;base64,' + await blobToB64(new Blob([pages[k].jpg])) + '">');
+      items.push(await Lib.addBlob(new Blob(hp, {type: 'text/html'}), o.name + '.html', {src: WEB.url, title: BR.title}));
+    }
+    fire('cap', {state: 'done', items: items});
+  }catch(e){ fire('cap', {state: 'error', msg: e.message}); }
 }

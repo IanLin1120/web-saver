@@ -28,6 +28,8 @@ document.addEventListener('keydown', function(e){
   applyTheme();
   paintIcons(document);
   pushNativeCfg();
+  /* 線上更新後，把最新的頁面腳本（去廣告、播放器、擷取）交給原生，不用重裝 APK */
+  if(isApp && NAT.has('setInject') && window.WS_INJECT) Object.keys(WS_INJECT).forEach(function(k){ NAT.call('setInject', k, WS_INJECT[k]); });
   await Lib.refresh();
   renderStart();
   renderBr();

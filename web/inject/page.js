@@ -14,7 +14,7 @@
     (document.head || document.documentElement).appendChild(st);
   }
 
-  if (window.__wsPage) { window.__wsPage.refresh(); return; }
+  if (window.__wsPage && window.__wsPage.v >= 3) { window.__wsPage.refresh(); return; }
 
   /* ---------- 密碼：偵測欄位與送出 ---------- */
   var pwNotified = false, lastOffer = 0;
@@ -84,12 +84,12 @@
   }
 
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
-  async function autoScroll(token) {
-    var se = document.scrollingElement || document.documentElement, start = se.scrollTop, h = 0, step = Math.max(400, innerHeight * 0.9);
-    for (var y = 0, i = 0; i < 80; i++) {
-      h = se.scrollHeight; y += step; se.scrollTop = y;
-      try { B.progress(token, 1, '捲動載入圖片… ' + Math.min(99, Math.round(100 * y / h)) + '%'); } catch (e) {}
-      await sleep(120);
+  async function autoScroll(token, slow) {
+    var se = document.scrollingElement || document.documentElement, start = se.scrollTop, h = 0, step = Math.max(400, innerHeight * (slow ? 0.8 : 0.9));
+    for (var y = 0, i = 0; i < (slow ? 600 : 80); i++) {
+      h = se.scrollHeight; y += step; se.scrollTop = y; window.scrollTo(0, y);
+      try { B.progress(token, Math.min(9, 1 + Math.round(8 * y / h)), '捲動載入所有圖片… ' + Math.min(99, Math.round(100 * y / h)) + '%'); } catch (e) {}
+      await sleep(slow ? 260 : 120);
       if (y >= se.scrollHeight) break;
     }
     se.scrollTop = start; await sleep(250);
@@ -108,6 +108,33 @@
     } catch (e) {
       try { B.fail(token, String(e && e.message || e)); } catch (x) {}
     }
+  }
+
+  /* 長條漫畫：只取內容圖片（寬度接近頁面上最寬的圖），依頁面順序 */
+  async function comic(token, optsJson) {
+    var opts = {}; try { opts = JSON.parse(optsJson); } catch (e) {}
+    try {
+      if (opts.autoScroll !== false) await autoScroll(token, true);
+      var imgs = Array.prototype.slice.call(document.images), t0 = Date.now();
+      while (Date.now() - t0 < 6000 && imgs.some(function (i) { return !i.complete; })) await sleep(300);
+      var adEls = [];
+      if (window.WS_AD && WS_AD.css) WS_AD.css.split(',').forEach(function (sel) { try { document.querySelectorAll(sel).forEach(function (e) { adEls.push(e); }); } catch (e) {} });
+      var base = document.baseURI, C = window.WSCapture;
+      var rows = imgs.map(function (img) {
+        var r = img.getBoundingClientRect(), cur = img.currentSrc || img.src, lz = C ? C.lazySrc(img, base) : '';
+        var u = lz && (!cur || (C && C.isPlaceholder(cur))) ? lz : cur;
+        return {el: img, w: r.width, h: r.height, nw: img.naturalWidth, nh: img.naturalHeight, url: u};
+      }).filter(function (x) {
+        if (!x.url || /^data:image\/(gif|svg)/.test(x.url) || x.w < 50) return false;
+        for (var i = 0; i < adEls.length; i++) if (adEls[i].contains(x.el)) return false;
+        return true;
+      });
+      var maxW = Math.max.apply(null, rows.map(function (x) { return x.w; }).concat([1]));
+      var ratio = opts.minRatio || 0.6, seen = {};
+      rows = rows.filter(function (x) { if (x.w < maxW * ratio || Math.max(x.nh, x.h) < 80 || seen[x.url]) return false; seen[x.url] = 1; return true; });
+      try { B.progress(token, 10, '找到 ' + rows.length + ' 張內容圖片'); } catch (e) {}
+      B.comicList(token, JSON.stringify(rows.map(function (x) { var u = x.url; try { u = new URL(u, base).href; } catch (e) {} return {url: u, w: x.nw, h: x.nh}; })));
+    } catch (e) { try { B.fail(token, String(e && e.message || e)); } catch (x) {} }
   }
 
   function media(token, minPx) {
@@ -164,7 +191,7 @@
   function refresh() {
     cfg = window.__wsCfg || cfg; adCss(); checkPw();
   }
-  window.__wsPage = {refresh: refresh, capture: capture, media: media, fill: fill, zap: zap,
+  window.__wsPage = {v: 3, refresh: refresh, capture: capture, media: media, comic: comic, fill: fill, zap: zap,
     reader: function (on) { return window.WSReader ? window.WSReader.toggleLive(on) : 'none'; }};
   refresh();
   try { mo.observe(document.documentElement, {childList: true, subtree: true}); setTimeout(function () { mo.disconnect(); }, 20000); } catch (e) {}
