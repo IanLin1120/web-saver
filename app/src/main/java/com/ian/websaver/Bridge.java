@@ -57,6 +57,16 @@ public class Bridge {
     }
 
     /* ---------- YouTube 分頁 ---------- */
+    /** 手機能不能把 4K 影片存成 MP4：需要 Android 14 以上（MP4 才能放 AV1）且有 AV1 解碼器 */
+    @JavascriptInterface public boolean hasAv1() {
+        if (android.os.Build.VERSION.SDK_INT < 34) return false;
+        try {
+            for (android.media.MediaCodecInfo i : new android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS).getCodecInfos())
+                if (!i.isEncoder()) for (String t : i.getSupportedTypes()) if (t.equalsIgnoreCase("video/av01")) return true;
+        } catch (Throwable t) { /* ignore */ }
+        return false;
+    }
+
     /** 清空瀏覽分頁偵測到的媒體（離開網頁、回首頁時） */
     @JavascriptInterface public void brMediaClear() { ui(new Runnable() { @Override public void run() { a.br.clearMedia(); } }); }
 

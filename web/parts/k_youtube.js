@@ -247,26 +247,33 @@ async function ytPageStreams(d, wantH, audioOnly, onStep){
   return r;
 }
 /* 每個畫質的選項（大小、容器） */
-function ytPageOptions(d){
-  var h264 = CFG.yt.codec === 'h264';
+/* 手機能否把 4K 存成 MP4（AV1＋Android 14） */
+var YT_AV1 = null;
+function ytAv1(){ if(YT_AV1 == null) YT_AV1 = isApp && NAT.has('hasAv1') ? !!NAT.call('hasAv1') : false; return YT_AV1; }
+function ytFmtMode(){ return lsGet('ws.ytFmt', CFG.yt.codec === 'vp9' ? 'mp4' : 'mp4'); }
+function ytPageOptions(d, mode){
+  mode = mode || ytFmtMode();
+  var mp4 = mode === 'mp4', av1 = ytAv1();
   var vids = d.formats.filter(function(f){ return /^video/.test(f.mimeType) && !f.audioQuality && f.height; });
   var auds = d.formats.filter(function(f){ return /^audio/.test(f.mimeType); });
   var aOpus = auds.filter(function(f){ return /opus/.test(ytCodec(f)); }).sort(function(a, b){ return b.bitrate - a.bitrate; })[0];
   var aM4a = auds.filter(function(f){ return /mp4a/.test(ytCodec(f)); }).sort(function(a, b){ return b.bitrate - a.bitrate; })[0];
   var by = {};
   vids.forEach(function(f){
-    var c = ytCodec(f), ok = h264 ? (/avc1/.test(c) || !c) : !/av01/.test(c);
+    var c = ytCodec(f);
+    var ok = mp4 ? (/avc1/.test(c) || (av1 && /av01/.test(c))) : /vp0?9|vp8/.test(c);
     if(!ok) return;
     var cur = by[f.height];
-    var score = function(x){ var cc = ytCodec(x); return (h264 ? 0 : /vp0?9/.test(cc) ? 2 : 1) * 1e12 + (x.contentLength || 0); };
+    /* MP4：1080p 以下用 H.264（相容性最好），以上用 AV1 */
+    var score = function(x){ var cc = ytCodec(x); return (mp4 ? (x.height <= 1080 ? (/avc1/.test(cc) ? 2 : 1) : (/av01/.test(cc) ? 2 : 1)) : 1) * 1e12 + (x.contentLength || 0); };
     if(!cur || score(f) > score(cur)) by[f.height] = f;
   });
-  if(h264) Object.keys(by).forEach(function(k){ if(+k > 1080) delete by[k]; });
   var out = Object.keys(by).map(Number).sort(function(a, b){ return b - a; }).map(function(hh){
-    var f = by[hh], webm = /webm/.test(f.mimeType), a = webm ? (aOpus || aM4a) : (aM4a || aOpus);
-    return {h: hh, f: f, cont: webm ? 'webm' : 'mp4', fps: f.fps || 0, size: fSize(f) + fSize(a)};
+    var f = by[hh], a = mp4 ? (aM4a || aOpus) : (aOpus || aM4a);
+    return {h: hh, f: f, cont: mp4 ? 'mp4' : 'webm', codec: /av01/.test(ytCodec(f)) ? 'AV1' : /avc1/.test(ytCodec(f)) ? 'H.264' : 'VP9', fps: f.fps || 0, size: fSize(f) + fSize(a)};
   });
-  return {video: out, opus: aOpus, m4a: aM4a, best: h264 ? (aM4a || aOpus) : (aOpus || aM4a)};
+  var maxAll = Math.max.apply(null, vids.map(function(f){ return f.height; }).concat([0]));
+  return {video: out, opus: aOpus, m4a: aM4a, best: mp4 ? (aM4a || aOpus) : (aOpus || aM4a), mode: mode, maxAll: maxAll, av1: av1};
 }
 function qTag(hh){ return hh >= 2160 ? '4K' : hh >= 1440 ? '2K' : hh >= 1080 ? 'Full HD' : hh >= 720 ? 'HD' : hh >= 480 ? '標準' : '省流量'; }
 
@@ -292,6 +299,7 @@ async function openYt(id){
   if(s.closed) return;
   var meta = ytMeta(d), tab = lsGet('ws.ytTab', 'video'), pick = null;
   var opt = d.page ? ytPageOptions(d) : null, old = d.page ? null : ytOptions(d);
+  function setMode(m){ lsSet('ws.ytFmt', m); if(d.page) opt = ytPageOptions(d, m); draw(); }
   var name = h('input', {type: 'text', value: meta.title.replace(/[\\\/:*?"<>|]/g, '_').slice(0, 100)});
   var nm = function(){ return (name.value.trim() || meta.title).replace(/[\\\/:*?"<>|]/g, '_'); };
   var go = h('button', {class: 'btn pri block', html: icon('download', 'sm') + '下載', disabled: true});
@@ -317,9 +325,9 @@ async function openYt(id){
     vl.forEach(function(o){
       var hh = o.h, nmQ = hh >= 2160 ? '超高畫質' : hh >= 1080 ? '高品質' : hh >= 720 ? '高品質' : '快速下載';
       var desc = hh >= 1080 ? '細節豐富，適合全螢幕播放' : hh >= 720 ? '高解析度，適合手機播放' : hh >= 360 ? '一般品質，下載快' : '畫質較差';
-      V.push({k: 'v' + hh, h: hh, label: nmQ + '（' + hh + 'p' + (o.fps > 30 ? o.fps : '') + '）', sub: desc + '・' + (o.cont === 'mp4' ? 'MP4' : 'WebM'), size: d.page ? o.size : fSize(o.v) + fSize(o.a),
-        big: hh + 'p', small: qTag(hh), color: 'var(--c-video)', tag: hh <= 240 ? '低品質' : '',
-        run: d.page ? function(){ ytStartPage(d, meta, {type: 'video', h: hh, name: nm() + '_' + hh + 'p'}); } : function(){ ytStart(d, meta, {type: 'video', h: hh, cont: o.cont, name: nm() + '_' + hh + 'p'}); }});
+      V.push({k: 'v' + hh, h: hh, label: nmQ + '（' + hh + 'p' + (o.fps > 30 ? o.fps : '') + '）', sub: desc + '・' + (o.cont === 'mp4' ? 'MP4' : 'WebM') + (o.codec ? '・' + o.codec : ''), tag: o.cont === 'mp4' ? 'MP4' : 'WebM', size: d.page ? o.size : fSize(o.v) + fSize(o.a),
+        big: hh + 'p', small: qTag(hh), color: 'var(--c-video)',
+        run: d.page ? function(){ ytStartPage(d, meta, {type: 'video', h: hh, codec: o.cont, name: nm() + '_' + hh + 'p'}); } : function(){ ytStart(d, meta, {type: 'video', h: hh, cont: o.cont, name: nm() + '_' + hh + 'p'}); }});
     });
     if(d.hls) V.push({k: 'hls', label: 'HLS 串流（備用）', sub: '上面的選項失敗時可試這個', size: 0, big: 'HLS', small: '', color: 'var(--c-video)', run: function(){ ytDl([{kind: 'hls', url: d.hls, name: nm(), src: 'https://www.youtube.com/watch?v=' + d.id, title: meta.title, thumbUrl: meta.thumb, noCookie: true}], meta); }});
     (d.captions || []).forEach(function(c){ C.push({k: 'cc' + c.lang + (c.kind || ''), label: c.name || c.lang, sub: (c.kind === 'asr' ? '自動產生・' : '') + 'SRT 字幕檔', size: 0, big: 'CC', small: c.lang, color: 'var(--c-doc, #6b7d8c)', run: function(){ ytSubDl(d, meta, c, nm()); }}); });
@@ -349,9 +357,16 @@ async function openYt(id){
       el.ondblclick = function(){ choose(p, el); go.click(); };
       return el;
     }
+    function fmtSeg(){
+      if(!d.page) return;
+      var m = opt.mode, seg = h('div', {class: 'seg ydFmt'});
+      [['mp4', 'MP4（所有播放器都能播）'], ['webm', 'WebM（VP9）']].forEach(function(x){ seg.appendChild(h('button', {class: m === x[0] ? 'on' : '', text: x[1], onclick: function(){ setMode(x[0]); }})); });
+      body.appendChild(seg);
+      if(m === 'mp4' && opt.maxAll > 1080 && !opt.av1) body.appendChild(h('div', {class: 'note', style: {fontSize: '12px'}, text: 'YouTube 的 1080p 以上只有 VP9／AV1 編碼。這支手機不支援 AV1（或 Android 版本低於 14），MP4 最高 1080p；要 ' + qTag(opt.maxAll) + ' 請切到 WebM。'}));
+    }
     function sect(title, list){ if(!list.length) return; body.appendChild(h('div', {class: 'ydSect', text: title})); var box = h('div', {class: 'ydList'}); list.forEach(function(p){ box.appendChild(row(p)); }); body.appendChild(box); }
     if(more){
-      sect('音樂', it.M); sect('影片', it.V);
+      sect('音樂', it.M); fmtSeg(); sect('影片', it.V);
       sect('字幕／CC', it.C.length ? it.C : []); if(!it.C.length) body.appendChild(h('div', {class: 'ydRow dis'}, h('span', {class: 'ydQ', style: {background: '#999'}}, h('b', {text: 'CC'})), h('div', {class: 'grow'}, h('b', {text: '字幕／CC'}), h('div', {class: 'sub', text: '這部影片沒有字幕'}))));
       sect('縮圖', it.T);
     } else {
@@ -361,6 +376,7 @@ async function openYt(id){
       var hq = vs.filter(function(x){ return x.h <= 1080; })[0] || vs[0];
       var top = vs[0] && vs[0].h > 1080 ? vs[0] : null;
       sect('音樂', it.M.filter(function(x){ return x.k === 'fast' || x.k === 'mp3320'; }));
+      fmtSeg();
       sect('影片', [fast, hq, top].filter(function(x, i, a){ return x && a.indexOf(x) === i; }).sort(function(a, b){ return a.h - b.h; }));
       body.appendChild(h('div', {class: 'ydMore', onclick: function(){ more = true; draw(); }}, h('span', {text: '更多格式（MP3 各音質、FLAC、所有畫質、字幕）'}), h('span', {html: icon('chevR', 'sm')})));
     }
@@ -387,7 +403,7 @@ async function ytStartPage(d, meta, ch, retry){
   if(!audioOnly) lsSet('ws.ytLastH', ch.h);
   /* 1. 播放器剛好用一般網址在播：直接下載（最快） */
   var r = retry ? {} : ytPickStreams(d, NAT.json('ytSniff', d.id), ch.h, audioOnly);
-  if(r.a && (audioOnly || r.v)){
+  if(r.a && (audioOnly || (r.v && r.cont === (ch.codec || ytFmtMode())))){
     if(audioOnly){
       var ext = /webm/.test(sMime(r.a)) ? 'webm' : 'mp4';
       if(extra.audioOut === 'opus' && ext !== 'webm') extra.audioOut = 'm4a';
@@ -398,7 +414,8 @@ async function ytStartPage(d, meta, ch, retry){
   }
   /* 2. 錄製式下載：背景播放器（靜音、看不到）播放這部影片，把播放器收到的資料存下來。
         不需要下載網址，所以不會被 403／機器人驗證／SABR 擋住。 */
-  var g = {kind: 'grab', vid: d.id, h: audioOnly ? 144 : ch.h, q: audioOnly ? 'tiny' : (QKEY[ch.h] || 'hd720'), audioOnly: audioOnly, len: +meta.dur || +(d.details.lengthSeconds || 0), name: ch.name};
+  var codec = audioOnly ? (extra.audioOut === 'm4a' ? 'mp4' : 'webm') : (ch.codec || ytFmtMode());
+  var g = {kind: 'grab', codec: codec, vid: d.id, h: audioOnly ? 144 : ch.h, q: audioOnly ? 'tiny' : (QKEY[ch.h] || 'hd720'), audioOnly: audioOnly, len: +meta.dur || +(d.details.lengthSeconds || 0), name: ch.name};
   if(audioOnly) ytDl([Object.assign({}, base, g, {artist: meta.artist}, extra, {title: meta.song})], meta, 'mp4');
   else ytDl([Object.assign({}, base, g)], meta, 'mp4');
   toast('在背景下載中，可以繼續看影片或做其他事');

@@ -43,6 +43,7 @@ final class YtGrab {
         g.put("h", it.optInt("h", 720));
         g.put("audio", audio);
         g.put("len", it.optDouble("len", 0));
+        g.put("codec", it.optString("codec", "webm"));
         Util.MAIN.post(new Runnable() {
             @Override public void run() {
                 Browser b = a.hidden("grab");

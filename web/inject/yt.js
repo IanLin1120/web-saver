@@ -178,14 +178,18 @@
      影片編碼偏好：不用 AV1（手機上很多無法合併存檔）；「相容模式」只用 H.264＋AAC（下載成 MP4）
      ============================================================ */
   try {
-    var CODEC = O.codec || 'vp9';
+    var GC = window.__wsCfg && window.__wsCfg.grab;
+    var CODEC = GC ? (GC.codec === 'mp4' ? 'mp4' : 'webm') : (O.codec || 'vp9');
     [window.MediaSource, window.ManagedMediaSource].forEach(function (MS) {
       if (!MS || !MS.isTypeSupported || MS.__wsPatched) return;
       var its = MS.isTypeSupported.bind(MS);
       MS.isTypeSupported = function (t) {
         t = String(t || '');
+        /* mp4：H.264／AV1＋AAC（4K 用 AV1 才能放進 MP4）；webm：VP9＋Opus；h264：只用 H.264（最高 1080p） */
+        if (CODEC === 'mp4') { if (/webm|vp0?9|vp8|opus/i.test(t)) return false; return its(t); }
         if (/av01/i.test(t)) return false;
         if (CODEC === 'h264' && /webm|vp0?9|vp8|opus/i.test(t)) return false;
+        if (CODEC === 'webm' && /mp4|avc1|mp4a/i.test(t)) return false;
         return its(t);
       };
       MS.__wsPatched = 1;

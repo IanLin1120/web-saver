@@ -445,11 +445,13 @@ final class Browser {
     /* ---------- 顯示與位置 ---------- */
     void setRect(float top, float bottom, float left, float right) {
         float d = a.getResources().getDisplayMetrics().density;
-        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) wv.getLayoutParams();
+        /* 全螢幕中：只記下來，離開全螢幕時才套用（之前轉橫向時介面重新排版，會把全螢幕蓋回去） */
+        FrameLayout.LayoutParams lp = fs && fsLp != null ? fsLp : (FrameLayout.LayoutParams) wv.getLayoutParams();
         lp.topMargin = Math.round(top * d);
         lp.bottomMargin = Math.round(bottom * d);
         lp.leftMargin = Math.round(left * d);
         lp.rightMargin = Math.round(right * d);
+        if (fs) return;
         wv.setLayoutParams(lp);
     }
 
@@ -464,6 +466,8 @@ final class Browser {
 
     /** 網頁介面要開啟對話框時：先拍一張快照給介面當背景，再把原生瀏覽器藏起來，讓對話框能顯示在最上層。 */
     void cover(boolean on) {
+        /* 全螢幕時要開面板：先離開全螢幕，面板才不會被影片蓋住 */
+        if (on && fs) fullscreen(false, false);
         covered = on;
         if (on) {
             if (wv.getVisibility() == View.VISIBLE && !fs) {

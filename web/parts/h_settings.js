@@ -91,7 +91,7 @@ function renderSettings(){
     swRow('手勢調整', '在影片右半邊上下滑調音量、左半邊調亮度', 'yt.gest'),
     swRow('Morphe 風格播放器', '換上自訂的播放控制：大按鈕、雙擊快轉 ±10 秒、長按 2 倍速、左右滑拖曳進度、上下滑調亮度／音量、進度條顯示 SponsorBlock 片段、畫質／速度選單、子母畫面、下載', 'yt.skin'),
     selRow('預設畫質', [['max', '最高畫質'], ['1080', '1080p'], ['720', '720p'], ['480', '480p（省流量）'], ['auto', '讓 YouTube 自動決定']], 'yt.q'),
-    selRow('下載與播放的影片編碼', [['vp9', '高畫質優先：最高 4K（VP9，存成 WebM）'], ['h264', '相容優先：最高 1080p（H.264，存成 MP4，所有播放器都能播）']], 'yt.codec', function(){ toast('重新整理 YouTube 頁面後生效'); }),
+    selRow('播放用的影片編碼（下載格式在下載面板選）', [['vp9', '高畫質優先：最高 4K（VP9）'], ['h264', '省電優先：最高 1080p（H.264）']], 'yt.codec', function(){ toast('重新整理 YouTube 頁面後生效'); }),
     swRow('顯示倒讚數', '在播放器標題下方顯示按讚／倒讚數（Return YouTube Dislike）', 'yt.ryd'),
     swRow('隱藏 Shorts', '首頁與搜尋結果不顯示 Shorts 短片區塊', 'yt.noShorts'),
     swRow('懸浮下載按鈕', '在網頁與 YouTube 影片上顯示可拖曳的 ⬇ 按鈕（彈出視窗裡也有），一點就開啟下載面板', 'fab'),
