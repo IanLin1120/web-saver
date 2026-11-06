@@ -1,0 +1,81 @@
+<body>
+<!-- ============ 1. 瀏覽 ============ -->
+<section class="view on" id="v-browse">
+  <div id="brTop" class="glass">
+    <div class="urlrow">
+      <button class="ib" id="bHome" title="首頁" data-ic="home"></button>
+      <div class="url" id="urlBox">
+        <span class="lock warn" id="urlLock" data-ic="search" data-sm="1"></span>
+        <input id="urlIn" type="url" inputmode="url" enterkeyhint="go" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上網址或輸入關鍵字">
+        <button class="ib" id="urlClear" title="清除" data-ic="x" data-sm="1"></button>
+        <button class="ib" id="urlAct" title="重新整理" data-ic="reload" data-sm="1"></button>
+      </div>
+      <button class="ib" id="bQuick" title="瀏覽設定" data-ic="sliders"></button>
+    </div>
+    <div class="tools">
+      <button class="ib" id="bBack" title="上一頁" data-ic="back"></button>
+      <button class="ib" id="bFwd" title="下一頁" data-ic="fwd"></button>
+      <button class="ib" id="bStar" title="收藏這個網頁" data-ic="star"></button>
+      <button class="ib" id="bBm" title="收藏清冊" data-ic="books"></button>
+      <button class="ib" id="bZap" title="手動移除元素" data-ic="scissors"></button>
+      <button class="ib" id="bMode" title="版面模式" data-ic="phone"></button>
+      <span class="grow"></span>
+      <button class="chip olive" id="bMedia" disabled><span data-ic="film" data-sm="1"></span><span class="lbl2">媒體</span><span class="n" id="mediaN">0</span></button>
+      <button class="chip pri" id="bCap" disabled><span data-ic="download" data-sm="1"></span>擷取</button>
+    </div>
+    <div id="brBar"><i></i></div>
+  </div>
+  <div id="brArea">
+    <div id="startPage"></div>
+    <img id="brSnap" alt="">
+    <iframe id="webFrame" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe>
+    <div class="webBusy" id="webBusy"><div class="spin"></div><span id="webBusyT">載入中…</span></div>
+  </div>
+</section>
+
+<!-- ============ 2. 檔案庫 ============ -->
+<section class="view" id="v-lib">
+  <div class="scroll" id="libScroll"><div class="page">
+    <h2 class="pt"><span class="logo" data-ic="folder"></span><span>檔案庫<small>離線網頁、PDF、圖片、影片都在這裡</small></span></h2>
+    <div class="card glass" id="storCard"></div>
+    <div class="catBar" id="catBar"></div>
+    <div id="selBar" class="selBar glass hide"></div>
+    <div class="libTools" id="libTools">
+      <div class="srch"><span data-ic="search" data-sm="1"></span><input id="libQ" type="search" placeholder="搜尋檔名、網址…"></div>
+      <button class="ib" id="bSort" title="排序" data-ic="sort"></button>
+      <button class="ib" id="bView" title="切換檢視" data-ic="list"></button>
+      <button class="ib" id="bSel" title="選取" data-ic="check"></button>
+    </div>
+    <div id="libList"></div>
+  </div></div>
+</section>
+
+<!-- ============ 3. 設定 ============ -->
+<section class="view" id="v-set">
+  <div class="scroll"><div class="page" id="setPage"></div></div>
+</section>
+
+<!-- 檢視器 -->
+<div id="viewer">
+  <div class="vwTop glass" id="vwTop">
+    <button class="ib" id="vwClose" data-ic="back"></button>
+    <div class="t"><b id="vwTitle"></b><div class="sub" id="vwSub"></div></div>
+    <button class="ib" id="vwShare" title="匯出" data-ic="share"></button>
+    <button class="ib" id="vwMore" title="更多" data-ic="more"></button>
+  </div>
+  <div class="vwBody" id="vwBody"></div>
+</div>
+
+<!-- 底部：任務列＋導覽 -->
+<div id="dock">
+  <div id="dockCards" style="display:contents"></div>
+  <nav id="nav" class="glass">
+    <button data-v="browse" class="on"><span data-ic="globe"></span>瀏覽</button>
+    <button data-v="lib"><span data-ic="folder"></span>檔案庫<span class="dot hide" id="libDot"></span></button>
+    <button data-v="set"><span data-ic="gear"></span>設定</button>
+  </nav>
+</div>
+
+<div id="sheets"></div>
+<div class="toast" id="toast"><span id="toastT"></span><button id="toastB" class="hide"></button></div>
+</body>
