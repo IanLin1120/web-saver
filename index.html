@@ -4,7 +4,7 @@
 <script>/* 線上更新開機程式：手機上若已下載比 APK 內建更新的介面版本，就改用新版（存在 IndexedDB）。
    新版連續兩次沒有正常開啟 → 自動退回 APK 內建版本。網址加上 #builtin 也會強制使用內建版本。 */
 (function () {
-  var B = '1.6.0'; if (!window.__OTA) window.APP_BUILTIN = B;
+  var B = '1.6.1'; if (!window.__OTA) window.APP_BUILTIN = B;
   if (window.__OTA || location.hash.indexOf('builtin') >= 0) return;
   var v = null; try { v = JSON.parse(localStorage.getItem('ws.ota') || 'null'); } catch (e) {}
   function gt(a, b) { a = String(a).split('.').map(Number); b = String(b).split('.').map(Number); for (var i = 0; i < Math.max(a.length, b.length); i++) { var p = a[i] || 0, q = b[i] || 0; if (p !== q) return p > q; } return false; }
@@ -540,6 +540,7 @@ input[type=range]{width:100%;accent-color:var(--accent);padding:0;border:0;backg
 /* 檔案庫影片播放器 */
 .vp{touch-action:none;user-select:none;-webkit-user-select:none;background:#000}
 .vp video{width:100%;height:100%;object-fit:contain;display:block}
+.vp.vpFs video{position:absolute;inset:0;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important}
 .vpUi{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .2s;background:linear-gradient(180deg,rgba(0,0,0,.25),rgba(0,0,0,0) 30%,rgba(0,0,0,0) 60%,rgba(0,0,0,.55))}
 .vp.show .vpUi{opacity:1;pointer-events:auto}
 .vp button{border:0;background:none;color:#fff;display:grid;place-items:center;cursor:pointer;padding:0}
@@ -563,13 +564,22 @@ input[type=range]{width:100%;accent-color:var(--accent);padding:0;border:0;backg
 .vpBar .kn{position:absolute;width:14px;height:14px;margin-left:-7px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
 .vpFlash{position:absolute;left:50%;top:18%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#fff;padding:7px 14px;border-radius:99px;font:700 13px/1.3 sans-serif;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
 .vpFlash.on{opacity:1}
-.vp.vpFs{position:fixed!important;inset:0!important;z-index:9999;width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;margin:0!important;border-radius:0!important}
+.vp.vpFs{position:fixed!important;inset:0!important;z-index:9999;width:auto!important;height:auto!important;max-width:none!important;max-height:none!important;margin:0!important;border-radius:0!important}
 body.vpFsOn #vwTop{display:none!important}
 
 #brTop .urlrow{gap:2px}
 #brTop .urlrow #bBack,#brTop .urlrow #bFwd,#brTop .urlrow #bHome{width:34px;height:38px;flex:none}
 #brTop .urlrow #bFwd:disabled{opacity:.3}
 #brTop .url{min-width:0;flex:1}
+
+.vpBot{padding-bottom:max(8px,env(safe-area-inset-bottom))}
+.vp.vpFs .vpBot{padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right))}
+.incogOn #brTop{background:linear-gradient(135deg,#3a3340,#26222b)!important;color:#eee}
+.incogOn #brTop .url{background:#4a4351!important;color:#fff}
+.incogOn #brTop .url input{color:#fff}
+.incogOn #brTop .ib{color:#ddd}
+#incogBadge{display:none;flex:none;font:800 11px/1 sans-serif;color:#fff;background:#6b5b7b;border-radius:99px;padding:5px 8px;margin-right:2px}
+.incogOn #incogBadge{display:inline-block}
 </style>
 </head>
 <body>
@@ -580,7 +590,7 @@ body.vpFsOn #vwTop{display:none!important}
       <button class="ib" id="bBack" title="上一頁" data-ic="back"></button>
       <button class="ib" id="bFwd" title="下一頁" data-ic="fwd"></button>
       <button class="ib" id="bHome" title="首頁" data-ic="home"></button>
-      <div class="url" id="urlBox">
+      <div class="url" id="urlBox"><span id="incogBadge">無痕</span>
         <span class="lock warn" id="urlLock" data-ic="search" data-sm="1"></span>
         <input id="urlIn" type="url" inputmode="url" enterkeyhint="go" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上網址或輸入關鍵字">
         <button class="ib" id="urlClear" title="清除" data-ic="x" data-sm="1"></button>
@@ -1760,7 +1770,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 /* ============================================================
    核心：工具函式、圖示、主題、面板（sheet）、提示、原生橋接、頁面切換
    ============================================================ */
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.6.1';
 var GH = {user: 'IanLin1120', repo: 'web-saver',
   get pages(){ return 'https://' + this.user.toLowerCase() + '.github.io/' + this.repo + '/'; },
   get web(){ return 'https://github.com/' + this.user + '/' + this.repo; }};
@@ -1836,6 +1846,7 @@ var IC = {
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   sort: '<path d="M7 4v16M3.5 16.5L7 20l3.5-3.5M14 6h7M14 12h5M14 18h3"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
+  incog: '<path d="M3 11h18"/><path d="M6 11l1.5-5h9L18 11"/><circle cx="7.5" cy="16" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/><path d="M10 16h4"/>',
   grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
   check: '<path d="M4.5 12.5l5 5 10-11"/>',
   checks: '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 12.5l3 3 5-6"/>',
@@ -2742,6 +2753,7 @@ function openToolsMenu(){
   b('star', bm ? '已收藏' : '收藏此頁', function(){ $('bStar').click(); }, {dis: !page, on: bm});
   b('books', '收藏清單', function(){ $('bBm').click(); });
   b('history', '瀏覽記錄', function(){ openHistory(); });
+  b('incog', INCOG.on ? '關閉無痕' : '無痕模式', function(){ setIncog(!INCOG.on); }, {on: INCOG.on});
   b('scissors', '手動清理', function(){ $('bZap').click(); }, {dis: !page, on: BR.zap});
   b(CFG.mode === 'desktop' ? 'monitor' : CFG.mode === 'reader' ? 'book' : 'phone', CFG.mode === 'desktop' ? '電腦版' : CFG.mode === 'reader' ? '閱讀模式' : '手機版', function(){ $('bMode').click(); }, {on: CFG.mode !== 'mobile'});
   b('sliders', '瀏覽設定', function(){ $('bQuick').click(); });
@@ -3977,7 +3989,14 @@ async function viewVideo(it, body){
   var sp = h('button', {class: 'vpC', text: '1×'});
   var fsB = h('button', {class: 'vpI', html: '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>'});
   var bar = h('div', {class: 'vpBar'}, h('div', {class: 'tr'}, h('div', {class: 'bf'}), h('div', {class: 'pl'})), h('div', {class: 'kn'}));
-  var bot = h('div', {class: 'vpBot'}, bar, h('div', {class: 'vpRow'}, tm, h('span', {style: {flex: 1}}), sp, fsB));
+  /* 畫面大小：符合螢幕（完整顯示）／填滿螢幕（裁切邊緣）／拉伸填滿 */
+  var FITS = [['contain', '符合螢幕'], ['cover', '填滿螢幕'], ['fill', '拉伸填滿']];
+  var fitI = Math.max(0, FITS.map(function(x){ return x[0]; }).indexOf(lsGet('ws.vpFit', 'contain')));
+  var fitB = h('button', {class: 'vpC', text: FITS[fitI][1]});
+  function applyFit(){ v.style.objectFit = FITS[fitI][0]; fitB.textContent = FITS[fitI][1]; }
+  fitB.onclick = function(e){ e.stopPropagation(); fitI = (fitI + 1) % FITS.length; lsSet('ws.vpFit', FITS[fitI][0]); applyFit(); fl('畫面：' + FITS[fitI][1]); show(); };
+  applyFit();
+  var bot = h('div', {class: 'vpBot'}, bar, h('div', {class: 'vpRow'}, tm, h('span', {style: {flex: 1}}), fitB, sp, fsB));
   var flash = h('div', {class: 'vpFlash'});
   ui.appendChild(mid); ui.appendChild(bot);
   box.appendChild(ui); box.appendChild(flash);
@@ -5363,7 +5382,7 @@ async function ytStartPage(d, meta, ch, retry){
       if(extra.audioOut === 'opus' && ext !== 'webm') extra.audioOut = 'm4a';
       if(extra.audioOut === 'm4a' && ext !== 'mp4') extra.audioOut = 'opus';
       ytDl([Object.assign({}, base, {kind: 'audio', url: r.a.url, ext: ext, name: ch.name, artist: meta.artist}, extra, {title: meta.song})], meta, 'mp4');
-    } else ytDl([Object.assign({}, base, {kind: 'merge', url: r.v.url, audioUrl: r.a.url, container: r.cont, name: ch.name})], meta, 'mp4');
+    } else ytDl([Object.assign({}, base, {kind: 'merge', url: r.v.url, audioUrl: r.a.url, container: r.cont, name: ch.name, needAudio: true})], meta, 'mp4');
     return;
   }
   /* 2. 直接下載 HLS（全速、不用錄製）：1080p 以下、而且 YouTube 有提供時 */
@@ -5374,7 +5393,7 @@ async function ytStartPage(d, meta, ch, retry){
       if(audioOnly || hl.maxH >= Math.min(ch.h, 1080) * 0.9){
         var hb = Object.assign({}, base, {kind: 'hls', url: hl.master, ua: YT_SAFARI_UA, referer: 'https://www.youtube.com/', name: ch.name, variant: audioOnly ? 'min' : String(ch.h)});
         if(audioOnly) ytDl([Object.assign(hb, {vidOut: 'm4a', artist: meta.artist}, extra, {title: meta.song})], meta, 'mp4');
-        else ytDl([hb], meta, 'mp4');
+        else ytDl([Object.assign(hb, {needAudio: true})], meta, 'mp4');
         toast('直接下載中（不用錄製）');
         return;
       }
@@ -5386,7 +5405,7 @@ async function ytStartPage(d, meta, ch, retry){
   var codec = audioOnly ? (extra.audioOut === 'm4a' ? 'mp4' : 'webm') : (ch.codec || ytFmtMode());
   var g = {kind: 'grab', codec: codec, vid: d.id, h: audioOnly ? 144 : ch.h, q: audioOnly ? 'tiny' : (QKEY[ch.h] || 'hd720'), audioOnly: audioOnly, len: +meta.dur || +(d.details.lengthSeconds || 0), name: ch.name};
   if(audioOnly) ytDl([Object.assign({}, base, g, {artist: meta.artist}, extra, {title: meta.song})], meta, 'mp4');
-  else ytDl([Object.assign({}, base, g)], meta, 'mp4');
+  else ytDl([Object.assign({}, base, g, {needAudio: true})], meta, 'mp4');
   toast('在背景下載中，可以繼續看影片或做其他事');
 }
 /* 舊的多來源解析（備用） */
@@ -5441,7 +5460,7 @@ on('dl', async function(d){
   var J = YTJOB; J.tries++;
   if(J.page){
     /* 串流網址可能過期：清掉記錄，請播放器重新載入後再試一次 */
-    toast('下載被中斷，重新取得串流後再試一次…');
+    toast(d.err && /沒有聲音/.test(d.err) ? '下載的影片沒有聲音，改用另一種方式重新下載…' : '下載失敗，改用另一種方式重新下載…');
     NAT.call('ytForget', J.id);
     ytStartPage(J.d, J.meta, J.ch, J.tries);
     return;
@@ -6126,6 +6145,8 @@ var Hist = {
   save: function(){ lsSet('ws.hist', this.items.slice(0, 4000)); },
   add: function(url, title, src){
     if(!/^https?:/.test(url)) return;
+    /* 「不要記錄」或無痕模式：完全不寫入 */
+    if(lsGet('ws.histOff', false) || (src !== 'yt' && INCOG.on)) return;
     var now = Date.now(), top = this.items[0];
     /* 同一個網址 30 秒內重複（例如重新整理）只更新時間 */
     if(top && top.url === url && now - top.t < 30000){ top.t = now; if(title) top.title = title; this.save(); return; }
@@ -6165,7 +6186,8 @@ function openHistory(src){
   [['all', '全部'], ['br', '瀏覽'], ['yt', 'YouTube']].forEach(function(x){
     seg.appendChild(h('button', {class: filt === x[0] ? 'on' : '', text: x[1], onclick: function(){ filt = x[0]; qsa('button', seg).forEach(function(b){ b.classList.remove('on'); }); this.classList.add('on'); shown = 150; draw(); }}));
   });
-  var body = h('div', null, search, seg, list);
+  var offNote = lsGet('ws.histOff', false) ? h('div', {class: 'note', style: {fontSize: '12px', marginBottom: '8px'}, text: '目前設定為「不記錄」：新的瀏覽不會出現在這裡（在「清除」裡可以關閉）'}) : null;
+  var body = h('div', null, offNote, search, seg, list);
   var clr = h('button', {class: 'btn sm dang', html: icon('trash', 'sm') + '清除', onclick: function(){ clearHistoryDlg(draw); }});
   var s = openSheet({title: '瀏覽記錄', icon: 'history', body: body, tall: true, headExtra: clr});
   function draw(){
@@ -6217,7 +6239,9 @@ function clearHistoryDlg(after){
   });
   from.onchange = count; to.onchange = count;
   var cookies = h('input', {type: 'checkbox'});
-  var body = h('div', null, opts, custom, cnt, isApp ? h('label', {class: 'opt'}, cookies, h('div', {class: 'grow'}, h('b', {text: '同時清除 Cookie 與網站資料'}), h('div', {class: 'sub', text: '會登出所有網站（包含 YouTube）'}))) : null);
+  var offRow = h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!lsGet('ws.histOff', false), onchange: function(){ lsSet('ws.histOff', this.checked); toast(this.checked ? '之後不再記錄瀏覽記錄' : '恢復記錄瀏覽記錄'); }}),
+    h('div', {class: 'grow'}, h('b', {text: '之後都不要記錄'}), h('div', {class: 'sub', text: '開啟後瀏覽與 YouTube 分頁都不會留下任何記錄（可隨時關閉）'})));
+  var body = h('div', null, opts, custom, cnt, offRow, isApp ? h('label', {class: 'opt'}, cookies, h('div', {class: 'grow'}, h('b', {text: '同時清除 Cookie 與網站資料'}), h('div', {class: 'sub', text: '會登出所有網站（包含 YouTube）'}))) : null);
   var go = h('button', {class: 'btn dang', html: icon('trash', 'sm') + '清除記錄'});
   var s = openSheet({title: '清除瀏覽記錄', icon: 'trash', body: body, foot: go});
   go.onclick = function(){
@@ -6226,6 +6250,23 @@ function clearHistoryDlg(after){
     s.close(); toast('已清除 ' + n + ' 筆記錄'); if(after) after();
   };
   count();
+}
+
+/* ---------- 無痕模式（瀏覽分頁） ---------- */
+var INCOG = {on: false};
+function setIncog(on){
+  if(on === INCOG.on) return;
+  if(on){
+    INCOG.on = true; document.body.classList.add('incogOn');
+    if(isApp) NAT.call('brIncog', true, false);
+    toast('已開啟無痕模式：不記錄瀏覽記錄、不儲存密碼與快取');
+  } else {
+    var s = openSheet({title: '關閉無痕模式', icon: 'incog', body: h('div', null, h('div', {class: 'sub', style: {lineHeight: '1.7'}, text: '無痕期間的快取與上一頁記錄會被清除。登入狀態（Cookie）和一般瀏覽共用，要清除的話會一併登出所有網站。'})),
+      foot: h('div', {style: {display: 'contents'}},
+        h('button', {class: 'btn ghost', text: '只清快取', onclick: function(){ fin(false); }}),
+        h('button', {class: 'btn dang', text: '連 Cookie 一起清除', onclick: function(){ fin(true); }}))});
+    function fin(ck){ s.close(); INCOG.on = false; document.body.classList.remove('incogOn'); if(isApp) NAT.call('brIncog', false, ck); toast('已關閉無痕模式'); }
+  }
 }
 
 /* ============================================================
