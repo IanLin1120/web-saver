@@ -94,11 +94,13 @@ final class Fab {
         apply();
     }
 
+    void prog(float p) { ((FabIcon) btn).setProg(p); apply(); }
+
     void cover(boolean on) { covered = on; apply(); }
 
     private void apply() {
         boolean fs = (a.br != null && a.br.fs) || (a.yt != null && a.yt.fs);
-        boolean vis = want && !covered && !fs && !a.inPipNow;
+        boolean vis = (want || ((FabIcon) btn).busy()) && !covered && !fs && !a.inPipNow;
         box.setVisibility(vis ? View.VISIBLE : View.GONE);
         if (vis) box.bringToFront();
     }

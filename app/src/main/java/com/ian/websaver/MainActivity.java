@@ -308,6 +308,10 @@ public class MainActivity extends Activity {
         v.setBackgroundColor(Color.BLACK);
         root.addView(v, new FrameLayout.LayoutParams(-1, -1));
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        /* 網頁影片全螢幕：自動轉成橫向（直式影片除外），離開時自動轉回 */
+        Browser b = act();
+        boolean portrait = b != null && b.vidW > 0 && b.vidH > b.vidW;
+        if (!portrait) setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
     }
 
     void hideCustom() {
@@ -318,6 +322,7 @@ public class MainActivity extends Activity {
         customCb = null;
         getWindow().getDecorView().setSystemUiVisibility(0);
         setBars(prefs.getString("barColor", "#efe5d3"), prefs.getBoolean("barDark", false));
+        setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
     }
 
     @Override protected void onActivityResult(int req, int res, Intent data) {

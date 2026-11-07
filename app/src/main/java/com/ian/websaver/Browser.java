@@ -318,6 +318,7 @@ final class Browser {
             favicon = fav;
             AdBlock.blockedPage.set(0);
             synchronized (netMedia) { netMedia.clear(); }
+            lastPlay = null;
             capToken = "";
             lastInjectBucket = -1;
             emitState();
@@ -534,7 +535,10 @@ final class Browser {
     private FrameLayout.LayoutParams savedLp;
     boolean inPip = false;
 
+    int vidW = 0, vidH = 0;
+
     void videoState(boolean playing, int w, int h) {
+        if (w > 0 && h > 0) { vidW = w; vidH = h; }
         if (!hiddenBr && playing != videoPlaying) KeepAlive.set(a, "yt", playing && isYt(curHost) ? "正在播放 YouTube" : null);
         videoPlaying = playing;
         if (w > 0 && h > 0) videoRatio = Math.max(0.42f, Math.min(2.38f, (float) w / h));
@@ -881,6 +885,7 @@ final class Browser {
                 String low = url.toLowerCase();
                 o.put("kind", low.contains(".m3u8") ? "hls" : low.contains(".mpd") ? "dash" : low.matches(".*\\.(mp3|m4a|aac|ogg|oga|opus|wav|flac)(\\?.*|#.*)?$") ? "audio" : "video");
                 o.put("net", true);
+                o.put("t", System.currentTimeMillis());
                 netMedia.put(key, o);
             } catch (Throwable t) { return; }
         }
@@ -916,6 +921,20 @@ final class Browser {
         wv.evaluateJavascript(code, null);
     }
 
+    volatile JSONObject lastPlay;
+
+    void notePlayed(String json) {
+        try {
+            JSONObject o = new JSONObject(json);
+            /* 廣告通常很短：已經記到長影片時，不被短片覆蓋 */
+            JSONObject old = lastPlay;
+            if (old != null && old.optDouble("dur", 0) > 120 && o.optDouble("dur", 0) > 0 && o.optDouble("dur", 0) < 90 && old.optString("page").equals(curUrl)) return;
+            o.put("at", System.currentTimeMillis());
+            o.put("page", curUrl);
+            lastPlay = o;
+        } catch (Throwable t) { /* ignore */ }
+    }
+
     void mediaResult(String token, String json) {
         if (!token.equals(mediaToken)) return;
         try {
@@ -931,6 +950,8 @@ final class Browser {
             out.put("items", all);
             out.put("page", curUrl);
             out.put("title", curTitle);
+            JSONObject lp = lastPlay;
+            if (lp != null && lp.optString("page").equals(curUrl)) out.put("playing", lp);
             MainActivity.emit("media", out.toString());
         } catch (Throwable t) { MainActivity.emit("media", "{\"items\":[]}"); }
     }

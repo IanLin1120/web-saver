@@ -14,6 +14,13 @@ final class FabIcon extends View {
     private final Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG), ring = new Paint(Paint.ANTI_ALIAS_FLAG), ln = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path arrow = new Path(), tray = new Path();
     private int c1, c2;
+    private float prog = -1;
+    private final Paint arc = new Paint(Paint.ANTI_ALIAS_FLAG), arcBg = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final android.graphics.RectF ov = new android.graphics.RectF();
+
+    void setProg(float p) { prog = p; invalidate(); }
+
+    boolean busy() { return prog >= 0; }
 
     FabIcon(Context c, int accent) {
         super(c);
@@ -25,6 +32,11 @@ final class FabIcon extends View {
         ln.setColor(Color.WHITE);
         ln.setStrokeCap(Paint.Cap.ROUND);
         ln.setStrokeJoin(Paint.Join.ROUND);
+        arc.setStyle(Paint.Style.STROKE);
+        arc.setStrokeCap(Paint.Cap.ROUND);
+        arc.setColor(Color.parseColor("#7fe08a"));
+        arcBg.setStyle(Paint.Style.STROKE);
+        arcBg.setColor(Color.argb(90, 0, 0, 0));
     }
 
     @Override protected void onSizeChanged(int w, int h, int ow, int oh) {
@@ -54,6 +66,15 @@ final class FabIcon extends View {
         c.drawCircle(w / 2f, h / 2f, r - ring.getStrokeWidth(), ring);
         c.drawPath(arrow, ln);
         c.drawPath(tray, ln);
+        if (prog >= 0) {
+            /* 下載／擷取進行中：外圈顯示進度 */
+            float sw = r * 0.16f;
+            arc.setStrokeWidth(sw); arcBg.setStrokeWidth(sw);
+            ov.set(sw / 2, sw / 2, w - sw / 2, h - sw / 2);
+            c.drawArc(ov, 0, 360, false, arcBg);
+            c.drawArc(ov, -90, Math.max(6f, 360f * Math.min(1f, prog)), false, arc);
+            if (prog < 1) postInvalidateDelayed(500);
+        }
     }
 
     private static int lighten(int c, float f) {

@@ -31,8 +31,10 @@ on('media', function(d){
   MEDIA.items = (d && d.items || []).filter(function(m){ return m.url; });
   MEDIA.page = d.page || BR.url; MEDIA.title = d.title || BR.title;
   BR.mediaN = MEDIA.items.length; renderBr();
-  /* 預設勾選：影片（非串流）全部，圖片不勾 */
-  MEDIA.items.forEach(function(m){ if((m.kind === 'video' || m.kind === 'hls') && MEDIA.sel.size < 3) MEDIA.sel.add(m.url); });
+  MEDIA.playing = d.playing || null; MEDIA.touched = false; MEDIA.showAds = false;
+  /* 先讀每個串流的長度（用來對應正在播放的影片、分辨廣告） */
+  if(isApp) MEDIA.items.forEach(function(m){ if(m.kind === 'hls' && !MEDIA.hls[m.url]){ MEDIA.hls[m.url] = {loading: true}; NAT.call('hlsInfo', m.url, MEDIA.page); } });
+  autoSelMedia();
   if(MEDIA.sheet) drawMedia();
 });
 function visibleMedia(){
@@ -58,7 +60,19 @@ function drawMedia(){
   var imgs = vis.filter(function(m){ return m.kind === 'image'; });
   if(vids.length){
     var vb = h('div');
-    vids.forEach(function(m){
+    var groups = {play: [], other: [], ad: []};
+    vids.forEach(function(m){ groups[mClass(m)].push(m); });
+    if(!groups.play.length && MEDIA.playing && MEDIA.playing.dur > 0 && Object.keys(MEDIA.hls).some(function(k){ return MEDIA.hls[k].loading; }))
+      vb.appendChild(h('div', {class: 'note', style: {fontSize: '12px'}, text: '正在比對哪一個是你播放中的影片…'}));
+    else if(!MEDIA.playing && vids.length > 1) vb.appendChild(h('div', {class: 'note', style: {fontSize: '12px'}, text: '小提示：先在網頁按播放影片幾秒再開這裡，App 會自動找出你正在看的那一部，並標示出廣告。'}));
+    var order = groups.play.concat(groups.other).concat(MEDIA.showAds ? groups.ad : []);
+    var shownN = 0;
+    order.forEach(function(m){
+      var cls = mClass(m);
+      if(cls === 'play' && shownN === 0) vb.appendChild(h('div', {class: 'sect-h', style: {margin: '4px 2px 8px'}}, h('span', {text: '▶ 你正在播放的影片'})));
+      if(cls === 'other' && (shownN === groups.play.length) && groups.play.length) vb.appendChild(h('div', {class: 'sect-h', style: {margin: '12px 2px 8px'}}, h('span', {text: '其他影片'})));
+      if(cls === 'ad' && shownN === groups.play.length + groups.other.length) vb.appendChild(h('div', {class: 'sect-h', style: {margin: '12px 2px 8px'}}, h('span', {text: '可能是廣告或網站音效'})));
+      shownN++;
       var dis = m.kind === 'stream' || m.kind === 'dash';
       var row = h('div', {class: 'mRow' + (MEDIA.sel.has(m.url) ? ' on' : ''), style: dis ? {opacity: .6} : null});
       var vi = h('div', {class: 'vi', html: icon(m.kind === 'audio' ? 'audio' : 'video', 'lg'), style: {background: m.kind === 'audio' ? 'var(--c-audio)' : 'var(--c-video)'}});
@@ -67,6 +81,14 @@ function drawMedia(){
       if(m.w && m.h) meta.push(m.w + '×' + m.h);
       if(m.dur) meta.push(fmtDur(m.dur));
       if(m.net) meta.push('網路偵測');
+      var P = MEDIA.playing, dd = mDur(m);
+      if(cls === 'play' && P){
+        row.classList.add('mPlay');
+        if(P.thumb || P.poster){ vi.style.backgroundImage = 'url("' + (P.thumb || pxUrl(P.poster)) + '")'; vi.innerHTML = '<span class="pb">' + icon('play', 'sm fill') + '</span>'; }
+        if(!m.name || m.net) m.name = pageVideoName();
+        if(!m.w && P.w){ m.w = P.w; m.h = P.h; }
+      } else if(m.net && !m.name){ m.name = (m.kind === 'audio' ? '音訊' : '影片') + (dd ? '（' + fmtDur(dd) + '）' : '') + '・' + hostOf(m.url); }
+      if(dd && !m.dur) meta.push(fmtDur(dd));
       var t = h('div', {class: 't'}, h('b', {text: m.name || m.alt || hostOf(m.url)}), h('div', {class: 'sub', text: (m.note ? m.note + '・' : '') + meta.join('・') + '\n' + m.url}));
       if(m.kind === 'hls' && isApp){
         var q = h('select', {onclick: function(e){ e.stopPropagation(); }});
@@ -83,6 +105,7 @@ function drawMedia(){
       row.onclick = function(){ if(dis){ toast(m.kind === 'dash' ? 'DASH 串流暫不支援，請找同一部影片的 m3u8／mp4' : '這是瀏覽器內部的串流，請改選偵測到的 m3u8／mp4', true); return; } toggleMedia(m); };
       vb.appendChild(row);
     });
+    if(groups.ad.length) vb.appendChild(h('button', {class: 'btn block ghost', style: {marginTop: '6px'}, text: (MEDIA.showAds ? '隱藏' : '顯示') + '可能是廣告或網站音效的項目（' + groups.ad.length + '）', onclick: function(){ MEDIA.showAds = !MEDIA.showAds; drawMedia(); }}));
     body.appendChild(vb);
   }
   if(imgs.length){
@@ -134,8 +157,39 @@ function drawMedia(){
   updateMediaBtn();
 }
 function vidQName(v){ return {max: '最高', min: '最低'}[v] || v + 'p'; }
-on('hlsInfo', function(d){ MEDIA.hls[d.url] = d; if(MEDIA.sheet) drawMedia(); });
+on('hlsInfo', function(d){ MEDIA.hls[d.url] = d; if(!MEDIA.touched) autoSelMedia(); if(MEDIA.sheet) drawMedia(); });
+/* ---------- 分類：正在播放的影片／其他影片／可能是廣告或網站音效 ---------- */
+function mDur(m){ var i = MEDIA.hls[m.url]; return m.dur || (i && i.dur) || 0; }
+function mClass(m){
+  if(m.kind === 'image') return 'image';
+  if(m.kind === 'stream' && MEDIA.playing) return 'ad';
+  var P = MEDIA.playing, d = mDur(m), u = String(m.url || '');
+  if(P){
+    if(P.src && /^https?:/.test(P.src) && P.src.split('#')[0] === u.split('#')[0]) return 'play';
+    if(P.dur > 0 && d > 0 && Math.abs(d - P.dur) <= Math.max(3, P.dur * 0.015)) return 'play';
+  }
+  var path = u.replace(/^https?:\/\/[^\/]+/, '').split('?')[0].toLowerCase();
+  if(/\/(static|assets?|sounds?|sfx|media\/sound)\//.test(path) && m.kind !== 'hls') return 'ad';
+  if(/(^|\/)(tip|notify|notice|message|beep|click|scan|qr|screen[_-]?shot|ding|ring|alert|test|sample|silence|blank)[^\/]*\.(mp3|mp4|wav|ogg|m4a|webm)$/.test(path)) return 'ad';
+  if(/(^|[\/._-])(ads?|advert|preroll|vast|vpaid|promo|banner)([\/._-]|$)/.test(path)) return 'ad';
+  if(d > 0 && d < 90 && (!P || P.dur > 300)) return 'ad';
+  if(P && P.dur > 300 && d > 0 && d < P.dur * 0.5) return 'ad';
+  return 'other';
+}
+function autoSelMedia(){
+  MEDIA.sel = new Set();
+  var vids = MEDIA.items.filter(function(m){ return m.kind !== 'image' && m.kind !== 'stream' && m.kind !== 'dash'; });
+  var play = vids.filter(function(m){ return mClass(m) === 'play'; });
+  var pick = play.length ? play.slice(0, 1) : vids.filter(function(m){ return mClass(m) === 'other' && (m.kind === 'hls' || m.kind === 'video'); }).slice(0, 1);
+  pick.forEach(function(m){ MEDIA.sel.add(m.url); });
+  if(MEDIA.dlBtn) updateMediaBtn();
+}
+function pageVideoName(){
+  var t = String((MEDIA.playing && (MEDIA.playing.title || MEDIA.playing.heading)) || MEDIA.title || BR.title || '影片');
+  return t.replace(/\s*[-|｜_–—]\s*[^-|｜_–—]{1,20}$/, '').trim() || t;
+}
 function toggleMedia(m, cell){
+  MEDIA.touched = true;
   if(MEDIA.sel.has(m.url)) MEDIA.sel.delete(m.url); else MEDIA.sel.add(m.url);
   if(cell) cell.classList.toggle('on', MEDIA.sel.has(m.url)); else drawMedia();
   updateMediaBtn();

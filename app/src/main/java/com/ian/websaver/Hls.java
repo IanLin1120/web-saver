@@ -105,7 +105,13 @@ final class Hls {
         Plan p = plan(url, ref, "max");
         JSONArray a = new JSONArray();
         for (Variant v : p.variants) a.put(new JSONObject().put("url", v.url).put("w", v.w).put("h", v.h).put("bw", v.bw).put("name", v.name));
-        return new JSONObject().put("url", url).put("variants", a);
+        /* 影片總長度（各片段 EXTINF 加總）：用來分辨正片和廣告 */
+        double dur = 0;
+        try {
+            String txt = Fetcher.text(p.video != null ? p.video : url, ref);
+            for (String l : txt.split("\\r?\\n")) if (l.startsWith("#EXTINF:")) { try { dur += Double.parseDouble(l.substring(8).split(",")[0].trim()); } catch (Throwable t) { /* ignore */ } }
+        } catch (Throwable t) { /* ignore */ }
+        return new JSONObject().put("url", url).put("variants", a).put("dur", dur);
     }
 
     /** 下載一個 media playlist，片段依序串接到 out。回傳 true 表示 fMP4。 */

@@ -164,6 +164,8 @@ window.onNativeEvent = function(type, data){
 /* ---------- 提示 ---------- */
 var toastT = 0;
 function toast(msg, warn, action){
+  /* 網頁或 YouTube 畫面上，App 的提示會被網頁蓋住：同時用手機系統的提示顯示 */
+  try{ if(isApp && (curView === 'browse' || curView === 'yt') && !Sheets.stack.length && !(curView === 'browse' && BR.home)) NAT.call('nativeToast', String(msg)); }catch(e){}
   var t = $('toast'); $('toastT').textContent = msg;
   t.classList.toggle('warn', !!warn);
   var b = $('toastB');
@@ -293,7 +295,7 @@ var Dock = {
   },
   scope: function(){ Object.keys(this.cards).forEach(function(k){ var n = Dock.cards[k]; if(n.dataset.scope) n.classList.toggle('hide', n.dataset.scope !== curView); }); Dock.changed(); },
   remove: function(id){ var n = this.cards[id]; if(n){ n.remove(); delete this.cards[id]; Dock.changed(); } },
-  changed: function(){ requestAnimationFrame(function(){ var hgt = $('dock').getBoundingClientRect().height / uiZoom(); document.documentElement.style.setProperty('--dock', Math.round(hgt) + 'px'); fire('layout'); }); }
+  changed: function(){ requestAnimationFrame(function(){ var z = uiZoom(), hgt = $('dock').getBoundingClientRect().height / z, nb = $('nav').getBoundingClientRect(); document.documentElement.style.setProperty('--dock', Math.round(hgt) + 'px'); document.documentElement.style.setProperty('--nav', Math.round((innerHeight - nb.top) / z) + 'px'); fire('layout'); }); }
 };
 function ring(pct){
   var r = 13, c = 2 * Math.PI * r, p = Math.max(0, Math.min(1, pct));

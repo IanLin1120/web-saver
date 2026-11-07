@@ -21,6 +21,7 @@ final class YtGrab {
         File v, a;
         FileOutputStream vo, ao;
         String vMime = "", aMime = "", err = null, note = "";
+        boolean slow = false;
         long vBytes = 0, aBytes = 0;
         volatile long lastData = System.currentTimeMillis();
         volatile double pct = 0;
@@ -61,6 +62,11 @@ final class YtGrab {
                 long now = System.currentTimeMillis();
                 if (now - j.lastData > (j.vBytes + j.aBytes == 0 ? 60000 : 90000))
                     throw new Exception(j.vBytes + j.aBytes == 0 ? "背景播放器 60 秒內沒有開始播放（可能需要登入、影片有年齡限制或地區限制）" : "背景播放器超過 90 秒沒有收到新資料（網路中斷？）");
+                final boolean watching = a.yt != null && a.yt.videoPlaying;
+                if (watching != j.slow) {
+                    j.slow = watching;
+                    Util.MAIN.post(new Runnable() { @Override public void run() { a.hidden("grab").wv.evaluateJavascript("window.__wsGrabSlow=" + (watching ? 1 : 0), null); } });
+                }
                 if (j.pct != lastPct) {
                     lastPct = j.pct;
                     String msg = (j.note.isEmpty() ? "" : j.note + "・") + shown;

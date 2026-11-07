@@ -73,6 +73,16 @@ public class Bridge {
     /** 震動＋通知（App 內轉檔完成時用） */
     @JavascriptInterface public void doneBuzz(String title) { KeepAlive.done(a, title); }
 
+    @JavascriptInterface public void nativeToast(final String msg) { ui(new Runnable() { @Override public void run() { android.widget.Toast.makeText(a, msg, android.widget.Toast.LENGTH_SHORT).show(); } }); }
+
+    @JavascriptInterface public void share(String title, String url) {
+        Intent i = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_SUBJECT, title).putExtra(Intent.EXTRA_TEXT, url);
+        a.startActivity(Intent.createChooser(i, "分享網址").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    }
+
+    /** 懸浮按鈕外圈的進度（-1＝沒有進行中的工作） */
+    @JavascriptInterface public void fabProg(final double p) { ui(new Runnable() { @Override public void run() { a.fab.prog((float) p); } }); }
+
     /** 清空瀏覽分頁偵測到的媒體（離開網頁、回首頁時） */
     @JavascriptInterface public void brMediaClear() { ui(new Runnable() { @Override public void run() { a.br.clearMedia(); } }); }
 

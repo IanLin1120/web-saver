@@ -31,6 +31,9 @@ public class PageBridge {
 
     @JavascriptInterface public void ytDl(String id) { MainActivity.emit("ytdl", id); }
 
+    /** 網頁上正在播放的影片（下載面板用來找出真正的影片） */
+    @JavascriptInterface public void played(String json) { b.notePlayed(json); }
+
     /* YouTube 錄製下載（背景播放器） */
     @JavascriptInterface public void grabMime(String kind, String mime) { YtGrab.mime(kind, mime); }
 

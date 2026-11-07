@@ -14,6 +14,36 @@
     (document.head || document.documentElement).appendChild(st);
   }
 
+  /* ---------- 正在播放的影片：記下它的長度、畫面與縮圖，讓下載面板知道哪個才是你要的 ---------- */
+  if (!window.__wsPlayHook && B.played) {
+    window.__wsPlayHook = 1;
+    var lastRep = 0;
+    var report = function (v, why) {
+      try {
+        if (!v || v.tagName !== 'VIDEO') return;
+        var d = v.duration;
+        if (!(d > 0)) return;
+        var now = Date.now();
+        if (why === 'time' && now - lastRep < 15000) return;
+        lastRep = now;
+        var thumb = '';
+        try {
+          if (v.videoWidth) {
+            var c = document.createElement('canvas'), w = 320, h = Math.round(320 * v.videoHeight / v.videoWidth);
+            c.width = w; c.height = h; c.getContext('2d').drawImage(v, 0, 0, w, h);
+            thumb = c.toDataURL('image/jpeg', 0.7);
+          }
+        } catch (e) { thumb = ''; }
+        var src = v.currentSrc || v.src || '';
+        var h1 = document.querySelector('h1, .title, [class*="title"]');
+        B.played(JSON.stringify({src: src, dur: isFinite(d) ? d : -1, w: v.videoWidth, h: v.videoHeight, poster: v.poster || '', thumb: thumb,
+          title: document.title || '', heading: h1 ? (h1.textContent || '').trim().slice(0, 80) : '', t: v.currentTime}));
+      } catch (e) {}
+    };
+    document.addEventListener('playing', function (e) { var v = e.target; setTimeout(function () { report(v, 'play'); }, 2500); }, true);
+    document.addEventListener('timeupdate', function (e) { report(e.target, 'time'); }, true);
+  }
+
   if (window.__wsPage && window.__wsPage.v >= 3) { window.__wsPage.refresh(); return; }
 
   /* ---------- 密碼：偵測欄位與送出 ---------- */

@@ -126,5 +126,36 @@ on('popup', function(d){ FAB.popup = !!(d && d.open); fabSync(); });
 on('fab', function(where){
   if(where === 'yt' || curView === 'yt'){ var id = ytCurId(); if(id){ openYt(id); return; } }
   if(curView !== 'browse') showView('browse');
-  openMedia();
+  if(YT.idOf(BR.url)){ openYt(YT.idOf(BR.url)); return; }
+  openFabMenu();
+});
+/* 懸浮按鈕的選單：下載影片、擷取網頁、目前進度 */
+var TASK = {pct: -1, label: ''};
+function openFabMenu(){
+  var body = h('div');
+  function big(ic, color, title, sub, fn, dis){
+    body.appendChild(h('button', {class: 'fabBig', disabled: !!dis, onclick: function(){ s.close(); setTimeout(fn, 80); }},
+      h('span', {class: 'oi', style: {background: color}, html: icon(ic)}), h('div', {class: 'grow'}, h('b', {text: title}), h('div', {class: 'sub', text: sub}))));
+  }
+  if(TASK.pct >= 0) body.appendChild(h('div', {class: 'card glass', style: {padding: '12px 14px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '12px'}},
+    h('span', {html: ring(TASK.pct)}), h('div', {class: 'grow', style: {minWidth: 0}}, h('b', {text: '進行中・' + Math.round(TASK.pct * 100) + '%'}), h('div', {class: 'sub ell', text: TASK.label})),
+    h('button', {class: 'btn sm ghost', text: '取消', onclick: function(){ NAT.call('dlCancel'); toast('正在取消…'); s.close(); }})));
+  var page = !BR.home && BR.loaded;
+  big('film', 'var(--c-video)', '下載這個網頁的影片', BR.mediaN ? '偵測到 ' + BR.mediaN + ' 個媒體・正在播放的影片會排在最前面' : '先播放網頁裡的影片，比較容易抓到', function(){ openMedia(); }, !page);
+  big('download', 'var(--accent)', '擷取網頁', '存成離線 HTML／PDF（可選無縫圖片 PDF）', function(){ openCapture(); }, !page);
+  big('scissors', 'var(--olive)', '手動清理', '點選要移除的區塊（廣告、浮動視窗）', function(){ $('bZap').click(); }, !page);
+  var s = openSheet({title: '下載與擷取', icon: 'download', body: body});
+}
+function taskProg(p, label){
+  TASK.pct = p; TASK.label = label || TASK.label;
+  if(isApp) NAT.call('fabProg', p);
+}
+on('dl', function(d){
+  if(d.state === 'start') taskProg(0, '準備下載…');
+  else if(d.state === 'item'){ var n = d.n || 1; taskProg(Math.max(0, Math.min(1, ((d.i || 0) + Math.max(0, d.pct || 0)) / n)), d.name); }
+  else if(d.state === 'done') taskProg(-1, '');
+});
+on('cap', function(d){
+  if(d.state === 'progress') taskProg(Math.max(0, Math.min(1, (d.pct || 0) / 100)), d.msg || '擷取中');
+  else if(d.state === 'done' || d.state === 'error') taskProg(-1, '');
 });

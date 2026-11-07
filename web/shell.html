@@ -3,23 +3,24 @@
 <section class="view on" id="v-browse">
   <div id="brTop" class="glass">
     <div class="urlrow">
-      <button class="ib" id="bHome" title="首頁" data-ic="home"></button>
+      <button class="ib" id="bBack" title="上一頁" data-ic="back"></button>
       <div class="url" id="urlBox">
         <span class="lock warn" id="urlLock" data-ic="search" data-sm="1"></span>
         <input id="urlIn" type="url" inputmode="url" enterkeyhint="go" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上網址或輸入關鍵字">
         <button class="ib" id="urlClear" title="清除" data-ic="x" data-sm="1"></button>
         <button class="ib" id="urlAct" title="重新整理" data-ic="reload" data-sm="1"></button>
       </div>
-      <button class="ib" id="bQuick" title="瀏覽設定" data-ic="sliders"></button>
+      <button class="ib" id="bMore" title="功能選單" data-ic="grid"></button>
     </div>
-    <div class="tools">
-      <button class="ib" id="bBack" title="上一頁" data-ic="back"></button>
-      <button class="ib" id="bFwd" title="下一頁" data-ic="fwd"></button>
-      <button class="ib" id="bStar" title="收藏這個網頁" data-ic="star"></button>
-      <button class="ib" id="bBm" title="收藏清冊" data-ic="books"></button>
-      <button class="ib" id="bZap" title="手動移除元素" data-ic="scissors"></button>
-      <button class="ib" id="bMode" title="版面模式" data-ic="phone"></button>
-      <span class="grow"></span>
+    <!-- 精簡工具列：原本第二排的按鈕收進「功能選單」與懸浮按鈕（保留元素給程式判斷狀態用） -->
+    <div class="tools" hidden>
+      <button class="ib" id="bHome" data-ic="home"></button>
+      <button class="ib" id="bFwd" data-ic="fwd"></button>
+      <button class="ib" id="bStar" data-ic="star"></button>
+      <button class="ib" id="bBm" data-ic="books"></button>
+      <button class="ib" id="bZap" data-ic="scissors"></button>
+      <button class="ib" id="bMode" data-ic="phone"></button>
+      <button class="ib" id="bQuick" data-ic="sliders"></button>
       <button class="chip olive" id="bMedia" disabled><span data-ic="film" data-sm="1"></span><span class="lbl2">媒體</span><span class="n" id="mediaN">0</span></button>
       <button class="chip pri" id="bCap" disabled><span data-ic="download" data-sm="1"></span>擷取</button>
     </div>

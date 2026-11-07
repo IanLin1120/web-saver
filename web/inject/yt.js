@@ -627,11 +627,19 @@
     var lastInfoId = '';
     function upd() {
       var pe = playerEl(), id = videoId();
-      if (!pe || !id || O.skin === false) { host.style.display = 'none'; requestAnimationFrame(upd); return; }
+      if (!pe || !id || O.skin === false) { host.style.display = 'none'; setTimeout(function () { requestAnimationFrame(upd); }, 300); return; }
       var r = isFs() ? {left: 0, top: 0, width: innerWidth, height: innerHeight, bottom: innerHeight} : pe.getBoundingClientRect();
       var ok = r.width > 80 && r.height > 60 && r.bottom > 30 && r.top < innerHeight - 30 && !document.documentElement.classList.contains('__wspip');
       host.style.display = ok ? 'block' : 'none';
-      if (ok) { host.style.left = r.left + 'px'; host.style.top = r.top + 'px'; host.style.width = r.width + 'px'; host.style.height = r.height + 'px'; }
+      if (ok) {
+        /* 只在位置真的改變時才更新樣式（避免每一格都重新排版造成播放卡頓） */
+        var key = Math.round(r.left) + ',' + Math.round(r.top) + ',' + Math.round(r.width) + ',' + Math.round(r.height);
+        if (host.__k !== key) { host.__k = key; host.style.left = r.left + 'px'; host.style.top = r.top + 'px'; host.style.width = r.width + 'px'; host.style.height = r.height + 'px'; }
+      }
+      /* 其餘的畫面更新每 0.25 秒一次就夠了（拖曳進度條時才即時更新） */
+      var nowT = Date.now();
+      if (!dragging && W.scrubTo == null && nowT - (upd.last || 0) < 250) { setTimeout(function () { requestAnimationFrame(upd); }, 60); return; }
+      upd.last = nowT;
       var v = vid();
       if (v && ok) {
         var d = v.duration || 0, t = v.currentTime || 0, f = d ? t / d : 0;
@@ -652,7 +660,7 @@
       if ($('tt').textContent !== title) $('tt').textContent = title;
       if ($('tl').textContent !== RYD.txt) $('tl').textContent = RYD.txt;
       if (id !== lastInfoId && v && v.readyState >= 1) { lastInfoId = id; loadRyd(); setTimeout(function () { window.__wsYTinfo(); }, 800); }
-      requestAnimationFrame(upd);
+      if (dragging || W.scrubTo != null) requestAnimationFrame(upd); else setTimeout(function () { requestAnimationFrame(upd); }, 60);
     }
     requestAnimationFrame(upd);
     show();
@@ -829,8 +837,10 @@
       if (be >= d - 0.6 || v.ended || (d - be < 4 && now - lastData > 3000)) { if (!ending) { ending = true; setTimeout(function () { done(''); }, 1200); } return; }
       /* 加速：2 倍速靜音播放，並跳到緩衝的最前端，讓播放器不停地抓下一段
          （太快會讓播放器判定掉格而自動降畫質、重新載入，反而變慢） */
-      try { if (v.playbackRate !== 2) v.playbackRate = 2; } catch (e) {}
-      if (be - v.currentTime > 2.5) { try { v.currentTime = Math.max(v.currentTime, be - 0.8); } catch (e) {} }
+      /* 你正在看 YouTube 時，背景錄製放慢，把網路和效能讓給你的播放 */
+      var slow = !!window.__wsGrabSlow, rate = slow ? 1 : 2;
+      try { if (v.playbackRate !== rate) v.playbackRate = rate; } catch (e) {}
+      if (be - v.currentTime > (slow ? 8 : 2.5)) { try { v.currentTime = Math.max(v.currentTime, be - 0.8); } catch (e) {} }
       if (Math.abs(be - lastBe) < 0.01) stuck++; else stuck = 0;
       lastBe = be;
       if (stuck > 24) { stuck = 0; try { v.currentTime = Math.min(d - 0.2, be + 0.05); } catch (e) {} }

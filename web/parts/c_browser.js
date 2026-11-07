@@ -354,12 +354,14 @@ function openCreds(){
   draw();
 }
 on('credAsk', function(d){
-  Dock.set('credAsk', h('div', {class: 'dockCard glass'}, h('span', {class: 'oi', html: icon('key'), style: {color: 'var(--accent)'}}),
-    h('div', {class: 't'}, h('b', {text: (d.update ? '更新' : '儲存') + ' ' + (d.user || '這組帳號') + ' 的密碼？'}), h('div', {class: 'sub', text: d.host})),
-    h('button', {class: 'btn sm ghost', text: '永不', onclick: function(){ NAT.call('credNever', d.host, true); Dock.remove('credAsk'); }}),
-    h('button', {class: 'btn sm ghost', text: '不要', onclick: function(){ Dock.remove('credAsk'); }}),
-    h('button', {class: 'btn sm pri', text: '儲存', onclick: function(){ var ok = NAT.call('credSavePending', d.host); Dock.remove('credAsk'); toast(ok ? '已儲存密碼' : '儲存失敗', !ok); }})), 'browse');
-  setTimeout(function(){ Dock.remove('credAsk'); }, 20000);
+  /* 用面板顯示（面板永遠在網頁上面），不會再被網頁蓋住；也不會改變網頁大小 */
+  var s = openSheet({title: (d.update ? '更新' : '儲存') + '密碼？', icon: 'key', modal: false,
+    body: h('div', null, h('div', {class: 'card glass', style: {padding: '14px'}}, h('b', {text: d.user || '這組帳號'}), h('div', {class: 'sub', text: d.host})),
+      h('div', {class: 'sub', style: {margin: '10px 2px'}, text: '密碼以手機的 Keystore 金鑰加密，只存在這支手機。下次登入這個網站時會自動幫你填入。'})),
+    foot: h('div', {style: {display: 'contents'}},
+      h('button', {class: 'btn ghost', text: '永不', onclick: function(){ NAT.call('credNever', d.host, true); s.close(); }}),
+      h('button', {class: 'btn ghost', text: '不要', onclick: function(){ s.close(); }}),
+      h('button', {class: 'btn pri', text: d.update ? '更新' : '儲存', onclick: function(){ var ok = NAT.call('credSavePending', d.host); s.close(); toast(ok ? '已儲存密碼' : '儲存失敗', !ok); }}))});
 });
 on('credAvail', function(d){
   var users = d.users || [];
@@ -492,3 +494,29 @@ $('webFrame').addEventListener('load', function(){
     navigate(u.href);
   });
 });
+
+/* ---------- 功能選單（精簡工具列：原本第二排的按鈕都在這裡） ---------- */
+function openToolsMenu(){
+  var page = !BR.home && BR.loaded;
+  var bm = page && BM.items.some(function(x){ return x.url === BR.url; });
+  var grid = h('div', {class: 'qGrid'});
+  function b(ic, label, fn, opts){
+    opts = opts || {};
+    var el = h('button', {class: opts.on ? 'on' : '', disabled: !!opts.dis, html: icon(ic) + '<span>' + esc(label) + '</span>' + (opts.n ? '<span class="n">' + opts.n + '</span>' : ''), onclick: function(){ s.close(); setTimeout(fn, 80); }});
+    grid.appendChild(el);
+  }
+  b('home', '首頁', function(){ $('bHome').click(); }, {on: BR.home});
+  b('fwd', '下一頁', function(){ $('bFwd').click(); }, {dis: $('bFwd').disabled});
+  b('star', bm ? '已收藏' : '收藏此頁', function(){ $('bStar').click(); }, {dis: !page, on: bm});
+  b('books', '收藏清單', function(){ $('bBm').click(); });
+  b('history', '瀏覽記錄', function(){ openHistory(); });
+  b('scissors', '手動清理', function(){ $('bZap').click(); }, {dis: !page, on: BR.zap});
+  b(CFG.mode === 'desktop' ? 'monitor' : CFG.mode === 'reader' ? 'book' : 'phone', CFG.mode === 'desktop' ? '電腦版' : CFG.mode === 'reader' ? '閱讀模式' : '手機版', function(){ $('bMode').click(); }, {on: CFG.mode !== 'mobile'});
+  b('sliders', '瀏覽設定', function(){ $('bQuick').click(); });
+  b('film', '下載影片', function(){ openMedia(); }, {dis: !page, n: BR.mediaN ? (BR.mediaN > 99 ? '99+' : BR.mediaN) : ''});
+  b('download', '擷取網頁', function(){ openCapture(); }, {dis: !page});
+  b('copy', '複製網址', function(){ copyText(BR.url); }, {dis: !page});
+  b('share', '分享', function(){ if(isApp) NAT.call('share', BR.title || '', BR.url); else copyText(BR.url); }, {dis: !page});
+  var s = openSheet({title: '功能', icon: 'grid', body: grid});
+}
+$('bMore').addEventListener('click', openToolsMenu);
