@@ -112,17 +112,31 @@ final class YtGrab {
         File out = lib.tmpFile(cont);
         try {
             Mux.mux(j.v, j.aBytes > 0 ? j.a : null, out, false, vw ? android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_WEBM : android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+            /* 最後再確認一次長度：明顯比影片短就當作失敗，不會再出現「顯示完成但只有 19 秒」 */
+            double want = it.optDouble("len", 0);
+            if (want > 10) {
+                double got = durationOf(out);
+                if (got > 0 && got < want * 0.9) { out.delete(); throw new Exception("錄製不完整：只有 " + Math.round(got) + " 秒（影片長 " + Math.round(want) + " 秒），請再試一次"); }
+            }
             j.v.delete();
             j.a.delete();
             return new Object[] {out, stem + "." + cont, vw ? "video/webm" : "video/mp4"};
         } catch (Throwable e) {
             out.delete();
+            if (e.getMessage() != null && e.getMessage().startsWith("錄製不完整")) throw new Exception(e.getMessage());
             /* 合併失敗：至少把影像存下來（聲音另存） */
             if (j.aBytes > 0) {
                 try { Lib.get(a).add(j.a, stem + "_聲音" + (aw ? ".webm" : ".m4a"), aw ? "audio/webm" : "audio/mp4", it.optString("src"), it.optString("title"), null); } catch (Throwable x) { /* ignore */ }
             }
             return new Object[] {j.v, stem + "." + cont, vw ? "video/webm" : "video/mp4"};
         }
+    }
+
+    static double durationOf(File f) {
+        android.media.MediaMetadataRetriever r = new android.media.MediaMetadataRetriever();
+        try { r.setDataSource(f.getAbsolutePath()); String d = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION); return d == null ? 0 : Long.parseLong(d) / 1000.0; }
+        catch (Throwable t) { return 0; }
+        finally { try { r.release(); } catch (Throwable t) { /* ignore */ } }
     }
 
     private static void emit(int i, int n, String name, double pct, long got) {

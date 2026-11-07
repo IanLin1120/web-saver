@@ -215,12 +215,106 @@ function viewImages(it, body){
 
 /* ---------- 影片／音訊 ---------- */
 async function viewVideo(it, body){
-  var v = h('video', {controls: true, autoplay: true, playsinline: true, preload: 'auto'});
+  /* 自己的播放器：跟 YouTube 分頁一樣的操作（點一下顯示控制、兩側連點快轉、長按 2 倍速、拖曳進度、全螢幕＋自動轉向） */
+  var v = h('video', {autoplay: true, playsinline: true, preload: 'auto'});
   v.src = await Lib.src(it);
-  body.appendChild(h('div', {class: 'vwVideo'}, v));
-  var pos = lsGet('ws.vpos', {});
-  v.addEventListener('loadedmetadata', function(){ if(pos[it.id] && pos[it.id] < v.duration - 5) v.currentTime = pos[it.id]; });
-  Viewer.cleanup = function(){ try{ pos = lsGet('ws.vpos', {}); pos[it.id] = v.currentTime; lsSet('ws.vpos', pos); v.pause(); v.removeAttribute('src'); v.load(); }catch(e){} };
+  var box = h('div', {class: 'vwVideo vp'}, v);
+  var ui = h('div', {class: 'vpUi'});
+  var pv = h('button', {class: 'vpB', html: icon('play')});
+  var rw = h('button', {class: 'vpB sk', html: '<svg viewBox="0 0 24 24"><path d="M12 6.2a6.8 6.8 0 1 1-6.8 6.8"/><path d="M12.6 2.8 9.2 6.2l3.4 3.4"/></svg><i>10</i>'});
+  var fw = h('button', {class: 'vpB sk', html: '<svg viewBox="0 0 24 24"><path d="M12 6.2a6.8 6.8 0 1 0 6.8 6.8"/><path d="M11.4 2.8l3.4 3.4-3.4 3.4"/></svg><i>10</i>'});
+  var mid = h('div', {class: 'vpMid'}, rw, pv, fw);
+  var tm = h('span', {class: 'vpT', text: '0:00 / 0:00'});
+  var sp = h('button', {class: 'vpC', text: '1×'});
+  var fsB = h('button', {class: 'vpI', html: '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>'});
+  var bar = h('div', {class: 'vpBar'}, h('div', {class: 'tr'}, h('div', {class: 'bf'}), h('div', {class: 'pl'})), h('div', {class: 'kn'}));
+  var bot = h('div', {class: 'vpBot'}, bar, h('div', {class: 'vpRow'}, tm, h('span', {style: {flex: 1}}), sp, fsB));
+  var flash = h('div', {class: 'vpFlash'});
+  ui.appendChild(mid); ui.appendChild(bot);
+  box.appendChild(ui); box.appendChild(flash);
+  body.appendChild(box);
+  paintIcons(box);
+  var hideT = 0;
+  function show(keep){ box.classList.add('show'); clearTimeout(hideT); if(!keep) hideT = setTimeout(function(){ if(!v.paused) box.classList.remove('show'); }, 3000); }
+  function fl(t){ flash.textContent = t; flash.classList.add('on'); clearTimeout(fl.t); fl.t = setTimeout(function(){ flash.classList.remove('on'); }, 900); }
+  function fmtT(t){ t = Math.max(0, Math.floor(t || 0)); var hh = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), ss = t % 60; return (hh ? hh + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (ss < 10 ? '0' : '') + ss; }
+  function seek(d){ v.currentTime = Math.max(0, Math.min((v.duration || 0) - 0.3, v.currentTime + d)); }
+  function tog(){ if(v.paused) v.play().catch(function(){}); else v.pause(); }
+  pv.onclick = function(e){ e.stopPropagation(); tog(); show(); };
+  rw.onclick = function(e){ e.stopPropagation(); seek(-10); fl('-10 秒'); show(); };
+  fw.onclick = function(e){ e.stopPropagation(); seek(10); fl('+10 秒'); show(); };
+  var SP = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+  sp.onclick = function(e){ e.stopPropagation(); var i = SP.indexOf(v.playbackRate); v.playbackRate = SP[(i + 1) % SP.length]; sp.textContent = v.playbackRate + '×'; fl('速度 ' + v.playbackRate + '×'); show(); };
+  /* 全螢幕：整個 App 隱藏狀態列、橫向影片自動轉橫向 */
+  var FS = false, autoFs = false;
+  function setFs(on, auto){
+    FS = on; autoFs = !!(on && auto);
+    box.classList.toggle('vpFs', on); document.body.classList.toggle('vpFsOn', on);
+    fsB.innerHTML = on ? '<svg viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+    if(isApp) NAT.call('uiFull', on, !auto && (v.videoWidth >= v.videoHeight));
+  }
+  fsB.onclick = function(e){ e.stopPropagation(); setFs(!FS); show(); };
+  function onRot(){
+    var land = innerWidth > innerHeight * 1.1;
+    if(land && !FS && v.videoWidth >= v.videoHeight) setFs(true, true);
+    else if(!land && FS && autoFs) setFs(false);
+  }
+  window.addEventListener('resize', onRot);
+  /* 進度條 */
+  var drag = false;
+  function pos(x){ var r = bar.getBoundingClientRect(); return Math.max(0, Math.min(1, (x - r.left) / r.width)); }
+  bar.addEventListener('pointerdown', function(e){ e.stopPropagation(); drag = true; bar.setPointerCapture(e.pointerId); bar.classList.add('drag'); mv(e); show(true); });
+  bar.addEventListener('pointermove', function(e){ if(drag) mv(e); });
+  function mv(e){ var f = pos(e.clientX); bar.querySelector('.pl').style.width = f * 100 + '%'; bar.querySelector('.kn').style.left = f * 100 + '%'; fl(fmtT(f * (v.duration || 0))); bar.__f = f; }
+  function upB(){ if(!drag) return; drag = false; bar.classList.remove('drag'); if(bar.__f != null && v.duration) v.currentTime = bar.__f * v.duration; show(); }
+  bar.addEventListener('pointerup', upB); bar.addEventListener('pointercancel', upB);
+  /* 手勢：點一下顯示控制、兩側連點快轉／快退、長按 2 倍速、左右滑拖曳 */
+  var G = null, last = {t: 0, side: ''}, combo = {n: 0, side: '', t: 0}, tapT = 0;
+  box.addEventListener('pointerdown', function(e){
+    if(e.target.closest('button') || e.target.closest('.vpBar')) return;
+    var r = box.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width;
+    G = {x: e.clientX, y: e.clientY, t: Date.now(), w: r.width, side: fx < .35 ? 'l' : fx > .65 ? 'r' : '', mode: '', c0: v.currentTime};
+    G.lp = setTimeout(function(){ if(G && !G.mode){ G.mode = 'hold'; v.playbackRate = 2; fl('▶▶ 2 倍速'); } }, 450);
+  });
+  box.addEventListener('pointermove', function(e){
+    if(!G) return; var dx = e.clientX - G.x, dy = e.clientY - G.y;
+    if(!G.mode && Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy) * 1.4){ G.mode = 'seek'; clearTimeout(G.lp); }
+    if(!G.mode && Math.abs(dy) > 60 && Math.abs(dy) > Math.abs(dx) * 1.4){ G.mode = 'swipe'; clearTimeout(G.lp); }
+    if(G.mode === 'seek' && v.duration){ G.to = Math.max(0, Math.min(v.duration, G.c0 + dx / G.w * Math.min(180, v.duration))); fl(fmtT(G.to) + '　' + (G.to >= G.c0 ? '+' : '-') + fmtT(Math.abs(G.to - G.c0))); }
+  });
+  box.addEventListener('pointerup', function(e){
+    if(!G) return; clearTimeout(G.lp); var g = G; G = null;
+    if(g.mode === 'hold'){ v.playbackRate = SP[SP.indexOf(+sp.textContent.replace('×', ''))] || 1; return; }
+    if(g.mode === 'seek'){ if(g.to != null) v.currentTime = g.to; return; }
+    if(g.mode === 'swipe'){ var dy = e.clientY - g.y; if(dy < 0 && !FS) setFs(true); else if(dy > 0 && FS) setFs(false); return; }
+    if(Date.now() - g.t > 450) return;
+    var now = Date.now(), side = g.side, inC = side && combo.side === side && now - combo.t < 650;
+    if(side && (inC || (last.side === side && now - last.t < 320))){
+      clearTimeout(tapT); combo.n = inC ? combo.n + 1 : 1; combo.side = side; combo.t = now;
+      seek(side === 'l' ? -10 : 10); fl((side === 'l' ? '⏪ ' : '⏩ ') + combo.n * 10 + ' 秒'); last = {t: 0, side: ''}; return;
+    }
+    last = {t: now, side: side}; clearTimeout(tapT);
+    tapT = setTimeout(function(){ if(box.classList.contains('show')) box.classList.remove('show'); else show(); }, side ? 300 : 0);
+  });
+  /* 畫面更新 */
+  function upd(){
+    var d = v.duration || 0, t = v.currentTime || 0;
+    tm.textContent = fmtT(t) + ' / ' + fmtT(d);
+    if(!drag){ bar.querySelector('.pl').style.width = (d ? t / d * 100 : 0) + '%'; bar.querySelector('.kn').style.left = (d ? t / d * 100 : 0) + '%'; }
+    try{ var b = v.buffered; if(b.length) bar.querySelector('.bf').style.width = (d ? b.end(b.length - 1) / d * 100 : 0) + '%'; }catch(e){}
+    pv.innerHTML = icon(v.paused ? 'play' : 'pause');
+  }
+  ['timeupdate', 'play', 'pause', 'loadedmetadata', 'progress'].forEach(function(ev){ v.addEventListener(ev, upd); });
+  v.addEventListener('pause', function(){ show(true); });
+  v.addEventListener('play', function(){ show(); });
+  var posM = lsGet('ws.vpos', {});
+  v.addEventListener('loadedmetadata', function(){ if(posM[it.id] && posM[it.id] < v.duration - 5) v.currentTime = posM[it.id]; onRot(); });
+  show();
+  Viewer.cleanup = function(){
+    try{ posM = lsGet('ws.vpos', {}); posM[it.id] = v.currentTime; lsSet('ws.vpos', posM); v.pause(); v.removeAttribute('src'); v.load(); }catch(e){}
+    window.removeEventListener('resize', onRot);
+    if(FS) setFs(false);
+  };
 }
 async function viewAudio(it, body){
   var t = Lib.thumb(it);

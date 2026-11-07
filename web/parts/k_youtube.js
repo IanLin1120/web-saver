@@ -43,11 +43,11 @@ YT.idOf = function(u){
 };
 var HTTPW = {};
 on('http', function(d){ var w = HTTPW[d.id]; if(w){ delete HTTPW[d.id]; w(d); } });
-function natHttp(method, url, headers, body){
+function natHttp(method, url, headers, body, cookies){
   return new Promise(function(res, rej){
     var id = 'h' + uid();
     HTTPW[id] = function(d){ if(d.status) res(d); else rej(new Error(d.err || '連線失敗')); };
-    NAT.call('http', id, method, url, JSON.stringify(headers || {}), body || '', false);
+    NAT.call('http', id, method, url, JSON.stringify(headers || {}), body || '', !!cookies);
     setTimeout(function(){ if(HTTPW[id]){ delete HTTPW[id]; rej(new Error('逾時')); } }, 30000);
   });
 }
@@ -395,6 +395,46 @@ async function openYt(id){
 }
 
 /* 用 App 內播放器的串流下載 */
+/* ---------- 直接下載（不用錄製）：用 Safari 的身分向 YouTube 要 HLS 串流清單 ----------
+   Safari 播 YouTube 用的是 HLS（m3u8），清單裡的每個片段網址都已經簽好，可以直接以全速下載。
+   最高通常到 1080p；要更高畫質或這個方式被拒絕時，才改用背景錄製。 */
+var YT_SAFARI_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15';
+var YT_HLS = {};
+async function ytSafariHls(id){
+  var c = YT_HLS[id];
+  if(c && Date.now() - c.t < 4 * 3600e3) return c;
+  var ver = (YT.cfg && YT.cfg.webVer) || '2.20251105.01.00';
+  var body = {context: {client: {clientName: 'WEB', clientVersion: ver, userAgent: YT_SAFARI_UA, osName: 'Macintosh', osVersion: '10_15_7', platform: 'DESKTOP', browserName: 'Safari', browserVersion: '18.1', hl: 'zh-TW', gl: 'TW', utcOffsetMinutes: 480}}, videoId: id, contentCheckOk: true, racyCheckOk: true};
+  var r = await natHttp('POST', 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {'Content-Type': 'application/json', 'User-Agent': YT_SAFARI_UA, 'X-YouTube-Client-Name': '1', 'X-YouTube-Client-Version': ver, 'Origin': 'https://www.youtube.com', 'Referer': 'https://www.youtube.com/watch?v=' + id}, JSON.stringify(body), true);
+  var j = JSON.parse(r.body || '{}'), st = j.playabilityStatus || {};
+  if(st.status !== 'OK') throw new Error(st.reason || st.status || ('HTTP ' + r.status));
+  var m3u = (j.streamingData || {}).hlsManifestUrl;
+  if(!m3u) throw new Error('YouTube 沒有提供 HLS');
+  /* 讀清單：各畫質與音軌 */
+  var mr = await natHttp('GET', m3u, {'User-Agent': YT_SAFARI_UA}, '', false);
+  if(mr.status !== 200 || String(mr.body).indexOf('#EXTM3U') < 0) throw new Error('HLS 清單讀取失敗（HTTP ' + mr.status + '）');
+  var lines = String(mr.body).split(/\r?\n/), vars = [];
+  for(var i = 0; i < lines.length; i++){
+    var l = lines[i];
+    if(l.indexOf('#EXT-X-STREAM-INF:') === 0){
+      var res = /RESOLUTION=(\d+)x(\d+)/.exec(l), bw = /BANDWIDTH=(\d+)/.exec(l), cd = /CODECS="([^"]+)"/.exec(l);
+      var u = (lines[i + 1] || '').trim();
+      if(u && res) vars.push({w: +res[1], h: +res[2], bw: bw ? +bw[1] : 0, codecs: cd ? cd[1] : '', url: u});
+    }
+  }
+  if(!vars.length) throw new Error('HLS 清單沒有影片');
+  /* 先試抓一個片段，確定真的能下載 */
+  var best = vars.slice().sort(function(a, b){ return b.h - a.h || b.bw - a.bw; })[0];
+  var pl = await natHttp('GET', best.url, {'User-Agent': YT_SAFARI_UA}, '', false);
+  var seg = String(pl.body || '').split(/\r?\n/).filter(function(x){ return x && x[0] !== '#'; })[0];
+  if(!seg) throw new Error('HLS 片段清單讀取失敗');
+  var pr = await natHttp('GET', /^https?:/.test(seg) ? seg : new URL(seg, best.url).href, {'User-Agent': YT_SAFARI_UA, 'Range': 'bytes=0-1'}, '', false);
+  if(pr.status >= 400) throw new Error('HLS 試抓被拒（HTTP ' + pr.status + '）');
+  c = {t: Date.now(), master: m3u, vars: vars, maxH: best.h, details: j.videoDetails || {}};
+  YT_HLS[id] = c;
+  return c;
+}
+
 async function ytStartPage(d, meta, ch, retry){
   var audioOnly = ch.type === 'audio';
   var base = {src: 'https://www.youtube.com/watch?v=' + d.id, title: meta.title, thumbUrl: meta.thumb, ua: '', noCookie: true, referer: 'https://m.youtube.com/'};
@@ -413,7 +453,22 @@ async function ytStartPage(d, meta, ch, retry){
     } else ytDl([Object.assign({}, base, {kind: 'merge', url: r.v.url, audioUrl: r.a.url, container: r.cont, name: ch.name})], meta, 'mp4');
     return;
   }
-  /* 2. 錄製式下載：背景播放器（靜音、看不到）播放這部影片，把播放器收到的資料存下來。
+  /* 2. 直接下載 HLS（全速、不用錄製）：1080p 以下、而且 YouTube 有提供時 */
+  if(!retry && (audioOnly || ch.h <= 1080) && !(ch.codec === 'webm' && !audioOnly)){
+    dlCard(0, 1, '取得直接下載的串流…', 0);
+    try{
+      var hl = await ytSafariHls(d.id);
+      if(audioOnly || hl.maxH >= Math.min(ch.h, 1080) * 0.9){
+        var hb = Object.assign({}, base, {kind: 'hls', url: hl.master, ua: YT_SAFARI_UA, referer: 'https://www.youtube.com/', name: ch.name, variant: audioOnly ? 'min' : String(ch.h)});
+        if(audioOnly) ytDl([Object.assign(hb, {vidOut: 'm4a', artist: meta.artist}, extra, {title: meta.song})], meta, 'mp4');
+        else ytDl([hb], meta, 'mp4');
+        toast('直接下載中（不用錄製）');
+        return;
+      }
+    }catch(e){ console.warn('safari hls', e); }
+    Dock.remove('dl');
+  }
+  /* 3. 錄製式下載：背景播放器（靜音、看不到）播放這部影片，把播放器收到的資料存下來。
         不需要下載網址，所以不會被 403／機器人驗證／SABR 擋住。 */
   var codec = audioOnly ? (extra.audioOut === 'm4a' ? 'mp4' : 'webm') : (ch.codec || ytFmtMode());
   var g = {kind: 'grab', codec: codec, vid: d.id, h: audioOnly ? 144 : ch.h, q: audioOnly ? 'tiny' : (QKEY[ch.h] || 'hd720'), audioOnly: audioOnly, len: +meta.dur || +(d.details.lengthSeconds || 0), name: ch.name};

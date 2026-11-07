@@ -534,6 +534,7 @@ final class Browser {
     float videoRatio = 16f / 9f;
     private FrameLayout.LayoutParams savedLp;
     boolean inPip = false;
+    volatile boolean pipWasPlaying = false;
 
     int vidW = 0, vidH = 0;
 
@@ -557,6 +558,14 @@ final class Browser {
             wv.setClipToOutline(false);
             wv.bringToFront();
             wv.evaluateJavascript("window.__wsYTpip&&__wsYTpip(true)", null);
+            wv.onResume();
+            /* 切到子母畫面時，網頁或系統可能把影片暫停：原本在播就自動繼續播 */
+            if (pipWasPlaying) {
+                final String js = "(function(){var v=document.querySelector('video');if(v&&v.paused){var p=v.play();if(p&&p.catch)p.catch(function(){});}})()";
+                wv.evaluateJavascript(js, null);
+                Util.MAIN.postDelayed(new Runnable() { @Override public void run() { if (inPip) wv.evaluateJavascript(js, null); } }, 600);
+                Util.MAIN.postDelayed(new Runnable() { @Override public void run() { if (inPip) wv.evaluateJavascript(js, null); } }, 1500);
+            }
         } else {
             if (savedLp != null) wv.setLayoutParams(savedLp);
             wv.setClipToOutline(true);
@@ -901,12 +910,21 @@ final class Browser {
         if (!"br".equals(tag)) return;
         Util.ui(new Runnable() {
             @Override public void run() {
-                wv.evaluateJavascript("(function(){try{return document.querySelectorAll('img,video,audio').length}catch(e){return 0}})()", new ValueCallback<String>() {
+                wv.evaluateJavascript("(function(){try{return document.querySelectorAll('video,audio').length}catch(e){return 0}})()", new ValueCallback<String>() {
                     @Override public void onReceiveValue(String v) {
                         int n = 0;
                         try { n = Integer.parseInt(v.replace("\"", "")); } catch (Throwable t) { /* ignore */ }
                         int net;
-                        synchronized (netMedia) { net = netMedia.size(); }
+                        /* 懸浮按鈕上的數字只算影片與音訊（不算圖片、網站音效），跟下載面板一致 */
+                        net = 0;
+                        synchronized (netMedia) {
+                            for (JSONObject o : netMedia.values()) {
+                                String k = o.optString("kind"), u = o.optString("url").toLowerCase();
+                                if ("image".equals(k)) continue;
+                                if (!"hls".equals(k) && u.matches("^https?://[^/]+/(static|assets?|sounds?|sfx)/.*")) continue;
+                                net++;
+                            }
+                        }
                         MainActivity.emit("mediaCount", "{\"dom\":" + n + ",\"net\":" + net + "}");
                     }
                 });

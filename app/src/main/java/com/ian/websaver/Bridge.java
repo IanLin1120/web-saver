@@ -83,6 +83,14 @@ public class Bridge {
     /** 懸浮按鈕外圈的進度（-1＝沒有進行中的工作） */
     @JavascriptInterface public void fabProg(final double p) { ui(new Runnable() { @Override public void run() { a.fab.prog((float) p); } }); }
 
+    /** App 自己的全螢幕（檔案庫影片播放器）：隱藏狀態列；land＝橫向影片自動轉橫向 */
+    @JavascriptInterface public void uiFull(final boolean on, final boolean land) {
+        ui(new Runnable() { @Override public void run() {
+            a.immersive(on);
+            a.setRequestedOrientation(on && land ? android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE : android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        } });
+    }
+
     /** 清空瀏覽分頁偵測到的媒體（離開網頁、回首頁時） */
     @JavascriptInterface public void brMediaClear() { ui(new Runnable() { @Override public void run() { a.br.clearMedia(); } }); }
 

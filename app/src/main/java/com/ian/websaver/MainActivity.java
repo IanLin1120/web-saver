@@ -201,6 +201,9 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT < 26 || br == null) return false;
         Browser br = act();
         if (!force && !br.wantsPip()) return false;
+        pipPending = true;
+        br.pipWasPlaying = br.videoPlaying || force;
+        Util.MAIN.postDelayed(new Runnable() { @Override public void run() { pipPending = false; } }, 2500);
         try {
             return enterPictureInPictureMode(new android.app.PictureInPictureParams.Builder()
                 .setAspectRatio(new android.util.Rational(Math.round(br.videoRatio * 1000), 1000)).build());
@@ -215,6 +218,7 @@ public class MainActivity extends Activity {
     @Override public void onPictureInPictureModeChanged(boolean on, android.content.res.Configuration c) {
         super.onPictureInPictureModeChanged(on, c);
         inPipNow = on;
+        pipPending = false;
         if (on) { pipBr = act(); pipBr.pipMode(true); }
         else if (pipBr != null) { pipBr.pipMode(false); pipBr = null; }
         if (fab != null) fab.refresh();
@@ -358,9 +362,15 @@ public class MainActivity extends Activity {
     @Override protected void onPause() {
         super.onPause();
         try { CookieManager.getInstance().flush(); } catch (Throwable t) { /* ignore */ }
+        /* 進入子母畫面時也會觸發 onPause：這時不能暫停網頁，否則影片會停 */
+        boolean pip = Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode();
+        if (pip || pipPending) return;
         if (br != null) br.onPause();
         if (yt != null) yt.onPause();
     }
+
+    /** 正在進入子母畫面（onUserLeaveHint 之後、模式切換完成之前） */
+    volatile boolean pipPending = false;
 
     @Override public void onBackPressed() {
         if (customView != null) { hideCustom(); return; }

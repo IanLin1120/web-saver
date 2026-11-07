@@ -109,7 +109,7 @@ final class MediaDl {
                 } else if (kind.equals("hls")) {
                     String pref = it.optString("variant", "");
                     if (pref.isEmpty()) pref = o.optString("vidQ", "max");
-                    Object[] r = hls(lib, url, ref, base, pref, o.optString("vidOut", "mp4"), idx, n, shown);
+                    Object[] r = hls(lib, url, ref, base, pref, it.optString("vidOut", o.optString("vidOut", "mp4")), idx, n, shown);
                     f = (File) r[0]; name = (String) r[1]; mime = (String) r[2];
                 } else if (kind.equals("grab")) {
                     Object[] r = YtGrab.run(a, lib, it, base, idx, n, shown);
@@ -330,7 +330,9 @@ final class MediaDl {
         Hls.Plan p = Hls.plan(url, ref, pref);
         final boolean hasAudio = p.audio != null;
         File v = lib.tmpFile("ts");
-        boolean fmp4 = Hls.download(p.video, ref, v, new Hls.Prog() {
+        /* 只要音訊而且有獨立音軌：不用下載影像 */
+        final boolean audOnly = out.equals("m4a") && hasAudio;
+        boolean fmp4 = audOnly ? false : Hls.download(p.video, ref, v, new Hls.Prog() {
             @Override public void on(int d, int t) {
                 try { emit(new JSONObject().put("state", "item").put("i", i).put("n", n).put("name", shown).put("pct", (hasAudio ? 0.8 : 1.0) * d / Math.max(1, t)).put("seg", d + "/" + t)); } catch (Throwable x) { /* ignore */ }
             }
@@ -340,7 +342,7 @@ final class MediaDl {
             a = lib.tmpFile("aud");
             Hls.download(p.audio, ref, a, new Hls.Prog() {
                 @Override public void on(int d, int t) {
-                    try { emit(new JSONObject().put("state", "item").put("i", i).put("n", n).put("name", shown + "（音軌）").put("pct", 0.8 + 0.2 * d / Math.max(1, t))); } catch (Throwable x) { /* ignore */ }
+                    try { emit(new JSONObject().put("state", "item").put("i", i).put("n", n).put("name", shown + "（音軌）").put("pct", audOnly ? (double) d / Math.max(1, t) : 0.8 + 0.2 * d / Math.max(1, t))); } catch (Throwable x) { /* ignore */ }
                 }
             }, cancel);
         }

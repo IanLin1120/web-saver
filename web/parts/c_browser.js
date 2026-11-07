@@ -505,8 +505,6 @@ function openToolsMenu(){
     var el = h('button', {class: opts.on ? 'on' : '', disabled: !!opts.dis, html: icon(ic) + '<span>' + esc(label) + '</span>' + (opts.n ? '<span class="n">' + opts.n + '</span>' : ''), onclick: function(){ s.close(); setTimeout(fn, 80); }});
     grid.appendChild(el);
   }
-  b('home', '首頁', function(){ $('bHome').click(); }, {on: BR.home});
-  b('fwd', '下一頁', function(){ $('bFwd').click(); }, {dis: $('bFwd').disabled});
   b('star', bm ? '已收藏' : '收藏此頁', function(){ $('bStar').click(); }, {dis: !page, on: bm});
   b('books', '收藏清單', function(){ $('bBm').click(); });
   b('history', '瀏覽記錄', function(){ openHistory(); });

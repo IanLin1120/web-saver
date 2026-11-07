@@ -30,7 +30,7 @@ $('bMedia').addEventListener('click', function(){ openMedia(); });
 on('media', function(d){
   MEDIA.items = (d && d.items || []).filter(function(m){ return m.url; });
   MEDIA.page = d.page || BR.url; MEDIA.title = d.title || BR.title;
-  BR.mediaN = MEDIA.items.length; renderBr();
+  BR.mediaN = MEDIA.items.filter(function(m){ return m.kind !== 'image' && mClass(m) !== 'ad'; }).length; renderBr();
   MEDIA.playing = d.playing || null; MEDIA.touched = false; MEDIA.showAds = false;
   /* 先讀每個串流的長度（用來對應正在播放的影片、分辨廣告） */
   if(isApp) MEDIA.items.forEach(function(m){ if(m.kind === 'hls' && !MEDIA.hls[m.url]){ MEDIA.hls[m.url] = {loading: true}; NAT.call('hlsInfo', m.url, MEDIA.page); } });

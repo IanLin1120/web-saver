@@ -135,7 +135,11 @@
   var QMAP = {max: 'highres', 2160: 'hd2160', 1440: 'hd1440', 1080: 'hd1080', 720: 'hd720', 480: 'large', 360: 'medium'};
   var QNAME = {highres: '最高', hd2160: '2160p 4K', hd1440: '1440p', hd1080: '1080p', hd720: '720p', large: '480p', medium: '360p', small: '240p', tiny: '144p', auto: '自動'};
   function ytp() { return document.getElementById('movie_player') || document.querySelector('.html5-video-player'); }
-  function setQuality(q) {
+  var UQ = {id: '', q: ''};
+  function setQuality(q, user) {
+    /* 你手動選的畫質優先（之前會被自動設定蓋回最高畫質） */
+    if (user) { UQ.id = videoId(); UQ.q = q; }
+    if (!q && UQ.q && UQ.id === videoId()) q = UQ.q;
     q = q || (O.q && O.q !== 'auto' ? QMAP[O.q] || 'highres' : '');
     if (!q) return;
     var p = ytp();
@@ -143,6 +147,12 @@
       if (q === 'highres' && p && p.getAvailableQualityLevels) { var L = p.getAvailableQualityLevels(); if (L && L.length) q = L[0]; }
       if (p && p.setPlaybackQualityRange) p.setPlaybackQualityRange(q, q);
       if (p && p.setPlaybackQuality) p.setPlaybackQuality(q);
+      if (user) {
+        var HQ2 = {tiny: 144, small: 240, medium: 360, large: 480, hd720: 720, hd1080: 1080, hd1440: 1440, hd2160: 2160, highres: 4320}, now = Date.now();
+        localStorage.setItem('yt-player-quality', JSON.stringify({data: JSON.stringify({quality: HQ2[q] || 720, previousQuality: HQ2[q] || 720}), expiration: now + 30 * 864e5, creation: now}));
+        /* 有些版本切換後要跳一下才會真的換：往回跳 0.1 秒觸發重新載入 */
+        var v = vid(); if (v) setTimeout(function () { try { v.currentTime = Math.max(0, v.currentTime - 0.1); } catch (e) {} }, 300);
+      }
     } catch (e) {}
   }
   var SB = {id: '', segs: []};
@@ -340,8 +350,8 @@
   var ICON = {
     play: '<path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none"/>',
     pause: '<rect x="6.5" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="13.5" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/>',
-    rew: '<path d="M12.5 8L8.5 12l4 4"/><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"/><path d="M4 4v4.5h4.5"/>',
-    fwd: '<path d="M11.5 8l4 4-4 4"/><path d="M20 12a8 8 0 1 1-2.4-5.7L20 8.5"/><path d="M20 4v4.5h-4.5"/>',
+    rew: '<path d="M12 6.2a6.8 6.8 0 1 1-6.8 6.8"/><path d="M12.6 2.8 9.2 6.2l3.4 3.4"/>',
+    fwd: '<path d="M12 6.2a6.8 6.8 0 1 0 6.8 6.8"/><path d="M11.4 2.8l3.4 3.4-3.4 3.4"/>',
     full: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>', exit: '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M2.5 12h3M18.5 12h3M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/>',
     loop: '<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
@@ -432,9 +442,12 @@
       '.top .t small{display:block;font:500 11px/1.3 sans-serif;opacity:.85;white-space:nowrap}' +
       '.top button{width:38px;height:38px;border-radius:50%}.top button:active,.row button:active{background:rgba(255,255,255,.2)}' +
       '.chip{font:800 12px/1 sans-serif;padding:7px 9px!important;width:auto!important;height:auto!important;border-radius:99px!important;background:rgba(255,255,255,.16)!important}.chip.on{background:#fff!important;color:#111}' +
-      '.mid{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:clamp(18px,9vw,56px)}' +
-      '.mid button{width:50px;height:50px;border-radius:50%;background:rgba(0,0,0,.28)}.mid button svg{width:26px;height:26px}.mid .pp{width:68px;height:68px;background:rgba(0,0,0,.4)}.mid .pp svg{width:36px;height:36px}' +
-      '.mid .sk{position:relative}.mid .sk i{position:absolute;font:800 9px/1 sans-serif;font-style:normal;top:50%;left:50%;transform:translate(-50%,-38%)}' +
+      '.mid{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:clamp(6px,3.2vw,34px);max-width:100%}' +
+      '.mid button{flex:none;width:clamp(38px,11vw,48px);height:clamp(38px,11vw,48px);border-radius:50%;background:rgba(0,0,0,.34);box-shadow:0 2px 10px rgba(0,0,0,.25);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}' +
+      '.mid button svg{width:55%;height:55%}.mid .pp{width:clamp(54px,16vw,66px);height:clamp(54px,16vw,66px);background:rgba(0,0,0,.45)}.mid .pp svg{width:50%;height:50%}' +
+      '.mid .sk{position:relative;width:clamp(44px,12.5vw,54px);height:clamp(44px,12.5vw,54px)}.mid .sk svg{width:66%;height:66%}' +
+      '.mid .sk i{position:absolute;left:0;right:0;top:57%;transform:translateY(-50%);text-align:center;font:800 clamp(8.5px,2.4vw,11px)/1 sans-serif;font-style:normal;letter-spacing:-.3px;pointer-events:none}' +
+      '.mid .nv svg{width:46%;height:46%}' +
       '.bot{position:absolute;left:0;right:0;bottom:0;padding:0 12px 4px}' +
       '.row{display:flex;align-items:center;gap:6px;font:600 12px/1 sans-serif;text-shadow:0 1px 2px #000}.row .g{flex:1}.row button{width:38px;height:38px;border-radius:50%}' +
       '.bar{position:relative;height:24px;display:flex;align-items:center;cursor:pointer}' +
@@ -464,7 +477,7 @@
       '<div class="ui" id="ui"><div class="top"><button id="mn" class="fsOnly" title="離開全螢幕">' + ic('down') + '</button><div class="t"><b id="tt"></b><small id="tl"></small></div>' +
       '<button class="chip" id="sp">1×</button><button id="lp" title="循環">' + ic('loop') + '</button>' +
       '<button id="pp2" title="子母畫面">' + ic('pip') + '</button><button id="dl" title="下載">' + ic('dl') + '</button><button id="mo" title="更多">' + ic('more') + '</button></div>' +
-      '<div class="mid"><button id="pv2" title="上一部">' + ic('prev') + '</button><button class="sk" id="rw">' + ic('rew') + '<i>10</i></button><button class="pp" id="pp">' + ic('play') + '</button><button class="sk" id="fw">' + ic('fwd') + '<i>10</i></button><button id="nx" title="下一部">' + ic('next') + '</button></div>' +
+      '<div class="mid"><button id="pv2" class="nv" title="上一部">' + ic('prev') + '</button><button class="sk" id="rw">' + ic('rew') + '<i>10</i></button><button class="pp" id="pp">' + ic('play') + '</button><button class="sk" id="fw">' + ic('fwd') + '<i>10</i></button><button id="nx" class="nv" title="下一部">' + ic('next') + '</button></div>' +
       '<div class="bot"><div class="bar" id="bar"><div class="tr"><div class="bf" id="bf"></div><div id="segs"></div><div class="pl" id="pl"></div></div><div class="kn" id="kn"></div></div>' +
       '<div class="row"><span id="tm">0:00 / 0:00</span><span class="g"></span><span id="sb"></span><button id="fill" class="fsOnly" title="填滿螢幕">' + ic('fill') + '</button><button id="lk" class="fsOnly" title="鎖定畫面">' + ic('lock') + '</button><button id="cc" title="字幕">' + ic('cc') + '</button><button id="q" title="畫質">' + ic('gear') + '</button><button id="fs" title="全螢幕">' + ic('full') + '</button></div></div></div>' +
       '<div class="mini" id="mini"><i id="miniB"></i></div><button class="lockb" id="ulk">' + ic('unlock') + '</button>' +
@@ -501,7 +514,7 @@
       e.stopPropagation(); var p = ytp(), L = [], cur = '';
       try { L = p.getAvailableQualityLevels() || []; cur = p.getPlaybackQuality(); } catch (x) {}
       if (!L.length) { W.flash('這部影片無法選擇畫質'); return; }
-      sheet('畫質', L.map(function (q) { return [QNAME[q] || q, function () { setQuality(q); W.flash('畫質：' + (QNAME[q] || q)); }, q === cur]; }));
+      sheet('畫質', L.map(function (q) { return [QNAME[q] || q, function () { setQuality(q, true); W.flash('畫質：' + (QNAME[q] || q)); }, q === cur]; }));
     };
     $('cc').onclick = function (e) {
       e.stopPropagation(); var p = ytp(), list = [], cur = null;
@@ -671,7 +684,14 @@
      ============================================================ */
   var GR = window.__wsCfg && window.__wsCfg.grab;
   if (GR) (function () {
-    var KIND = new WeakMap(), MSOF = new WeakMap();
+    var KIND = new WeakMap(), MSOF = new WeakMap(), SBS = [];
+    /* 清掉播放器已緩衝的某一段，逼它重新下載（用來補錄或換畫質後從頭錄） */
+    function dropBuf(kind, from, to) {
+      SBS.forEach(function (sb) {
+        if (KIND.get(sb) !== kind) return;
+        try { if (!sb.updating) sb.remove(from, to); } catch (e) {}
+      });
+    }
     var T = {v: {sig: '', bytes: null, last: -1, n: 0, h: 0, other: 0}, a: {sig: '', bytes: null, last: -1, n: 0, other: 0}};
     var phase = 'wait', t0 = Date.now(), lastData = Date.now(), finished = false, reloads = +(sessionStorage.getItem('__wsGrabR') || 0);
     var HQ = {tiny: 144, small: 240, medium: 360, large: 480, hd720: 720, hd1080: 1080, hd1440: 1440, hd2160: 2160};
@@ -753,6 +773,16 @@
       }
       return 0;
     }
+    /* MP4 時間單位（mdhd timescale） */
+    function mp4Scale(u8) {
+      var mv = boxes(u8, 0, u8.length, 'moov'); if (!mv) return 0;
+      var tk = boxes(u8, mv[0], mv[1], 'trak'); if (!tk) return 0;
+      var md = boxes(u8, tk[0], tk[1], 'mdia'); if (!md) return 0;
+      var hd = boxes(u8, md[0], md[1], 'mdhd'); if (!hd) return 0;
+      return u8[hd[0]] === 1 ? u32(u8, hd[0] + 20) : u32(u8, hd[0] + 12);
+    }
+    function secOf(t, ts) { return t.webm ? ts / 1000 : (t.scale ? ts / t.scale : 0); }
+    var switches = 0, restart0 = false;
     function take(sb, data) {
       if (finished) return;
       var k = KIND.get(sb); if (!k) return;
@@ -763,9 +793,14 @@
       if (isInit(u8)) {
         var sg = sig(u8);
         if (sg === t.sig) return;
+        if (phase === 'run' && t.sig) {
+          /* 錄到一半 YouTube 換了畫質：改用新的格式從頭重錄（不把兩種格式混在一起，否則會卡住或只剩幾秒） */
+          if (switches >= 3) { t.other++; return; }
+          switches++; restart0 = true;
+        }
         if (k === 'v') t.h = initHeight(u8);
-        if (phase === 'run' && t.sig) { t.other++; return; } /* 執行中換了格式：不要混進來 */
-        t.sig = sg; t.bytes = new Uint8Array(u8); t.last = -1; t.n = 0; t.first = null;
+        t.webm = u8[0] === 0x1A && u8[1] === 0x45; t.scale = t.webm ? 0 : mp4Scale(u8); t.lastSec = 0;
+        t.sig = sg; t.bytes = new Uint8Array(u8); t.last = -1; t.n = 0; t.first = null; t.firstSec = null;
         send(k, u8, true);
         var ts0 = segTs(u8); if (ts0 != null) t.last = ts0;
         return;
@@ -773,7 +808,7 @@
       if (!t.sig) return;
       if (phase === 'run' && t.other) { /* 正在收別的格式：檢查是不是回到原本格式 */ }
       var ts = segTs(u8);
-      if (ts != null) { if (ts <= t.last) return; t.last = ts; if (t.first == null) t.first = ts; }
+      if (ts != null) { if (ts <= t.last) return; t.last = ts; t.lastSec = secOf(t, ts); if (t.first == null) { t.first = ts; t.firstSec = secOf(t, ts); } }
       send(k, u8, false); t.n++;
     }
     function hookMS(MS) {
@@ -781,7 +816,7 @@
       var add = MS.prototype.addSourceBuffer;
       MS.prototype.addSourceBuffer = function (mime) {
         var sb = add.apply(this, arguments), k = /audio/i.test(mime) ? 'a' : 'v';
-        KIND.set(sb, k); MSOF.set(sb, this);
+        KIND.set(sb, k); MSOF.set(sb, this); SBS.push(sb);
         try { B.grabMime(k, String(mime)); } catch (e) {}
         return sb;
       };
@@ -803,7 +838,7 @@
       for (var i = 0; i < b.length; i++) if (b.start(i) <= t + 0.3 && b.end(i) >= t) return b.end(i);
       return t;
     }
-    var stuck = 0, lastBe = -1, qSet = 0, ending = false, maxPct = 0;
+    var stuck = 0, lastBe = -1, qSet = 0, ending = false, maxPct = 0, fills = 0;
     setInterval(function () {
       if (finished || ending) return;
       var v = vid(), p = ytp(), now = Date.now();
@@ -831,10 +866,35 @@
         phase = 'run'; try { v.currentTime = 0; } catch (e) {}
       }
       var be = bufEnd(v);
-      maxPct = Math.max(maxPct, Math.min(0.99, be / d));
+      var recNow = GR.audio ? (T.a.lastSec || be) : Math.min(T.v.lastSec || be, T.a.lastSec || be);
+      maxPct = Math.max(maxPct, Math.min(0.99, Math.min(be, recNow + 10) / d));
       B.grabProg(maxPct, (GR.audio ? '錄製音軌 ' : '錄製 ' + (T.v.h ? T.v.h + 'p ' : '')) + fmt(be) + ' / ' + fmt(d));
-      /* 結束：緩衝到尾端、影片播完，或已到最後幾秒且 3 秒沒有新資料（避免卡在 99%） */
-      if (be >= d - 0.6 || v.ended || (d - be < 4 && now - lastData > 3000)) { if (!ending) { ending = true; setTimeout(function () { done(''); }, 1200); } return; }
+      if (restart0) { restart0 = false; maxPct = 0; dropBuf('v', 0, d + 1); try { v.currentTime = 0; } catch (e) {} B.grabProg(0, '畫質改變，重新錄製'); return; }
+      /* 結束：要確認影像與聲音都真的錄到結尾，才算完成（之前會把只錄到 19 秒的當成完成） */
+      var vEnd = GR.audio ? d : (T.v.lastSec || 0), aEnd = T.a.lastSec || 0, recEnd = Math.min(vEnd, aEnd);
+      /* 開頭也要有：如果影像不是從 0 秒開始（例如換畫質後），清掉緩衝從頭重錄 */
+      var badStart = ['v', 'a'].filter(function (k) { return !(GR.audio && k === 'v') && T[k].firstSec != null && T[k].firstSec > 1.5; });
+      var canCheck = (GR.audio || T.v.webm || T.v.scale) && (T.a.webm || T.a.scale);
+      if (be >= d - 0.6 || v.ended || (d - be < 4 && now - lastData > 3000)) {
+        if (canCheck && badStart.length && fills < 8) {
+          fills++;
+          badStart.forEach(function (k) { var t = T[k]; send(k, t.bytes, true); t.last = -1; t.first = null; t.firstSec = null; t.n = 0; dropBuf(k, 0, d + 1); });
+          try { v.currentTime = 0; } catch (e) {}
+          B.grabProg(0, '補錄開頭');
+          return;
+        }
+        if (canCheck && recEnd < d - 4) {
+          /* 還有沒錄到的部分：跳回缺的地方再錄 */
+          fills++;
+          if (fills > 8) { done('錄製不完整：只錄到 ' + Math.round(100 * recEnd / d) + '%（' + fmt(recEnd) + ' / ' + fmt(d) + '），請再試一次'); return; }
+          dropBuf('v', Math.max(0, recEnd - 1), d + 1); dropBuf('a', Math.max(0, recEnd - 1), d + 1);
+          try { v.currentTime = Math.max(0, recEnd - 1); } catch (e) {}
+          B.grabProg(maxPct, '補錄缺少的部分 ' + fmt(recEnd));
+          return;
+        }
+        if (!ending) { ending = true; setTimeout(function () { done(''); }, 1200); }
+        return;
+      }
       /* 加速：2 倍速靜音播放，並跳到緩衝的最前端，讓播放器不停地抓下一段
          （太快會讓播放器判定掉格而自動降畫質、重新載入，反而變慢） */
       /* 你正在看 YouTube 時，背景錄製放慢，把網路和效能讓給你的播放 */
