@@ -125,6 +125,11 @@ final class MediaDl {
                 } else {
                     throw new Exception("串流影片（blob）無法直接下載，請改選偵測到的 m3u8／mp4 來源");
                 }
+                /* YouTube 影片要有聲音：沒有聲音軌就當作失敗（會自動換方式重新下載） */
+                if (it.optBoolean("needAudio") && mime != null && mime.startsWith("video/") && !hasAudio(f)) {
+                    f.delete();
+                    throw new Exception("下載的影片沒有聲音");
+                }
                 /* 檔名去重 */
                 String uniq = name;
                 int k = 2;
@@ -326,6 +331,16 @@ final class MediaDl {
     }
 
     /* ---------- HLS ---------- */
+    static boolean hasAudio(File f) {
+        android.media.MediaExtractor ex = new android.media.MediaExtractor();
+        try {
+            ex.setDataSource(f.getAbsolutePath());
+            for (int i = 0; i < ex.getTrackCount(); i++) { String m = ex.getTrackFormat(i).getString(android.media.MediaFormat.KEY_MIME); if (m != null && m.startsWith("audio/")) return true; }
+            return false;
+        } catch (Throwable t) { return true; /* 無法判斷時不擋 */ }
+        finally { try { ex.release(); } catch (Throwable t) { /* ignore */ } }
+    }
+
     private static Object[] hls(Lib lib, String url, String ref, String base, String pref, String out, final int i, final int n, final String shown) throws Exception {
         Hls.Plan p = Hls.plan(url, ref, pref);
         final boolean hasAudio = p.audio != null;

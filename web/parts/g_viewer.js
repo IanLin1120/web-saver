@@ -228,7 +228,14 @@ async function viewVideo(it, body){
   var sp = h('button', {class: 'vpC', text: '1×'});
   var fsB = h('button', {class: 'vpI', html: '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>'});
   var bar = h('div', {class: 'vpBar'}, h('div', {class: 'tr'}, h('div', {class: 'bf'}), h('div', {class: 'pl'})), h('div', {class: 'kn'}));
-  var bot = h('div', {class: 'vpBot'}, bar, h('div', {class: 'vpRow'}, tm, h('span', {style: {flex: 1}}), sp, fsB));
+  /* 畫面大小：符合螢幕（完整顯示）／填滿螢幕（裁切邊緣）／拉伸填滿 */
+  var FITS = [['contain', '符合螢幕'], ['cover', '填滿螢幕'], ['fill', '拉伸填滿']];
+  var fitI = Math.max(0, FITS.map(function(x){ return x[0]; }).indexOf(lsGet('ws.vpFit', 'contain')));
+  var fitB = h('button', {class: 'vpC', text: FITS[fitI][1]});
+  function applyFit(){ v.style.objectFit = FITS[fitI][0]; fitB.textContent = FITS[fitI][1]; }
+  fitB.onclick = function(e){ e.stopPropagation(); fitI = (fitI + 1) % FITS.length; lsSet('ws.vpFit', FITS[fitI][0]); applyFit(); fl('畫面：' + FITS[fitI][1]); show(); };
+  applyFit();
+  var bot = h('div', {class: 'vpBot'}, bar, h('div', {class: 'vpRow'}, tm, h('span', {style: {flex: 1}}), fitB, sp, fsB));
   var flash = h('div', {class: 'vpFlash'});
   ui.appendChild(mid); ui.appendChild(bot);
   box.appendChild(ui); box.appendChild(flash);

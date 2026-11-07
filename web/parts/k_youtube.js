@@ -450,7 +450,7 @@ async function ytStartPage(d, meta, ch, retry){
       if(extra.audioOut === 'opus' && ext !== 'webm') extra.audioOut = 'm4a';
       if(extra.audioOut === 'm4a' && ext !== 'mp4') extra.audioOut = 'opus';
       ytDl([Object.assign({}, base, {kind: 'audio', url: r.a.url, ext: ext, name: ch.name, artist: meta.artist}, extra, {title: meta.song})], meta, 'mp4');
-    } else ytDl([Object.assign({}, base, {kind: 'merge', url: r.v.url, audioUrl: r.a.url, container: r.cont, name: ch.name})], meta, 'mp4');
+    } else ytDl([Object.assign({}, base, {kind: 'merge', url: r.v.url, audioUrl: r.a.url, container: r.cont, name: ch.name, needAudio: true})], meta, 'mp4');
     return;
   }
   /* 2. 直接下載 HLS（全速、不用錄製）：1080p 以下、而且 YouTube 有提供時 */
@@ -461,7 +461,7 @@ async function ytStartPage(d, meta, ch, retry){
       if(audioOnly || hl.maxH >= Math.min(ch.h, 1080) * 0.9){
         var hb = Object.assign({}, base, {kind: 'hls', url: hl.master, ua: YT_SAFARI_UA, referer: 'https://www.youtube.com/', name: ch.name, variant: audioOnly ? 'min' : String(ch.h)});
         if(audioOnly) ytDl([Object.assign(hb, {vidOut: 'm4a', artist: meta.artist}, extra, {title: meta.song})], meta, 'mp4');
-        else ytDl([hb], meta, 'mp4');
+        else ytDl([Object.assign(hb, {needAudio: true})], meta, 'mp4');
         toast('直接下載中（不用錄製）');
         return;
       }
@@ -473,7 +473,7 @@ async function ytStartPage(d, meta, ch, retry){
   var codec = audioOnly ? (extra.audioOut === 'm4a' ? 'mp4' : 'webm') : (ch.codec || ytFmtMode());
   var g = {kind: 'grab', codec: codec, vid: d.id, h: audioOnly ? 144 : ch.h, q: audioOnly ? 'tiny' : (QKEY[ch.h] || 'hd720'), audioOnly: audioOnly, len: +meta.dur || +(d.details.lengthSeconds || 0), name: ch.name};
   if(audioOnly) ytDl([Object.assign({}, base, g, {artist: meta.artist}, extra, {title: meta.song})], meta, 'mp4');
-  else ytDl([Object.assign({}, base, g)], meta, 'mp4');
+  else ytDl([Object.assign({}, base, g, {needAudio: true})], meta, 'mp4');
   toast('在背景下載中，可以繼續看影片或做其他事');
 }
 /* 舊的多來源解析（備用） */
@@ -528,7 +528,7 @@ on('dl', async function(d){
   var J = YTJOB; J.tries++;
   if(J.page){
     /* 串流網址可能過期：清掉記錄，請播放器重新載入後再試一次 */
-    toast('下載被中斷，重新取得串流後再試一次…');
+    toast(d.err && /沒有聲音/.test(d.err) ? '下載的影片沒有聲音，改用另一種方式重新下載…' : '下載失敗，改用另一種方式重新下載…');
     NAT.call('ytForget', J.id);
     ytStartPage(J.d, J.meta, J.ch, J.tries);
     return;

@@ -186,6 +186,41 @@ public class MainActivity extends Activity {
     /** 目前在畫面上的瀏覽器（YouTube 分頁或瀏覽分頁） */
     Browser act() { return yt != null && (yt.isShown() || yt.fs || yt.inPip) ? yt : br; }
 
+    /* ---------- 子母畫面的控制按鈕：倒退 10 秒、播放／暫停、快轉 10 秒 ---------- */
+    static final String PIP_ACT = "com.ian.websaver.PIP";
+    private android.content.BroadcastReceiver pipRx;
+
+    java.util.List<android.app.RemoteAction> pipActions(boolean playing) {
+        java.util.List<android.app.RemoteAction> L = new java.util.ArrayList<>();
+        if (Build.VERSION.SDK_INT < 26) return L;
+        if (pipRx == null) {
+            pipRx = new android.content.BroadcastReceiver() {
+                @Override public void onReceive(android.content.Context c, Intent i) {
+                    String cmd = i.getStringExtra("cmd");
+                    Browser b = pipBr != null ? pipBr : act();
+                    if (b == null || cmd == null) return;
+                    String js = "rew".equals(cmd) ? "(function(){var v=document.querySelector('video');if(v)v.currentTime=Math.max(0,v.currentTime-10)})()"
+                        : "fwd".equals(cmd) ? "(function(){var v=document.querySelector('video');if(v)v.currentTime=Math.min(v.duration-0.5,v.currentTime+10)})()"
+                        : "(function(){var v=document.querySelector('video');if(v){if(v.paused){var p=v.play();if(p&&p.catch)p.catch(function(){})}else v.pause()}})()";
+                    b.wv.evaluateJavascript(js, null);
+                    if ("toggle".equals(cmd)) { b.videoPlaying = !b.videoPlaying; updatePipParams(); }
+                }
+            };
+            android.content.IntentFilter f = new android.content.IntentFilter(PIP_ACT);
+            if (Build.VERSION.SDK_INT >= 33) registerReceiver(pipRx, f, android.content.Context.RECEIVER_NOT_EXPORTED); else registerReceiver(pipRx, f);
+        }
+        String[][] items = {{"rew", "倒退 10 秒", String.valueOf(android.R.drawable.ic_media_rew)},
+            {"toggle", playing ? "暫停" : "播放", String.valueOf(playing ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play)},
+            {"fwd", "快轉 10 秒", String.valueOf(android.R.drawable.ic_media_ff)}};
+        int code = 10;
+        for (String[] x : items) {
+            Intent i = new Intent(PIP_ACT).setPackage(getPackageName()).putExtra("cmd", x[0]);
+            android.app.PendingIntent pi = android.app.PendingIntent.getBroadcast(this, code++, i, android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
+            L.add(new android.app.RemoteAction(android.graphics.drawable.Icon.createWithResource(this, Integer.parseInt(x[2])), x[1], x[1], pi));
+        }
+        return L;
+    }
+
     void updatePipParams() {
         if (Build.VERSION.SDK_INT < 26 || br == null) return;
         Browser br = act();
@@ -193,6 +228,7 @@ public class MainActivity extends Activity {
             android.app.PictureInPictureParams.Builder b = new android.app.PictureInPictureParams.Builder()
                 .setAspectRatio(new android.util.Rational(Math.round(br.videoRatio * 1000), 1000));
             if (Build.VERSION.SDK_INT >= 31) b.setAutoEnterEnabled(br.wantsPip()).setSeamlessResizeEnabled(true);
+            b.setActions(pipActions(br.videoPlaying));
             setPictureInPictureParams(b.build());
         } catch (Throwable t) { /* ignore */ }
     }
@@ -206,7 +242,7 @@ public class MainActivity extends Activity {
         Util.MAIN.postDelayed(new Runnable() { @Override public void run() { pipPending = false; } }, 2500);
         try {
             return enterPictureInPictureMode(new android.app.PictureInPictureParams.Builder()
-                .setAspectRatio(new android.util.Rational(Math.round(br.videoRatio * 1000), 1000)).build());
+                .setAspectRatio(new android.util.Rational(Math.round(br.videoRatio * 1000), 1000)).setActions(pipActions(true)).build());
         } catch (Throwable t) { return false; }
     }
 

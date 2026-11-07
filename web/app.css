@@ -499,6 +499,7 @@ input[type=range]{width:100%;accent-color:var(--accent);padding:0;border:0;backg
 /* 檔案庫影片播放器 */
 .vp{touch-action:none;user-select:none;-webkit-user-select:none;background:#000}
 .vp video{width:100%;height:100%;object-fit:contain;display:block}
+.vp.vpFs video{position:absolute;inset:0;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important}
 .vpUi{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .2s;background:linear-gradient(180deg,rgba(0,0,0,.25),rgba(0,0,0,0) 30%,rgba(0,0,0,0) 60%,rgba(0,0,0,.55))}
 .vp.show .vpUi{opacity:1;pointer-events:auto}
 .vp button{border:0;background:none;color:#fff;display:grid;place-items:center;cursor:pointer;padding:0}
@@ -522,10 +523,19 @@ input[type=range]{width:100%;accent-color:var(--accent);padding:0;border:0;backg
 .vpBar .kn{position:absolute;width:14px;height:14px;margin-left:-7px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
 .vpFlash{position:absolute;left:50%;top:18%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#fff;padding:7px 14px;border-radius:99px;font:700 13px/1.3 sans-serif;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
 .vpFlash.on{opacity:1}
-.vp.vpFs{position:fixed!important;inset:0!important;z-index:9999;width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;margin:0!important;border-radius:0!important}
+.vp.vpFs{position:fixed!important;inset:0!important;z-index:9999;width:auto!important;height:auto!important;max-width:none!important;max-height:none!important;margin:0!important;border-radius:0!important}
 body.vpFsOn #vwTop{display:none!important}
 
 #brTop .urlrow{gap:2px}
 #brTop .urlrow #bBack,#brTop .urlrow #bFwd,#brTop .urlrow #bHome{width:34px;height:38px;flex:none}
 #brTop .urlrow #bFwd:disabled{opacity:.3}
 #brTop .url{min-width:0;flex:1}
+
+.vpBot{padding-bottom:max(8px,env(safe-area-inset-bottom))}
+.vp.vpFs .vpBot{padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right))}
+.incogOn #brTop{background:linear-gradient(135deg,#3a3340,#26222b)!important;color:#eee}
+.incogOn #brTop .url{background:#4a4351!important;color:#fff}
+.incogOn #brTop .url input{color:#fff}
+.incogOn #brTop .ib{color:#ddd}
+#incogBadge{display:none;flex:none;font:800 11px/1 sans-serif;color:#fff;background:#6b5b7b;border-radius:99px;padding:5px 8px;margin-right:2px}
+.incogOn #incogBadge{display:inline-block}

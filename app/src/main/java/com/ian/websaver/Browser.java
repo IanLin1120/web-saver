@@ -195,7 +195,8 @@ final class Browser {
         try { ytOpts = new JSONObject(p.getString("ytOpts", "{}")); } catch (Throwable t) { ytOpts = new JSONObject(); }
         if (ytTab) mode = "mobile";
         wv = makeWebView(false);
-        if (ytTab) wv.getSettings().setMediaPlaybackRequiresUserGesture(false);
+        /* 子母畫面、通知列控制要能直接繼續播放（不需要再點一下畫面） */
+        wv.getSettings().setMediaPlaybackRequiresUserGesture(false);
         wv.setVisibility(View.GONE);
         final float rad = Util.dp(a, 16);
         wv.setOutlineProvider(new android.view.ViewOutlineProvider() {
@@ -535,11 +536,16 @@ final class Browser {
     private FrameLayout.LayoutParams savedLp;
     boolean inPip = false;
     volatile boolean pipWasPlaying = false;
+    volatile long lastStopAt = 0;
+    /** 無痕模式：不記錄瀏覽記錄、不詢問儲存密碼、不使用快取 */
+    volatile boolean incog = false;
 
     int vidW = 0, vidH = 0;
 
     void videoState(boolean playing, int w, int h) {
         if (w > 0 && h > 0) { vidW = w; vidH = h; }
+        if (!playing && videoPlaying) lastStopAt = System.currentTimeMillis();
+        if (inPip) a.updatePipParams();
         if (!hiddenBr && playing != videoPlaying) KeepAlive.set(a, "yt", playing && isYt(curHost) ? "正在播放 YouTube" : null);
         videoPlaying = playing;
         if (w > 0 && h > 0) videoRatio = Math.max(0.42f, Math.min(2.38f, (float) w / h));
@@ -559,8 +565,8 @@ final class Browser {
             wv.bringToFront();
             wv.evaluateJavascript("window.__wsYTpip&&__wsYTpip(true)", null);
             wv.onResume();
-            /* 切到子母畫面時，網頁或系統可能把影片暫停：原本在播就自動繼續播 */
-            if (pipWasPlaying) {
+            /* 切到子母畫面時，網頁或系統可能把影片暫停：原本在播（或剛剛才被暫停）就自動繼續播 */
+            if (pipWasPlaying || videoPlaying || System.currentTimeMillis() - lastStopAt < 2500) {
                 final String js = "(function(){var v=document.querySelector('video');if(v&&v.paused){var p=v.play();if(p&&p.catch)p.catch(function(){});}})()";
                 wv.evaluateJavascript(js, null);
                 Util.MAIN.postDelayed(new Runnable() { @Override public void run() { if (inPip) wv.evaluateJavascript(js, null); } }, 600);
@@ -988,6 +994,7 @@ final class Browser {
         Creds c = Creds.get(a);
         if (c.isNever(host) || c.same(host, user, pass)) return;
         synchronized (pendingCred) { pendingCred.put(host, new String[] {user, pass}); }
+        if (incog) return;
         try { MainActivity.emit("credAsk", new JSONObject().put("host", host).put("user", user).put("update", c.has(host, user)).toString()); } catch (Throwable t) { /* ignore */ }
     }
 

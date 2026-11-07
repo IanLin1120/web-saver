@@ -508,6 +508,7 @@ function openToolsMenu(){
   b('star', bm ? '已收藏' : '收藏此頁', function(){ $('bStar').click(); }, {dis: !page, on: bm});
   b('books', '收藏清單', function(){ $('bBm').click(); });
   b('history', '瀏覽記錄', function(){ openHistory(); });
+  b('incog', INCOG.on ? '關閉無痕' : '無痕模式', function(){ setIncog(!INCOG.on); }, {on: INCOG.on});
   b('scissors', '手動清理', function(){ $('bZap').click(); }, {dis: !page, on: BR.zap});
   b(CFG.mode === 'desktop' ? 'monitor' : CFG.mode === 'reader' ? 'book' : 'phone', CFG.mode === 'desktop' ? '電腦版' : CFG.mode === 'reader' ? '閱讀模式' : '手機版', function(){ $('bMode').click(); }, {on: CFG.mode !== 'mobile'});
   b('sliders', '瀏覽設定', function(){ $('bQuick').click(); });

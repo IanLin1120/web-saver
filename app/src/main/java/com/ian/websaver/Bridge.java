@@ -91,6 +91,22 @@ public class Bridge {
         } });
     }
 
+    /** 無痕模式：開啟時不使用快取、不存表單、不詢問密碼；關閉時清除這段期間的快取與記錄（clearCookies＝連 Cookie 一起清，會登出所有網站） */
+    @JavascriptInterface public void brIncog(final boolean on, final boolean clearCookies) {
+        ui(new Runnable() { @Override public void run() {
+            Browser b = a.br;
+            b.incog = on;
+            b.wv.getSettings().setCacheMode(on ? android.webkit.WebSettings.LOAD_NO_CACHE : android.webkit.WebSettings.LOAD_DEFAULT);
+            b.wv.getSettings().setSaveFormData(!on);
+            if (!on) {
+                b.wv.clearCache(true);
+                b.wv.clearHistory();
+                b.wv.clearFormData();
+                if (clearCookies) { android.webkit.CookieManager.getInstance().removeAllCookies(null); android.webkit.WebStorage.getInstance().deleteAllData(); }
+            }
+        } });
+    }
+
     /** 清空瀏覽分頁偵測到的媒體（離開網頁、回首頁時） */
     @JavascriptInterface public void brMediaClear() { ui(new Runnable() { @Override public void run() { a.br.clearMedia(); } }); }
 
