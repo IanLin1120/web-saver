@@ -4,7 +4,7 @@
 <script>/* 線上更新開機程式：手機上若已下載比 APK 內建更新的介面版本，就改用新版（存在 IndexedDB）。
    新版連續兩次沒有正常開啟 → 自動退回 APK 內建版本。網址加上 #builtin 也會強制使用內建版本。 */
 (function () {
-  var B = '1.7.7'; if (!window.__OTA) window.APP_BUILTIN = B;
+  var B = '1.7.8'; if (!window.__OTA) window.APP_BUILTIN = B;
   if (window.__OTA || location.hash.indexOf('builtin') >= 0) return;
   var v = null; try { v = JSON.parse(localStorage.getItem('ws.ota') || 'null'); } catch (e) {}
   function gt(a, b) { a = String(a).split('.').map(Number); b = String(b).split('.').map(Number); for (var i = 0; i < Math.max(a.length, b.length); i++) { var p = a[i] || 0, q = b[i] || 0; if (p !== q) return p > q; } return false; }
@@ -1825,7 +1825,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 /* ============================================================
    核心：工具函式、圖示、主題、面板（sheet）、提示、原生橋接、頁面切換
    ============================================================ */
-const APP_VERSION = '1.7.7';
+const APP_VERSION = '1.7.8';
 var GH = {user: 'IanLin1120', repo: 'web-saver',
   get pages(){ return 'https://' + this.user.toLowerCase() + '.github.io/' + this.repo + '/'; },
   get web(){ return 'https://github.com/' + this.user + '/' + this.repo; }};
@@ -1931,6 +1931,7 @@ var IC = {
   pc: '<rect x="2.5" y="4" width="19" height="12" rx="2"/><path d="M7 20h10M12 16v4"/>',
   inbox: '<path d="M3 13l2.5-8h13L21 13v6a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19z"/><path d="M3 13h5l1.5 2.5h5L16 13h5"/>',
   key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3M14 9l2 2"/>',
+  eyeOff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.9 9.9 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
   eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   shield: '<path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>',
   palette: '<path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.8 1.8-1.8 0-.5-.2-.9-.5-1.3-.3-.3-.5-.7-.5-1.2 0-1 .8-1.7 1.8-1.7H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10.5" cy="7" r="1.2"/><circle cx="15" cy="7.5" r="1.2"/>',
@@ -2681,24 +2682,40 @@ function openQuick(){
 $('bQuick').addEventListener('click', openQuick);
 
 /* ---------- 帳號密碼管理 ---------- */
+/* 帳號密碼：每一組密碼的「查看／複製／修改」都要單獨驗證（密碼或指紋），就算其他地方已經解鎖過；
+   顯示的密碼 30 秒後、或離開這個畫面就馬上遮起來 */
 async function openCreds(){
-  if(SEC.cfg.vault && SEC.has() && !(await SEC.need('解鎖帳號密碼'))) return;
-  var body = h('div');
-  var s = openSheet({title: '帳號密碼', icon: 'key', body: body, tall: true});
+  var body = h('div'), timers = [];
+  /* App 切到背景（回主畫面、切到別的 App）時，顯示中的密碼馬上遮起來 */
+  var onHide = function(){ if(document.hidden) draw(); };
+  document.addEventListener('visibilitychange', onHide);
+  var s = openSheet({title: '帳號密碼', icon: 'key', body: body, tall: true, onClose: function(){ timers.forEach(clearTimeout); document.removeEventListener('visibilitychange', onHide); body.textContent = ''; }});
   function draw(){
     body.textContent = '';
     if(!isApp){ body.appendChild(h('div', {class: 'note', html: '網頁版無法登入其他網站，也無法替其他網站填入密碼。請使用 APK 版：登入時會詢問是否儲存，下次可一鍵填入。'})); return; }
     var d = NAT.json('credList') || {list: [], never: []};
+    if(!SEC.has()) body.appendChild(h('div', {class: 'note', style: {marginBottom: '10px'}, html: '⚠️ 還沒有設定密碼：建議先到「設定 → 隱私與安全」設定密碼，之後查看任何一組密碼都要先驗證。'}));
     var box = h('div', {class: 'card glass'});
     if(!d.list.length) box.appendChild(h('div', {class: 'empty', html: '<div class="big">🔑</div>還沒有儲存任何帳號<br><span class="sub">在網站登入時，下方會跳出「要儲存密碼嗎？」</span>'}));
     d.list.forEach(function(c){
-      var pw = h('span', {class: 'sub', text: '••••••••'});
+      var pw = h('span', {class: 'sub', text: '••••••••'}), shown = false, tm = 0;
+      function hide(){ shown = false; pw.textContent = '••••••••'; eye.innerHTML = icon('eye'); clearTimeout(tm); }
+      var eye = h('button', {class: 'ib', html: icon('eye'), title: '查看（要驗證）', onclick: async function(){
+        if(shown){ hide(); return; }
+        if(!(await SEC.verify('查看「' + c.host + '」的密碼'))) return;
+        shown = true; pw.textContent = NAT.call('credReveal', c.host, c.user); eye.innerHTML = icon('eyeOff');
+        tm = setTimeout(hide, 30000); timers.push(tm);
+      }});
       box.appendChild(h('div', {class: 'credRow'},
         h('div', {class: 'fav sm', text: (c.host.replace(/^www\./, '')[0] || '?').toUpperCase()}),
         h('div', {class: 't'}, h('b', {text: c.user || '（未填帳號）'}), h('div', {class: 'sub ell', text: c.host}), pw),
-        h('button', {class: 'ib', html: icon('eye'), onclick: function(){ pw.textContent = pw.textContent.indexOf('•') === 0 ? NAT.call('credReveal', c.host, c.user) : '••••••••'; }}),
-        h('button', {class: 'ib', html: icon('copy'), onclick: function(){ copyText(NAT.call('credReveal', c.host, c.user)); }}),
-        h('button', {class: 'ib', html: icon('trash'), style: {color: 'var(--danger)'}, onclick: async function(){ if(await confirmDlg('刪除這組帳號？', esc(c.user) + '<br>' + esc(c.host), '刪除', true)){ NAT.call('credDel', c.host, c.user); draw(); } }})));
+        eye,
+        h('button', {class: 'ib', html: icon('copy'), title: '複製密碼（要驗證）', onclick: async function(){ if(await SEC.verify('複製「' + c.host + '」的密碼')) copyText(NAT.call('credReveal', c.host, c.user)); }}),
+        h('button', {class: 'ib', html: icon('edit'), title: '修改（要驗證）', onclick: async function(){ if(await SEC.verify('修改「' + c.host + '」的帳號密碼')) editCred(c, draw); }}),
+        h('button', {class: 'ib', html: icon('trash'), style: {color: 'var(--danger)'}, onclick: async function(){
+          if(!(await SEC.verify('刪除「' + c.host + '」的帳號密碼'))) return;
+          if(await confirmDlg('刪除這組帳號？', esc(c.user) + '<br>' + esc(c.host), '刪除', true)){ NAT.call('credDel', c.host, c.user); draw(); }
+        }})));
     });
     body.appendChild(box);
     /* 手動新增 */
@@ -2720,6 +2737,23 @@ async function openCreds(){
     paintIcons(body);
   }
   draw();
+}
+/* 修改一組帳號密碼（已經驗證過才會進來）；關掉就清空，不留在畫面上 */
+function editCred(c, after){
+  var uIn = h('input', {type: 'text', value: c.user || '', autocomplete: 'off'});
+  var pIn = h('input', {type: 'password', value: NAT.call('credReveal', c.host, c.user) || '', autocomplete: 'new-password'});
+  var showB = h('button', {class: 'btn sm ghost', text: '顯示', onclick: function(){ pIn.type = pIn.type === 'password' ? 'text' : 'password'; showB.textContent = pIn.type === 'password' ? '顯示' : '隱藏'; }});
+  var s = openSheet({title: '修改帳號密碼', icon: 'edit', onClose: function(){ pIn.value = ''; },
+    body: h('div', null, h('div', {class: 'sub', style: {marginBottom: '10px'}, text: c.host}),
+      h('div', {class: 'field'}, h('div', {class: 'lbl'}, '帳號／Email'), uIn),
+      h('div', {class: 'field'}, h('div', {class: 'lbl'}, '密碼'), h('div', {style: {display: 'flex', gap: '8px'}}, pIn, showB))),
+    foot: h('button', {class: 'btn pri', text: '儲存修改', onclick: function(){
+      if(!pIn.value){ toast('密碼不能空白', true); return; }
+      var nu = uIn.value.trim();
+      if(nu !== (c.user || '')) NAT.call('credDel', c.host, c.user);
+      NAT.call('credSave', c.host, nu, pIn.value);
+      s.close(); toast('✓ 已修改'); if(after) after();
+    }})});
 }
 on('credAsk', function(d){
   /* 用面板顯示（面板永遠在網頁上面），不會再被網頁蓋住；也不會改變網頁大小 */
@@ -7250,6 +7284,14 @@ SEC.need = function(title){
   return new Promise(function(res){ pinPad({title: title || '輸入密碼解鎖', bio: true, onOk: function(){ res(true); fire('secChanged'); }, onCancel: function(){ res(false); }}); });
 };
 
+/* 每次都要驗證（帳號密碼專用）：就算這次已經解鎖過，也要再輸入密碼或指紋 */
+SEC.verify = function(title){
+  if(!SEC.has()) return new Promise(function(res){
+    dialog('先設定密碼', '要保護帳號密碼，請先設定一組 6 位數密碼（之後每次查看、複製、修改都要輸入密碼或指紋）。', [['設定密碼', function(){ setPinFlow(); res(false); }], ['取消', function(){ res(false); }, '']]);
+  });
+  return new Promise(function(res){ pinPad({title: title || '驗證身分', bio: true, onOk: function(){ res(true); }, onCancel: function(){ res(false); }}); });
+};
+
 /* 數字鍵盤（像手機鎖屏） */
 function pinPad(o){
   var pin = '', done = false;
@@ -7343,8 +7385,8 @@ function openSecurity(){
     if(isApp) body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: SEC.cfg.bio !== false, disabled: !bioOk(), onchange: function(){ SEC.cfg.bio = this.checked; SEC.save(); }}),
       h('div', {class: 'grow'}, h('b', {text: '可以用指紋／臉部解鎖'}), h('div', {class: 'sub', text: bioOk() ? '解鎖時自動跳出指紋，也可以改用密碼' : '這支手機沒有設定指紋或臉部辨識'}))));
     body.appendChild(h('div', {class: 'ydSect', text: '要上鎖的地方'}));
-    body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.vault, onchange: function(){ SEC.cfg.vault = this.checked; SEC.save(); }}),
-      h('div', {class: 'grow'}, h('b', {text: '帳號密碼'}), h('div', {class: 'sub', text: '查看、複製、修改已儲存的帳號密碼前要解鎖'}))));
+    body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: true, disabled: true}),
+      h('div', {class: 'grow'}, h('b', {text: '帳號密碼（每一組都要單獨驗證）'}), h('div', {class: 'sub', text: '固定開啟：每次查看、複製、修改任何一組密碼，都要重新輸入密碼或指紋；離開畫面就馬上鎖回去'}))));
     body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.trash, onchange: function(){ SEC.cfg.trash = this.checked; SEC.save(); }}),
       h('div', {class: 'grow'}, h('b', {text: '垃圾桶'}), h('div', {class: 'sub', text: '打開檔案庫或收藏的垃圾桶（還原、永久刪除）前要解鎖'}))));
     body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.bm, onchange: function(){ SEC.cfg.bm = this.checked; SEC.save(); }}),
@@ -7418,7 +7460,13 @@ window.onNativeBack = function(){
     if(YTB.url && !/^https:\/\/m\.youtube\.com\/?(\?|#|$)/.test(YTB.url)){ ytEnsure(YT_HOME); return true; }
     return false;
   }
-  if(curView !== 'browse'){ showView('browse'); return true; }
+  /* 檔案庫：在子資料夾裡就回上一層；其他情況不切換分頁（要切換只能按下方的四個按鈕） */
+  if(curView === 'lib'){
+    var cat = CFG.lib.cat, cf = LV.open && LV.folder[cat];
+    if(cf){ var pf = LF.get(cf); LV.folder[cat] = pf && pf.parent || ''; renderLib(); return true; }
+    return false;
+  }
+  if(curView !== 'browse') return false;
   if(BR.home && BR.loaded){ leaveHome(); return true; }
   if(!BR.home && !BR.back && BR.loaded){ goHome(); return true; }
   return false;      /* 交給原生：瀏覽器上一頁，或把 App 退到背景 */
