@@ -151,7 +151,10 @@ $('bMode').addEventListener('click', function(){
 
 /* ---------- 收藏 ---------- */
 var BM = lsGet('ws.bm', null) || {folders: [{id: 'f_def', name: '未分類', icon: '📁'}, {id: 'f_read', name: '稍後閱讀', icon: '📖'}], items: []};
-BM.save = function(){ lsSet('ws.bm', {folders: BM.folders, items: BM.items}); };
+BM.trash = BM.trash || [];
+BM.save = function(){ lsSet('ws.bm', {folders: BM.folders, items: BM.items, trash: BM.trash}); };
+/* 刪除收藏：先丟進收藏的垃圾桶 */
+BM.remove = function(it){ BM.items = BM.items.filter(function(x){ return x !== it; }); BM.trash.unshift(Object.assign({}, it, {deleted: Date.now()})); BM.save(); };
 BM.norm = function(u){ return String(u || '').replace(/#.*$/, '').replace(/\/$/, ''); };
 BM.find = function(u){ var n = BM.norm(u); return BM.items.filter(function(x){ return BM.norm(x.url) === n; })[0]; };
 BM.folder = function(id){ return BM.folders.filter(function(f){ return f.id === id; })[0] || BM.folders[0]; };
@@ -194,7 +197,7 @@ function openStar(){
     h('div', {class: 'field'}, h('div', {class: 'lbl'}, '名稱'), title),
     h('div', {class: 'field'}, h('div', {class: 'lbl'}, '放到哪個收藏夾'), folderChips(sel, function(id){ sel = id; })));
   var save = h('button', {class: 'btn pri', html: icon('star', 'sm') + (ex ? '更新收藏' : '加入收藏')});
-  var foot = [ex ? h('button', {class: 'btn dang', html: icon('trash', 'sm') + '移除', onclick: function(){ BM.items = BM.items.filter(function(x){ return x !== ex; }); BM.save(); s.close(); renderBr(); toast('已移除收藏'); }}) : null, save];
+  var foot = [ex ? h('button', {class: 'btn dang', html: icon('trash', 'sm') + '移除', onclick: function(){ BM.remove(ex); s.close(); renderBr(); toast('已移到收藏的垃圾桶'); }}) : null, save];
   var s = openSheet({title: ex ? '編輯收藏' : '加入收藏', icon: 'star', body: body, foot: h('div', {style: {display: 'contents'}}, foot)});
   save.onclick = function(){
     it.title = title.value.trim() || it.title; it.folder = sel;
@@ -215,7 +218,7 @@ async function openBmList(startFolder){
   var chips = folderChips(sel, function(id){ sel = id; draw(); }, {toggle: true});
   chips.className = 'folderBar';
   var body = h('div', null, search, chips, list);
-  var manage = h('span', {style: {display: 'contents'}}, h('button', {class: 'ib', html: icon('history'), title: '瀏覽記錄', onclick: function(){ s.close(); openHistory(); }}), h('button', {class: 'ib', html: icon('edit'), title: '管理收藏夾', onclick: function(){ manageFolders(function(){ chips.redraw(); draw(); }); }}));
+  var manage = h('span', {style: {display: 'contents'}}, h('button', {class: 'ib', html: icon('trash'), title: '收藏的垃圾桶', onclick: function(){ openBmTrash(function(){ chips.redraw(); draw(); }); }}), h('button', {class: 'ib', html: icon('history'), title: '瀏覽記錄', onclick: function(){ s.close(); openHistory(); }}), h('button', {class: 'ib', html: icon('edit'), title: '管理收藏夾', onclick: function(){ manageFolders(function(){ chips.redraw(); draw(); }); }}));
   var s = openSheet({title: '我的收藏', icon: 'books', body: body, tall: true, headExtra: manage});
   function draw(){
     list.textContent = '';
@@ -240,7 +243,7 @@ function bmItemMenu(it, redraw){
       var s2 = openSheet({title: '移到…', icon: 'folder', body: folderChips(it.folder, function(id){ it.folder = id; BM.save(); s2.close(); redraw(); toast('已移到「' + BM.folder(id).name + '」'); })});
     }],
     ['copy', '複製網址', function(){ copyText(it.url); }],
-    ['trash', '刪除收藏', function(){ BM.items = BM.items.filter(function(x){ return x !== it; }); BM.save(); redraw(); renderBr(); toast('已刪除'); }, true]
+    ['trash', '刪除收藏（移到垃圾桶）', function(){ BM.remove(it); redraw(); renderBr(); toast('已移到垃圾桶', false, ['復原', function(){ BM.trash = BM.trash.filter(function(x){ return !(x.url === it.url && x.deleted); }); BM.items.unshift(it); BM.save(); redraw(); renderBr(); }]); }, true]
   ]);
 }
 function manageFolders(after){
@@ -584,3 +587,24 @@ $('bTabs').addEventListener('click', function(){
   }
   draw();
 });
+
+/* ---------- 收藏的垃圾桶 ---------- */
+async function openBmTrash(after){
+  if(SEC.cfg.trash && SEC.has() && !(await SEC.need('解鎖垃圾桶'))) return;
+  var body = h('div');
+  var s = openSheet({title: '收藏的垃圾桶', icon: 'trash', body: body, tall: true, onClose: after, foot: h('div', {style: {display: 'contents'}},
+    h('button', {class: 'btn ghost', text: '全部還原', onclick: function(){ BM.trash.forEach(function(x){ var y = Object.assign({}, x); delete y.deleted; if(!BM.folders.some(function(f){ return f.id === y.folder; })) y.folder = BM.folders[0].id; BM.items.unshift(y); }); BM.trash = []; BM.save(); renderBr(); draw(); toast('已全部還原'); }}),
+    h('button', {class: 'btn dang', text: '清空垃圾桶', onclick: async function(){ if(!BM.trash.length) return; if(await confirmDlg('永久刪除 ' + BM.trash.length + ' 個收藏？', '刪除後無法復原。', '永久刪除', true)){ BM.trash = []; BM.save(); draw(); } }}))});
+  function draw(){
+    body.textContent = '';
+    if(!BM.trash.length){ body.appendChild(h('div', {class: 'empty', html: '<div class="big">🗑</div>垃圾桶是空的'})); return; }
+    BM.trash.forEach(function(it, i){
+      body.appendChild(h('div', {class: 'bmItem'}, favEl(it, true),
+        h('div', {class: 't'}, h('b', {text: it.title || it.url}), h('div', {class: 'sub', text: hostOf(it.url) + '・刪除於 ' + fmtDate(it.deleted)})),
+        h('button', {class: 'ib', html: icon('reload'), title: '還原', onclick: function(){ var y = Object.assign({}, it); delete y.deleted; if(!BM.folders.some(function(f){ return f.id === y.folder; })) y.folder = BM.folders[0].id; BM.items.unshift(y); BM.trash.splice(i, 1); BM.save(); renderBr(); draw(); toast('已還原'); }}),
+        h('button', {class: 'ib', html: icon('trash'), title: '永久刪除', style: {color: 'var(--danger)'}, onclick: function(){ BM.trash.splice(i, 1); BM.save(); draw(); toast('已永久刪除'); }})));
+    });
+    paintIcons(body);
+  }
+  draw();
+}

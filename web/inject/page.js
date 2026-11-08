@@ -338,6 +338,8 @@
   }
   /* 手機內建螢幕錄影用：把影片放大到整個畫面（蓋住網頁其他東西），從頭播放到結束後通知 App 停止錄影 */
   var scr = null;
+  var FULL = [['position', 'fixed'], ['inset', '0'], ['left', '0'], ['top', '0'], ['width', '100vw'], ['height', '100vh'], ['max-width', 'none'], ['max-height', 'none'],
+       ['z-index', '2147483647'], ['object-fit', 'contain'], ['background', '#000'], ['margin', '0'], ['transform', 'none']];
   function screen(on) {
     if (on) {
       var v = (scr && scr.v) || pick('');
@@ -345,20 +347,42 @@
       if (!scr) scr = {v: v, style: v.getAttribute('style'), controls: v.controls, rect: v.getBoundingClientRect()};
       v.controls = false;
       /* 跟原本「在目前分頁錄製」一樣：只改影片本身的樣式（不加遮罩，之前加黑色遮罩會在某些網站蓋住影片變成全黑） */
-      [['position', 'fixed'], ['inset', '0'], ['left', '0'], ['top', '0'], ['width', '100vw'], ['height', '100vh'], ['max-width', 'none'], ['max-height', 'none'],
-       ['z-index', '2147483647'], ['object-fit', 'contain'], ['background', '#000'], ['margin', '0'], ['transform', 'none']].forEach(function (p) { v.style.setProperty(p[0], p[1], 'important'); });
+      FULL.forEach(function (p) { v.style.setProperty(p[0], p[1], 'important'); });
       ensureSound(v);
       var pp = v.play(); if (pp && pp.catch) pp.catch(function () {});
+      /* 跟著換影片：限時動態播完自動跳下一則、或網站重新畫面時，影片元素會換成新的一個 → 把滿版套到新的那一個 */
+      clearInterval(scr.fw);
+      scr.fw = setInterval(follow, 500);
       return JSON.stringify({w: v.videoWidth || 16, h: v.videoHeight || 9, dur: isFinite(v.duration) ? v.duration : 0});
     }
     if (scr) {
-      clearInterval(scr.tm);
+      clearInterval(scr.tm); clearInterval(scr.fw);
       if (scr.style == null) scr.v.removeAttribute('style'); else scr.v.setAttribute('style', scr.style);
       scr.v.controls = scr.controls;
       scr = null;
     }
     window.__wsRecPaused = 0;
     return '{}';
+  }
+  function follow() {
+    if (!scr || scr.rec) return;
+    var cur = scr.v;
+    /* 目前這個還在而且在播：不用換 */
+    var shown = cur.isConnected && cur.getClientRects().length > 0;
+    if (shown && !cur.paused && !cur.ended) return;
+    var best = null, bs = 0;
+    vids().forEach(function (o) {
+      if (o === cur || !o.isConnected || o.paused || o.readyState < 2) return;
+      var r = o.getBoundingClientRect(), a = r.width * r.height;
+      if (a > bs) { bs = a; best = o; }
+    });
+    if (!best) return;
+    if (cur.isConnected && !shown) { try { cur.pause(); } catch (e) {} }
+    if (cur.isConnected) { if (scr.style == null) cur.removeAttribute('style'); else cur.setAttribute('style', scr.style); cur.controls = scr.controls; }
+    scr.v = best; scr.style = best.getAttribute('style'); scr.controls = best.controls;
+    best.controls = false;
+    FULL.forEach(function (p) { best.style.setProperty(p[0], p[1], 'important'); });
+    ensureSound(best);
   }
   /* 確保影片有聲音（不調整音量）：
      1. 找網頁上標示「目前是靜音」的聲音按鈕（例如 IG 右上角的喇叭），找到就按它，讓網站自己把聲音打開
@@ -408,6 +432,7 @@
   function screenRewind() { if (!scr) return 'none'; try { scr.v.pause(); if (isFinite(scr.v.duration) && scr.v.duration > 0) scr.v.currentTime = 0; } catch (e) {} return 'ok'; }
   function screenPlay() {
     if (!scr) return 'none';
+    scr.rec = true;
     var v = scr.v, maxT = 0, lastT = -1, stall = 0, t0 = Date.now(), done = false;
     clearInterval(scr.tm);
     try { v.loop = false; v.playbackRate = 1; } catch (e) {}
@@ -432,7 +457,7 @@
     }, 1000);
     return 'ok';
   }
-  window.__wsRec = {start: start, stop: stop, screen: screen, screenPlay: screenPlay, screenToggle: screenToggle, screenRewind: screenRewind, can: function (src) {
+  window.__wsRec = {start: start, stop: stop, screen: screen, screenPlay: screenPlay, screenInfo: function () { if (!scr) return '{}'; follow(); var v = scr.v; return JSON.stringify({w: v.videoWidth || 0, h: v.videoHeight || 0}); }, screenToggle: screenToggle, screenRewind: screenRewind, can: function (src) {
     var v = pick(src);
     if (!v) return 'novideo';
     try { var s = (v.captureStream || v.mozCaptureStream).call(v); s.getTracks().forEach(function (t) { t.stop(); }); return 'ok'; } catch (e) { return 'nocap'; }

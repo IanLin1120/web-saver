@@ -56,16 +56,27 @@ var IDB = {
     });
   }
 };
+var TRASH = lsGet('ws.trash', {});
 var Lib = {
   items: [], urls: {},
   refresh: async function(){
     try{
-      if(isApp) this.items = NAT.json('libList') || [];
-      else this.items = await IDB.tx(['meta'], 'readonly', function(t){ return t.objectStore('meta').getAll(); }) || [];
-    }catch(e){ this.items = []; }
+      if(isApp) this.all = NAT.json('libList') || [];
+      else this.all = await IDB.tx(['meta'], 'readonly', function(t){ return t.objectStore('meta').getAll(); }) || [];
+    }catch(e){ this.all = []; }
+    /* 垃圾桶裡的檔案不出現在檔案庫的任何地方 */
+    var ids = {}, ch = false;
+    this.all.forEach(function(it){ ids[it.id] = 1; });
+    Object.keys(TRASH).forEach(function(k){ if(!ids[k]){ delete TRASH[k]; ch = true; } });
+    if(ch) lsSet('ws.trash', TRASH);
+    this.items = this.all.filter(function(it){ return !TRASH[it.id]; });
     fire('libChanged');
   },
-  byId: function(id){ return this.items.filter(function(x){ return x.id === id; })[0]; },
+  byId: function(id){ return (this.all || this.items).filter(function(x){ return x.id === id; })[0]; },
+  /* 刪除先丟進垃圾桶；在垃圾桶裡再刪除才是真的刪掉 */
+  trash: async function(ids){ ids.forEach(function(id){ TRASH[id] = Date.now(); }); lsSet('ws.trash', TRASH); await this.refresh(); },
+  restore: async function(ids){ ids.forEach(function(id){ delete TRASH[id]; }); lsSet('ws.trash', TRASH); await this.refresh(); },
+  trashList: function(){ return (this.all || []).filter(function(it){ return TRASH[it.id]; }).sort(function(a, b){ return TRASH[b.id] - TRASH[a.id]; }); },
   thumb: function(it){ return isApp ? (it.thumb ? 'file://' + it.thumb : '') : (it.thumbData || ''); },
   src: async function(it){
     if(isApp) return 'file://' + it.path;
@@ -210,6 +221,8 @@ function renderCats(){
       LV.open = true; setCfg('lib.cat', c[0]); renderLibList(); renderCats();
     }}));
   });
+  var tn = Lib.trashList().length;
+  if(tn) bar.appendChild(h('button', {class: 'fchip', html: icon('trash', 'sm') + '垃圾桶 <span class="c">' + tn + '</span>', onclick: function(){ openTrash(); }}));
   bar.appendChild(h('button', {class: 'fchip', html: icon('gear', 'sm') + '分類', title: '管理分類', onclick: function(){ manageAreas(); }}));
   if(CFG.lib.cat !== 'all' && !cnt[CFG.lib.cat] && !CAT[CFG.lib.cat]){ var f2 = Object.keys(CAT).filter(function(k){ return cnt[k]; })[0]; CFG.lib.cat = f2 || 'all'; saveCfg(); }
 }
@@ -344,8 +357,9 @@ function renderSelBar(){
   bar.appendChild(h('button', {class: 'ib', html: icon('edit'), title: '重新命名', disabled: !n, onclick: function(){ renameItems(picked); }}));
   bar.appendChild(h('button', {class: 'ib', html: icon('share'), title: '匯出', disabled: !n, onclick: function(){ exportSheet(picked); }}));
   bar.appendChild(h('button', {class: 'ib', html: icon('trash'), title: '刪除', disabled: !n, style: {color: 'var(--danger)'}, onclick: async function(){
-    if(!(await confirmDlg('刪除 ' + n + ' 個檔案？', '共 ' + fmtSize(picked.reduce(function(s, x){ return s + (x.size || 0); }, 0)) + '，刪除後無法復原。', '刪除', true))) return;
-    await Lib.del(Array.from(LV.sel)); LV.sel.clear(); LV.selMode = false; toast('已刪除');
+    var ids = Array.from(LV.sel);
+    await Lib.trash(ids); LV.sel.clear(); LV.selMode = false;
+    toast('已移到垃圾桶（' + n + ' 個）', false, ['復原', function(){ Lib.restore(ids).then(function(){ toast('已復原'); }); }]);
   }}));
 }
 function renderLib(){ renderCats(); renderSelBar(); renderLibList(); paintIcons($('v-lib')); }
@@ -554,7 +568,37 @@ function manageAreas(){
   on('areasChanged', function(){ if(!s.closed) draw(); });
 }
 on('libChanged', function(){
-  var ids = {}; Lib.items.forEach(function(it){ ids[it.id] = 1; });
+  var ids = {}; (Lib.all || Lib.items).forEach(function(it){ ids[it.id] = 1; });
   var ch = false; Object.keys(AREA.map).forEach(function(k){ if(!ids[k]){ delete AREA.map[k]; ch = true; } });
   if(ch) AREA.save();
 });
+
+/* ---------- 檔案庫垃圾桶：可以還原，或永久刪除 ---------- */
+async function openTrash(){
+  if(SEC.cfg.trash && SEC.has() && !(await SEC.need('解鎖垃圾桶'))) return;
+  var body = h('div');
+  var s = openSheet({title: '垃圾桶', icon: 'trash', body: body, tall: true, foot: h('div', {style: {display: 'contents'}},
+    h('button', {class: 'btn ghost', text: '全部還原', onclick: async function(){ var L = Lib.trashList(); if(!L.length) return; await Lib.restore(L.map(function(x){ return x.id; })); toast('已還原 ' + L.length + ' 個'); draw(); }}),
+    h('button', {class: 'btn dang', html: icon('trash', 'sm') + '清空垃圾桶', onclick: async function(){
+      var L = Lib.trashList(); if(!L.length) return;
+      if(!(await confirmDlg('永久刪除 ' + L.length + ' 個檔案？', '共 ' + fmtSize(L.reduce(function(a, x){ return a + (x.size || 0); }, 0)) + '，刪除後<b>無法復原</b>。', '永久刪除', true))) return;
+      await Lib.del(L.map(function(x){ return x.id; })); toast('已永久刪除'); draw();
+    }}))});
+  function draw(){
+    body.textContent = '';
+    var L = Lib.trashList();
+    body.appendChild(h('div', {class: 'sub', style: {marginBottom: '10px', lineHeight: '1.6'}, text: L.length ? '共 ' + L.length + ' 個・' + fmtSize(L.reduce(function(a, x){ return a + (x.size || 0); }, 0)) + '（仍佔用手機空間，清空後才會釋放）' : ''}));
+    if(!L.length){ body.appendChild(h('div', {class: 'empty', html: '<div class="big">🗑</div>垃圾桶是空的'})); return; }
+    L.forEach(function(it){
+      body.appendChild(h('div', {class: 'lrow'}, thumbEl(it),
+        h('div', {class: 't'}, h('b', {text: it.name}), h('div', {class: 'sub', text: areaName(areaOf(it)) + '・' + fmtSize(it.size) + '・刪除於 ' + fmtDate(TRASH[it.id])})),
+        h('button', {class: 'ib', html: icon('reload'), title: '還原', onclick: async function(){ await Lib.restore([it.id]); toast('已還原'); draw(); }}),
+        h('button', {class: 'ib', html: icon('trash'), title: '永久刪除', style: {color: 'var(--danger)'}, onclick: async function(){
+          if(!(await confirmDlg('永久刪除？', esc(it.name) + '<br>刪除後<b>無法復原</b>。', '永久刪除', true))) return;
+          await Lib.del([it.id]); toast('已永久刪除'); draw();
+        }})));
+    });
+    paintIcons(body);
+  }
+  draw();
+}

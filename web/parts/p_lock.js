@@ -129,6 +129,8 @@ function openSecurity(){
     body.appendChild(h('div', {class: 'ydSect', text: '要上鎖的地方'}));
     body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.vault, onchange: function(){ SEC.cfg.vault = this.checked; SEC.save(); }}),
       h('div', {class: 'grow'}, h('b', {text: '帳號密碼'}), h('div', {class: 'sub', text: '查看、複製、修改已儲存的帳號密碼前要解鎖'}))));
+    body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.trash, onchange: function(){ SEC.cfg.trash = this.checked; SEC.save(); }}),
+      h('div', {class: 'grow'}, h('b', {text: '垃圾桶'}), h('div', {class: 'sub', text: '打開檔案庫或收藏的垃圾桶（還原、永久刪除）前要解鎖'}))));
     body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.bm, onchange: function(){ SEC.cfg.bm = this.checked; SEC.save(); }}),
       h('div', {class: 'grow'}, h('b', {text: '我的收藏'}), h('div', {class: 'sub', text: '打開收藏清單前要解鎖'}))));
     Object.keys(CAT).forEach(function(k){

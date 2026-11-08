@@ -45,7 +45,7 @@ LF.setItems = function(ids, fid){ ids.forEach(function(id){ if(fid) LF.map[id] =
 LF.pickDefault = function(){ return ''; };
 on('libChanged', function(){
   /* 清掉已刪除檔案的對應；原生紀錄的資料夾補回來 */
-  var ids = {}; Lib.items.forEach(function(it){ ids[it.id] = 1; if(it.folder && !LF.map[it.id] && LF.get(it.folder)) LF.map[it.id] = it.folder; });
+  var ids = {}; (Lib.all || Lib.items).forEach(function(it){ ids[it.id] = 1; if(it.folder && !LF.map[it.id] && LF.get(it.folder)) LF.map[it.id] = it.folder; });
   var ch = false; Object.keys(LF.map).forEach(function(k){ if(!ids[k]){ delete LF.map[k]; ch = true; } });
   if(ch) LF.save();
 });

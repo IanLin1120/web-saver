@@ -371,11 +371,17 @@ function brRun(js){
 async function startScreenRec(){
   if(MEDIA.sheet) MEDIA.sheet.close();
   if(SREC.on || NAT.call('srecOn')){ toast('已經在滿版播放／錄影中', true); return; }
+  /* 先切成滿版瀏覽、等網頁重新排版完（IG 會因為畫面大小改變而重畫影片），再把影片放大；不用自己先切滿版 */
+  var wasFull = document.body.classList.contains('brFull');
+  if(!wasFull){ setBrFull(true, true); await sleep(900); }
   var info = await brRun("(function(){try{return window.__wsRec?__wsRec.screen(true):'{\"err\":\"noscript\"}'}catch(e){return '{\"err\":\"'+e.message+'\"}'}})()");
-  if(!info || info.err){ toast('在網頁裡找不到影片，請先播放影片再試', true); return; }
+  if(!info || info.err){ if(!wasFull) setBrFull(false, true); toast('在網頁裡找不到影片，請先播放影片再試', true); return; }
+  /* 等一下再看實際在放的是哪一部（會自動換到畫面上看得到的那部），用它的方向決定直／橫 */
+  await sleep(700);
+  var i2 = await brRun("(function(){return window.__wsRec&&__wsRec.screenInfo?__wsRec.screenInfo():'{}'})()");
+  if(i2 && i2.w) info = i2;
   SREC.on = true; SREC.rec = false;
   SREC.title = (typeof pageVideoName === 'function' ? pageVideoName() : (BR.title || '影片')).replace(/\.[a-z0-9]{2,4}$/i, '');
-  setBrFull(true, true);
   /* 依影片本身的方向：橫的才轉橫向，直的維持直向 */
   NAT.call('uiFull', true, info.w > 0 && info.w > info.h * 1.05);
   fabSync();
