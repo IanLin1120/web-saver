@@ -336,31 +336,26 @@ function recCard(){
   if(!isApp || !NAT.has('brRecCheck')) return null;
   var r = MEDIA.rec;
   if(!r || r === 'novideo' || r === 'noscript' || r === 'err') return null;
-  var ok = r === 'ok';
-  var scr = NAT.has('srecAsk') ? h('div', {class: 'card glass', style: {padding: '12px 14px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '12px'}},
-    h('span', {style: {background: 'var(--olive)', width: '40px', height: '40px', borderRadius: '12px', display: 'grid', placeItems: 'center', color: '#fff', flex: 'none'}, html: icon('phone')}),
-    h('div', {class: 'grow', style: {minWidth: 0}}, h('b', {text: '手機螢幕錄影（勿擾模式）'}),
-      h('div', {class: 'sub', style: {fontSize: '12px'}, text: '用手機內建的螢幕錄影：影片放大到整個螢幕、從頭播到結束自動停止。錄影時自動開勿擾、擋通知，結束後恢復'})),
-    h('button', {class: 'btn sm', text: '錄影', onclick: function(){ startScreenRec(); }})) : null;
-  return h('div', null, h('div', {class: 'card glass', style: {padding: '12px 14px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '12px'}},
-    h('span', {class: 'oi', style: {background: ok ? 'var(--c-video)' : '#999', width: '40px', height: '40px', borderRadius: '12px', display: 'grid', placeItems: 'center', color: '#fff', flex: 'none'}, html: icon('film')}),
+  return h('div', {class: 'card glass', style: {padding: '12px 14px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '12px'}},
+    h('span', {style: {background: 'var(--c-video)', width: '40px', height: '40px', borderRadius: '12px', display: 'grid', placeItems: 'center', color: '#fff', flex: 'none'}, html: icon('film')}),
     h('div', {class: 'grow', style: {minWidth: 0}}, h('b', {text: '錄製下載（畫面＋聲音）'}),
-      h('div', {class: 'sub', style: {fontSize: '12px'}, text: ok ? '偵測到可以錄製：錄下影片原本的畫面與聲音（最高畫質、只有影片畫面），需要跟影片一樣長的時間' : '這部影片有防錄製保護或來自其他網域，不能錄製，請用下面的一般下載'})),
-    ok ? h('button', {class: 'btn sm pri', text: '錄製', onclick: function(){ startRec(); }}) : null), scr);
+      h('div', {class: 'sub', style: {fontSize: '12px'}, text: '自動從頭錄到影片結束。可以在背景錄，或滿版播放用手機螢幕錄影（勿擾模式）'})),
+    h('button', {class: 'btn sm pri', text: '錄製', onclick: function(){ startRec(); }}));
 }
 function startRec(){
   var src = MEDIA.playing && MEDIA.playing.src || '';
   var title = (pageVideoName ? pageVideoName() : (MEDIA.title || '影片')).replace(/\.[a-z0-9]{2,4}$/i, '');
-  function go(here){
+  var canBg = MEDIA.rec === 'ok';
+  function bg(){
     if(MEDIA.sheet) MEDIA.sheet.close();
-    var req = {job: dlJobId(title), page: MEDIA.page, title: MEDIA.title, items: [{kind: 'rec', url: src, page: MEDIA.page, referer: MEDIA.page, here: here, name: title, src: MEDIA.page, title: MEDIA.title, thumbUrl: MEDIA.playing && MEDIA.playing.poster || ''}], opts: {zip: false}};
+    var req = {job: dlJobId(title), page: MEDIA.page, title: MEDIA.title, items: [{kind: 'rec', url: src, page: MEDIA.page, referer: MEDIA.page, here: false, name: title, src: MEDIA.page, title: MEDIA.title, thumbUrl: MEDIA.playing && MEDIA.playing.poster || ''}], opts: {zip: false}};
     dlCard(0, 1, '準備錄製…', 0);
     NAT.call('dlStart', JSON.stringify(req));
-    toast(here ? '開始錄製：這個分頁要保持開著，錄製期間影片不會發出聲音' : '在背景錄製：會在看不到的分頁從頭播放到結束');
+    toast('在背景錄製：看不到的分頁會從頭播到結束，你可以繼續用 App 的其他功能');
   }
   menu('錄製方式', [
-    ['film', '在背景錄製（建議）', function(){ go(false); }, false, '另開一個看不到的分頁從頭錄到結束，你可以繼續用 App'],
-    ['play', '在目前分頁錄製', function(){ go(true); }, false, '網頁需要先點播放或登入時用這個；錄製期間不要離開這個網頁']
+    ['phone', '滿版播放＋手機螢幕錄影（建議）', function(){ startScreenRec(); }, false, '影片放大到整個螢幕、用手機內建錄影從頭錄到結束；有懸浮的暫停／停止鈕（錄不到），期間自動開勿擾'],
+    ['film', '在背景錄製', function(){ if(canBg) bg(); else toast('這部影片有防錄製保護或來自其他網域，只能用「滿版播放＋手機螢幕錄影」', true); }, false, canBg ? '直接錄影片串流（不用螢幕錄影），錄的時候可以繼續用 App 的其他功能' : '這部影片不支援背景錄製']
   ]);
 }
 
@@ -405,6 +400,7 @@ function srecCleanup(){
 }
 on('srec', function(d){
   if(!d) return;
+  if(d.state === 'paused' || d.state === 'resumed') return;
   if(d.state === 'start'){ setTimeout(function(){ brRun("(function(){return JSON.stringify(window.__wsRec?__wsRec.screenPlay():'none')})()"); }, 400); return; }
   srecCleanup();
   if(d.state === 'done'){

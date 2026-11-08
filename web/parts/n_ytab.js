@@ -7,11 +7,13 @@ var YT_HOME = 'https://m.youtube.com/';
 
 function ytSyncLayout(){
   if(!isApp) return;
+  /* 換分頁時畫面有 6px 的滑入動畫：扣掉動畫位移，量到的才是最後的位置（之前會偏下、蓋到下方分頁列） */
+  var vo = $('v-yt').getBoundingClientRect().top;
   var tb = $('ytTop').getBoundingClientRect();
-  if(tb.height) document.documentElement.style.setProperty('--ytTop', Math.round(tb.bottom / uiZoom() + 4) + 'px');
+  if(tb.height) document.documentElement.style.setProperty('--ytTop', Math.round((tb.bottom - vo) / uiZoom() + 6) + 'px');
   requestAnimationFrame(function(){
-    var a = $('ytArea').getBoundingClientRect();
-    NAT.call('ytRect', a.top, Math.max(0, innerHeight - a.bottom), a.left, Math.max(0, innerWidth - a.right));
+    var off = $('v-yt').getBoundingClientRect().top, a = $('ytArea').getBoundingClientRect();
+    NAT.call('ytRect', a.top - off, Math.max(0, innerHeight - (a.bottom - off)), a.left, Math.max(0, innerWidth - a.right));
     ytUpdateVisible();
   });
 }
@@ -65,6 +67,7 @@ on('view', function(e){
   if(e.prev === 'browse' && e.v !== 'browse') fabClear();
   if(e.v === 'yt'){ ytEnsure(); if(!YTB.started) renderYtStart(); }
   ytSyncLayout(); ytUpdateVisible(); fabSync();
+  clearTimeout(ytSyncLayout.v); ytSyncLayout.v = setTimeout(ytSyncLayout, 300);
   if(e.prev === 'yt' && e.v !== 'yt' && isApp) NAT.call('ytNav', 'fsOff');
 });
 on('layout', ytSyncLayout);

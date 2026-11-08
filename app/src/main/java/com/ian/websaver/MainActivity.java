@@ -95,6 +95,7 @@ public class MainActivity extends Activity {
         });
 
         br = new Browser(this);
+        tabs.add(br);
         yt = new Browser(this, "yt");
         vw = new Viewer(this);
         fab = new Fab(this);
@@ -191,6 +192,49 @@ public class MainActivity extends Activity {
 
     /* ---------- 子母畫面（YouTube 影片播放中按 Home 自動縮小） ---------- */
     /** 目前在畫面上的瀏覽器（YouTube 分頁或瀏覽分頁） */
+    /* ---------- 瀏覽分頁的多分頁 ---------- */
+    final java.util.List<Browser> tabs = new java.util.ArrayList<>();
+
+    Browser tabById(int id) { for (Browser b : tabs) if (b.tabId == id) return b; return null; }
+
+    Browser newTab() {
+        Browser old = br;
+        Browser b = new Browser(this);
+        root.removeView(b.wv);
+        root.addView(b.wv, root.indexOfChild(old.wv) + 1, new FrameLayout.LayoutParams((FrameLayout.LayoutParams) old.wv.getLayoutParams()));
+        b.incog = old.incog;
+        if (b.incog) { b.wv.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_NO_CACHE); b.wv.getSettings().setSaveFormData(false); }
+        old.pauseMedia();
+        old.show(false);
+        tabs.add(b);
+        br = b;
+        b.emitState();
+        return b;
+    }
+
+    void switchTab(int id) {
+        Browser b = tabById(id);
+        if (b == null || b == br) return;
+        boolean vis = br.shown;
+        br.pauseMedia();
+        br.show(false);
+        b.wv.setLayoutParams(new FrameLayout.LayoutParams((FrameLayout.LayoutParams) br.wv.getLayoutParams()));
+        br = b;
+        b.show(vis);
+        b.emitState();
+        if (fab != null) fab.refresh();
+    }
+
+    void closeTab(int id) {
+        Browser b = tabById(id);
+        if (b == null) return;
+        if (tabs.size() == 1) { b.pauseMedia(); b.wv.loadUrl("about:blank"); b.wv.clearHistory(); b.emitState(); return; }
+        int i = tabs.indexOf(b);
+        if (b == br) switchTab(tabs.get(i > 0 ? i - 1 : 1).tabId);
+        tabs.remove(b);
+        try { root.removeView(b.wv); b.wv.stopLoading(); b.wv.destroy(); } catch (Throwable t) { /* ignore */ }
+    }
+
     Browser act() { return yt != null && (yt.isShown() || yt.fs || yt.inPip) ? yt : br; }
 
     /* ---------- 子母畫面的控制按鈕：倒退 10 秒、播放／暫停、快轉 10 秒 ---------- */

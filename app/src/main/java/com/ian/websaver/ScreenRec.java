@@ -45,6 +45,11 @@ final class ScreenRec {
         String name;
         int vTrack = -1, aTrack = -1, tracks = 0, need = 1;
         boolean muxing = false, vEos = false;
+        Surface in;
+        volatile boolean paused = false;
+        volatile long pauseAt = 0, pausedUs = 0;
+        long startMs = System.currentTimeMillis();
+        RecCtl ctl;
         volatile boolean stop = false;
         long t0 = -1;
         Thread tv, ta;
@@ -140,9 +145,9 @@ final class ScreenRec {
         vf.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2);
         r.venc = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
         r.venc.configure(vf, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
-        Surface in = r.venc.createInputSurface();
+        r.in = r.venc.createInputSurface();
         r.venc.start();
-        r.vd = r.mp.createVirtualDisplay("websaver-rec", w, h, dm.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, in, null, null);
+        r.vd = r.mp.createVirtualDisplay("websaver-rec", w, h, dm.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, r.in, null, null);
         /* 聲音：錄 App 播出的聲音（不是麥克風）；需要錄音權限，沒有就只錄畫面 */
         if (Build.VERSION.SDK_INT >= 29 && a.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             try {
@@ -169,6 +174,9 @@ final class ScreenRec {
             r.ta = new Thread(new Runnable() { @Override public void run() { audioLoop(r); } }, "rec-a");
             r.ta.start();
         }
+        r.startMs = System.currentTimeMillis();
+        r.ctl = new RecCtl(a);
+        r.ctl.show();
         emit("start", r.need == 2 ? "錄影中（含聲音）" : "錄影中（沒有錄音權限，只錄畫面）");
     }
 
@@ -178,6 +186,7 @@ final class ScreenRec {
         try {
             while (true) {
                 int n = r.stop ? -1 : r.ar.read(buf, 0, buf.length);
+                if (r.paused && n >= 0) continue;
                 int ix = r.aenc.dequeueInputBuffer(10000);
                 if (ix >= 0) {
                     ByteBuffer ib = r.aenc.getInputBuffer(ix);
@@ -227,7 +236,7 @@ final class ScreenRec {
                 if (r.muxing) {
                     if (video) {
                         if (r.t0 < 0) r.t0 = bi.presentationTimeUs;
-                        bi.presentationTimeUs = Math.max(0, bi.presentationTimeUs - r.t0);
+                        bi.presentationTimeUs = Math.max(0, bi.presentationTimeUs - r.t0 - r.pausedUs);
                     }
                     ob.position(bi.offset); ob.limit(bi.offset + bi.size);
                     try { r.mux.writeSampleData(video ? r.vTrack : r.aTrack, ob, bi); } catch (Throwable t) { /* ignore */ }
@@ -238,12 +247,35 @@ final class ScreenRec {
         return eos;
     }
 
+    /* ---------- 暫停／繼續：暫停時不錄畫面也不錄聲音，影片也一起暫停 ---------- */
+    static void pause(MainActivity a, boolean on) {
+        Rec r = cur;
+        if (r == null || r.paused == on) return;
+        if (on) {
+            r.paused = true;
+            r.pauseAt = System.nanoTime();
+            try { r.vd.setSurface(null); } catch (Throwable t) { /* ignore */ }
+            a.br.wv.evaluateJavascript("window.__wsRecPaused=1;(function(){try{[].forEach.call(document.querySelectorAll('video'),function(v){v.pause()})}catch(e){}})()", null);
+        } else {
+            r.pausedUs += (System.nanoTime() - r.pauseAt) / 1000;
+            try { r.vd.setSurface(r.in); } catch (Throwable t) { /* ignore */ }
+            r.paused = false;
+            a.br.wv.evaluateJavascript("window.__wsRecPaused=0;(function(){try{var v=document.querySelector('video[style*=\"2147483647\"]')||document.querySelector('video');if(v)v.play()}catch(e){}})()", null);
+        }
+        if (r.ctl != null) r.ctl.update(r.paused);
+        emit(on ? "paused" : "resumed", "");
+    }
+
+    static long elapsed() { Rec r = cur; if (r == null) return 0; long p = r.pausedUs / 1000 + (r.paused ? (System.nanoTime() - r.pauseAt) / 1_000_000 : 0); return System.currentTimeMillis() - r.startMs - p; }
+
     /* ---------- 結束：存進檔案庫、恢復勿擾設定 ---------- */
     static void stop(final MainActivity a) {
         final Rec r = cur;
         if (r == null || r.stop) return;
+        if (r.paused) { r.pausedUs += (System.nanoTime() - r.pauseAt) / 1000; try { r.vd.setSurface(r.in); } catch (Throwable t) { /* ignore */ } r.paused = false; }
         r.stop = true;
         cur = null;
+        if (r.ctl != null) r.ctl.hide();
         Util.IO.execute(new Runnable() {
             @Override public void run() {
                 try { if (r.tv != null) r.tv.join(5000); } catch (Throwable t) { /* ignore */ }

@@ -174,6 +174,14 @@ final class Browser {
 
     Browser(MainActivity act) { this(act, "br"); }
 
+    static int tabSeq = 0;
+    final int tabId = ++tabSeq;
+
+    /** 背景分頁（不是目前顯示的瀏覽分頁）：不要把狀態送給介面 */
+    boolean bgTab() { return "br".equals(tag) && a.br != null && a.br != this; }
+
+    void pauseMedia() { try { wv.evaluateJavascript("(function(){try{[].forEach.call(document.querySelectorAll('video,audio'),function(m){m.pause()})}catch(e){}})()", null); } catch (Throwable t) { /* ignore */ } }
+
     Browser(MainActivity act, String tg) {
         a = act;
         tag = tg;
@@ -628,7 +636,8 @@ final class Browser {
             o.put("mode", mode);
             o.put("secure", curUrl.startsWith("https:"));
             o.put("fs", fs);
-            if (!hiddenBr) MainActivity.emit("yt".equals(tag) ? "ytbr" : "br", o.toString());
+            o.put("tab", tabId);
+            if (!hiddenBr && !bgTab()) MainActivity.emit("yt".equals(tag) ? "ytbr" : "br", o.toString());
         } catch (Throwable t) { /* ignore */ }
     }
 
@@ -931,7 +940,7 @@ final class Browser {
                                 net++;
                             }
                         }
-                        MainActivity.emit("mediaCount", "{\"dom\":" + n + ",\"net\":" + net + "}");
+                        if (!bgTab()) MainActivity.emit("mediaCount", "{\"dom\":" + n + ",\"net\":" + net + "}");
                     }
                 });
             }
@@ -985,7 +994,7 @@ final class Browser {
         if (!pw || !host.equals(curHost)) return;
         JSONArray users = Creds.get(a).users(host);
         if (users.length() > 0) {
-            try { MainActivity.emit("credAvail", new JSONObject().put("host", host).put("users", users).toString()); } catch (Throwable t) { /* ignore */ }
+            if (!bgTab()) try { MainActivity.emit("credAvail", new JSONObject().put("host", host).put("users", users).toString()); } catch (Throwable t) { /* ignore */ }
         }
     }
 

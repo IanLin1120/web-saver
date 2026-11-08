@@ -557,3 +557,10 @@ body.brFull #brArea{left:0!important;right:0!important;top:0!important;bottom:0!
 .hoBtn img,.hoBtn>span:first-child{width:38px;height:38px;border-radius:10px;display:grid;place-items:center}
 .hoBtn .more{background:var(--surface);color:var(--text-2)}
 .hoBtn .ell{max-width:100%}
+
+#brTop .urlrow #bTabs{width:34px;height:38px;flex:none}
+#bTabs span{display:grid;place-items:center;min-width:19px;height:19px;padding:0 3px;border:2px solid currentColor;border-radius:6px;font:800 11px/1 -apple-system,sans-serif}
+.tabItem{display:flex;align-items:center;gap:10px;padding:10px 10px 10px 12px;border-radius:14px;background:var(--surface-2);margin-bottom:8px;border:2px solid transparent}
+.tabItem.on{border-color:var(--accent);background:var(--surface)}
+.tabItem .t{flex:1;min-width:0}
+.tabItem .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

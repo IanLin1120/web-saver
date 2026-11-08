@@ -371,6 +371,7 @@
     function end() { if (done) return; done = true; clearInterval(scr && scr.tm); try { B.srecEnd(); } catch (e) {} }
     v.addEventListener('ended', end);
     scr.tm = setInterval(function () {
+      if (window.__wsRecPaused) { stall = 0; return; }
       var d = isFinite(v.duration) ? v.duration : 0, t = v.currentTime || 0;
       if (Math.abs(t - lastT) < 0.05) stall++; else stall = 0;
       var looped = d > 0 && maxT >= d * 0.8 && t < maxT - 2;

@@ -266,6 +266,24 @@ public class Bridge {
     @JavascriptInterface public void dlMax(int n) { a.prefs.edit().putInt("dlMax", n).apply(); MediaDl.setMax(n); }
     @JavascriptInterface public int dlMaxGet() { return a.prefs.getInt("dlMax", 3); }
     @JavascriptInterface public int dlRunning() { return MediaDl.JOBS.size(); }
+    /* ---------- 多分頁 ---------- */
+    @JavascriptInterface public String tabsList() {
+        JSONArray out = new JSONArray();
+        try { for (Browser b : a.tabs) out.put(new JSONObject().put("id", b.tabId).put("url", b.curUrl == null ? "" : b.curUrl).put("title", b.curTitle == null ? "" : b.curTitle).put("cur", b == a.br)); } catch (Throwable t) { /* ignore */ }
+        return out.toString();
+    }
+    @JavascriptInterface public void tabNew(final String url) { ui(new Runnable() { @Override public void run() { Browser b = a.newTab(); if (url != null && !url.isEmpty()) b.load(url); } }); }
+    @JavascriptInterface public void tabSwitch(final int id) { ui(new Runnable() { @Override public void run() { a.switchTab(id); } }); }
+    @JavascriptInterface public void tabClose(final int id) { ui(new Runnable() { @Override public void run() { a.closeTab(id); MainActivity.emit("tabs", ""); } }); }
+    @JavascriptInterface public void tabCloseAll() {
+        ui(new Runnable() { @Override public void run() {
+            int keep = a.br.tabId;
+            for (Browser b : new java.util.ArrayList<>(a.tabs)) if (b.tabId != keep) a.closeTab(b.tabId);
+            a.closeTab(keep);
+            MainActivity.emit("tabs", "");
+        } });
+    }
+
     /* ---------- 手機內建螢幕錄影 ---------- */
     @JavascriptInterface public boolean dndOk() { return ScreenRec.dndAllowed(a); }
     @JavascriptInterface public void dndSettings() { ui(new Runnable() { @Override public void run() { ScreenRec.openDndSettings(a); } }); }

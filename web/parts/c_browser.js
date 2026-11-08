@@ -6,12 +6,13 @@ var BR = {url: '', title: '', host: '', progress: 100, back: false, fwd: false, 
 
 /* ---------- 版面同步（原生瀏覽器的位置） ---------- */
 function syncLayout(){
+  var vo = $('v-browse').getBoundingClientRect().top;
   var top = $('brTop').getBoundingClientRect();
-  document.documentElement.style.setProperty('--brTop', Math.round(top.bottom / uiZoom() + 6) + 'px');
+  document.documentElement.style.setProperty('--brTop', Math.round((top.bottom - vo) / uiZoom() + 6) + 'px');
   if(!isApp) return;
   requestAnimationFrame(function(){
-    var a = $('brArea').getBoundingClientRect();
-    NAT.call('brRect', a.top, Math.max(0, innerHeight - a.bottom), a.left, Math.max(0, innerWidth - a.right));
+    var off = $('v-browse').getBoundingClientRect().top, a = $('brArea').getBoundingClientRect();
+    NAT.call('brRect', a.top - off, Math.max(0, innerHeight - (a.bottom - off)), a.left, Math.max(0, innerWidth - a.right));
     updateBrVisible();
   });
 }
@@ -121,6 +122,15 @@ on('br', function(d){
   var urlChanged = d.url !== BR.url;
   BR.url = d.url || ''; BR.title = d.title || ''; BR.host = d.host || hostOf(BR.url); BR.progress = d.progress; BR.back = d.back; BR.fwd = d.fwd; BR.secure = d.secure; BR.blocked = d.blocked || 0;
   if(urlChanged){ BR.mediaN = 0; Dock.remove('credAvail'); if(BR.zap){ BR.zap = false; Dock.remove('zap'); } }
+  if(d.tab && d.tab !== BR.tab){
+    /* 切換到另一個分頁：空白分頁顯示首頁，有網頁的分頁直接顯示 */
+    var first = !BR.tab; BR.tab = d.tab;
+    if(!first){
+      if(!BR.url || /^about:/.test(BR.url)){ BR.loaded = false; goHome(); }
+      else { BR.loaded = true; BR.home = false; $('startPage').classList.add('hide'); updateBrVisible(); }
+    }
+    tabCount();
+  }
   if(BR.url && !/^about:/.test(BR.url) && BR.home && urlChanged && BR.loaded){ BR.home = false; $('startPage').classList.add('hide'); updateBrVisible(); }
   renderBr();
 });
@@ -276,7 +286,7 @@ function renderStart(){
       catch(err){ urlIn.focus(); toast('請長按網址列貼上'); }
     }})));
   if(!isApp) sects.appendChild(h('div', {class: 'note', html: '🌐 <b>網頁版</b>：瀏覽器的安全限制讓網頁無法直接開啟其他網站，這裡會透過「代理伺服器」讀取網頁內容（不執行網頁程式、無法登入）。完整的瀏覽、登入、廣告阻擋與影片偵測請使用 <b>APK 版</b>。代理伺服器可在「設定 → 網頁版代理」修改。'}));
-  if(BR.loaded) sects.appendChild(h('div', {class: 'opt', style: {marginTop: '12px'}, onclick: leaveHome}, h('span', {class: 'oi', html: icon('back')}), h('div', {class: 'grow'}, h('b', {text: '回到目前網頁'}), h('div', {class: 'sub ell', text: BR.title || BR.url}))));
+
   /* 收藏與瀏覽記錄（只放入口按鈕，畫面保持清爽） */
   var tiles = h('div', {class: 'tiles'});
   tiles.appendChild(h('div', {class: 'tile', onclick: function(){ openBmList(''); }}, h('div', {class: 'fav', html: icon('books')}), h('span', {text: '全部收藏'}), h('small', {class: 'sub', text: BM.items.length + ' 個'})));
@@ -531,3 +541,44 @@ function setBrFull(on, quiet){
   if(on && !quiet) toast('滿版瀏覽：點懸浮下載按鈕 →「離開滿版瀏覽」切回一般版面');
 }
 on('view', function(e){ if(e.v !== 'browse' && document.body.classList.contains('brFull')) setBrFull(false); });
+
+/* ---------- 多分頁：網址列旁的「分頁」按鈕，可切換、關閉單一分頁或全部 ---------- */
+function tabList(){ try{ return isApp && NAT.has('tabsList') ? JSON.parse(NAT.call('tabsList') || '[]') : []; }catch(e){ return []; } }
+function tabCount(){ var n = tabList().length || 1; $('tabN').textContent = n > 99 ? '∞' : n; }
+if(!isApp) $('bTabs').classList.add('hide');
+on('tabs', function(){ setTimeout(tabCount, 50); });
+function newTab(url){
+  NAT.call('tabNew', url || '');
+  BR.url = ''; BR.loaded = !!url; BR.back = false; BR.fwd = false;
+  if(url){ BR.home = false; $('startPage').classList.add('hide'); BR.progress = 5; }
+  else goHome();
+  setTimeout(tabCount, 80); renderBr();
+}
+$('bTabs').addEventListener('click', function(){
+  var body = h('div');
+  var s = openSheet({title: '分頁', icon: 'grid', body: body, tall: true,
+    foot: h('div', {style: {display: 'contents'}},
+      h('button', {class: 'btn ghost', html: icon('trash', 'sm') + '關閉全部', onclick: function(){ s.close(); NAT.call('tabCloseAll'); BR.loaded = false; BR.url = ''; goHome(); setTimeout(tabCount, 120); toast('已關閉全部分頁'); }}),
+      h('button', {class: 'btn pri', html: icon('plus', 'sm') + '新分頁', onclick: function(){ s.close(); newTab(''); }}))});
+  function draw(){
+    body.textContent = '';
+    var L = tabList();
+    L.forEach(function(t){
+      var blank = !t.url || /^about:/.test(t.url);
+      body.appendChild(h('div', {class: 'tabItem' + (t.cur ? ' on' : ''), onclick: function(){
+          s.close();
+          if(t.cur){ if(blank) goHome(); else leaveHome(); return; }
+          NAT.call('tabSwitch', t.id);
+        }},
+        blank ? h('span', {class: 'oi', html: icon('home')}) : favEl({url: t.url, title: t.title}, true),
+        h('div', {class: 't'}, h('b', {text: blank ? '新分頁' : (t.title || hostOf(t.url))}), h('div', {class: 'sub ell', text: blank ? '' : hostOf(t.url)})),
+        h('button', {class: 'ib', html: icon('x'), title: '關閉分頁', onclick: function(e){
+          e.stopPropagation();
+          NAT.call('tabClose', t.id);
+          setTimeout(function(){ draw(); tabCount(); if(L.length === 1){ BR.loaded = false; BR.url = ''; goHome(); } }, 150);
+        }})));
+    });
+    paintIcons(body);
+  }
+  draw();
+});
