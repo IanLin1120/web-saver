@@ -342,7 +342,7 @@
        ['z-index', '2147483647'], ['object-fit', 'contain'], ['background', '#000'], ['margin', '0'], ['transform', 'none']];
   function screen(on) {
     if (on) {
-      var v = (scr && scr.v) || pick('');
+      var v = (scr && scr.v) || shownPlaying(null) || pick('');
       if (!v) return JSON.stringify({err: 'novideo'});
       if (!scr) scr = {v: v, style: v.getAttribute('style'), controls: v.controls, rect: v.getBoundingClientRect()};
       v.controls = false;
@@ -357,7 +357,7 @@
     }
     if (scr) {
       clearInterval(scr.tm); clearInterval(scr.fw);
-      unmuteOthers();
+      vids().forEach(function (o) { if (o.__wsMutedByUs) { try { o.muted = false; } catch (e) {} delete o.__wsMutedByUs; } });
       if (scr.style == null) scr.v.removeAttribute('style'); else scr.v.setAttribute('style', scr.style);
       scr.v.controls = scr.controls;
       scr = null;
@@ -365,38 +365,48 @@
     window.__wsRecPaused = 0;
     return '{}';
   }
-  /* 只留滿版這一部的聲音：其他影片（背景還在播的、預先載入的）一律靜音，不暫停、不影響畫面；離開滿版時恢復 */
-  function muteOthers(v) {
+  /* 畫面上看得到（有實際大小）而且正在播的影片中最大的一部 */
+  function shownPlaying(except) {
+    var best = null, bs = 0;
     vids().forEach(function (o) {
-      if (o === v || o.muted) return;
-      try { o.__wsMutedByUs = true; o.muted = true; } catch (e) {}
+      if (o === except || !o.isConnected || o.paused || o.readyState < 2 || !o.getClientRects().length) return;
+      var a = visArea(o);
+      if (a > bs) { bs = a; best = o; }
     });
+    return best;
   }
-  function unmuteOthers() {
-    vids().forEach(function (o) { if (o.__wsMutedByUs) { try { o.muted = false; } catch (e) {} delete o.__wsMutedByUs; } });
+  /* 在螢幕範圍內實際看得到的面積（畫面外、預先載入的影片是 0） */
+  function visArea(o) {
+    if (!o.getClientRects().length) return 0;
+    var r = o.getBoundingClientRect();
+    return Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0)) * Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
+  }
+  /* 只在「錄影中」：其他影片全部靜音（只錄滿版這一部的聲音），看不到的（藏起來、畫面外）再順便暫停。
+     滿版預覽時完全不碰其他影片，網站自己換下一則限時動態不受影響。離開滿版後恢復。 */
+  function quietHidden(v) {
+    vids().forEach(function (o) {
+      if (o === v) return;
+      try {
+        if (!o.muted) { o.__wsMutedByUs = true; o.muted = true; }
+        if (!o.paused && visArea(o) === 0) o.pause();
+      } catch (e) {}
+    });
   }
   function follow() {
     if (!scr || scr.rec) return;
     var cur = scr.v;
-    muteOthers(cur);
     /* 目前這個還在而且在播：不用換 */
-    var shown = cur.isConnected && cur.getClientRects().length > 0;
+    var shown = cur.isConnected && visArea(cur) > 0;
     if (shown && !cur.paused && !cur.ended) return;
-    var best = null, bs = 0;
-    vids().forEach(function (o) {
-      if (o === cur || !o.isConnected || o.paused || o.readyState < 2) return;
-      var r = o.getBoundingClientRect(), a = r.width * r.height;
-      if (a > bs) { bs = a; best = o; }
-    });
+    /* 換成畫面上看得到、正在播的那一部（畫面外預先載入的不算） */
+    var best = shownPlaying(cur);
     if (!best) return;
     if (cur.isConnected && !shown) { try { cur.pause(); } catch (e) {} }
     if (cur.isConnected) { if (scr.style == null) cur.removeAttribute('style'); else cur.setAttribute('style', scr.style); cur.controls = scr.controls; }
     scr.v = best; scr.style = best.getAttribute('style'); scr.controls = best.controls;
     best.controls = false;
     FULL.forEach(function (p) { best.style.setProperty(p[0], p[1], 'important'); });
-    delete best.__wsMutedByUs;
     ensureSound(best);
-    muteOthers(best);
   }
   /* 確保影片有聲音（不調整音量）：
      1. 找網頁上標示「目前是靜音」的聲音按鈕（例如 IG 右上角的喇叭），找到就按它，讓網站自己把聲音打開
@@ -448,10 +458,10 @@
     if (!scr) return 'none';
     scr.rec = true;
     var v = scr.v, maxT = 0, lastT = -1, stall = 0, t0 = Date.now(), done = false;
+    delete v.__wsMutedByUs;
+    quietHidden(v);
     clearInterval(scr.tm);
     try { v.loop = false; v.playbackRate = 1; } catch (e) {}
-    delete v.__wsMutedByUs;
-    muteOthers(v);
     ensureSound(v);
     /* 一定從頭開始：先跳到 0 秒再播放，1.5 秒後再檢查一次（有些網站的播放器會把位置改回去） */
     var toStart = function () { try { if (isFinite(v.duration) && v.duration > 0 && v.currentTime > 0.5) v.currentTime = 0; } catch (e) {} };
@@ -462,7 +472,7 @@
     v.addEventListener('ended', end);
     scr.tm = setInterval(function () {
       if (window.__wsRecPaused) { stall = 0; return; }
-      muteOthers(v);
+      quietHidden(v);
       if (v.muted || soundBtn(v)) ensureSound(v);
       var d = isFinite(v.duration) ? v.duration : 0, t = v.currentTime || 0;
       if (Math.abs(t - lastT) < 0.05) stall++; else stall = 0;
