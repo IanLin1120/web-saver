@@ -564,3 +564,15 @@ body.brFull #brArea{left:0!important;right:0!important;top:0!important;bottom:0!
 .tabItem.on{border-color:var(--accent);background:var(--surface)}
 .tabItem .t{flex:1;min-width:0}
 .tabItem .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 播放器字幕（自己畫，可自訂樣式） */
+.vpSub{position:absolute;left:4%;right:4%;bottom:8%;z-index:2;text-align:center;pointer-events:none;display:none}
+.vpSub.on{display:block}
+.vpSub span{display:inline;white-space:pre-line;line-height:1.35;padding:.08em .35em;border-radius:6px;-webkit-box-decoration-break:clone;box-decoration-break:clone;font-family:-apple-system,"Noto Sans TC",sans-serif}
+.vp.show .vpSub{transform:translateY(-34px);transition:transform .2s}
+.vp.vpFs{--vpSubK:1.12}
+.vpLock{position:absolute;inset:0;z-index:6;display:none}
+.vp.locked .vpLock{display:block}
+.vp.locked .vpUi{display:none}
+.vpLockB{position:absolute;left:50%;bottom:16%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:99px;padding:10px 16px;font:700 13px/1 sans-serif;opacity:0;transition:opacity .2s}
+.vpLock.show .vpLockB{opacity:1}
+.vp video{transform-origin:center center}

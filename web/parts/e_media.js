@@ -354,7 +354,7 @@ function startRec(){
     toast('在背景錄製：看不到的分頁會從頭播到結束，你可以繼續用 App 的其他功能');
   }
   menu('錄製方式', [
-    ['phone', '滿版播放＋手機螢幕錄影（建議）', function(){ startScreenRec(); }, false, '影片放大到整個螢幕、用手機內建錄影從頭錄到結束；有懸浮的暫停／停止鈕（錄不到），期間自動開勿擾'],
+    ['phone', '滿版播放（確認畫面後再錄影）', function(){ startScreenRec(); }, false, '影片放大到整個螢幕播放；確認畫面正常後，按懸浮鈕上的 ● 用手機內建錄影從頭錄到結束（期間自動開勿擾，懸浮鈕錄不到）'],
     ['film', '在背景錄製', function(){ if(canBg) bg(); else toast('這部影片有防錄製保護或來自其他網域，只能用「滿版播放＋手機螢幕錄影」', true); }, false, canBg ? '直接錄影片串流（不用螢幕錄影），錄的時候可以繼續用 App 的其他功能' : '這部影片不支援背景錄製']
   ]);
 }
@@ -367,32 +367,45 @@ function brRun(js){
   NAT.call('brRun', js, ev);
   return p;
 }
+/* 滿版播放：先把影片放大到整個螢幕播放（不錄影），懸浮鈕上按 ● 才開始用手機螢幕錄影 */
 async function startScreenRec(){
   if(MEDIA.sheet) MEDIA.sheet.close();
-  if(SREC.on || NAT.call('srecOn')){ toast('已經在錄影中', true); return; }
+  if(SREC.on || NAT.call('srecOn')){ toast('已經在滿版播放／錄影中', true); return; }
+  var info = await brRun("(function(){try{return window.__wsRec?__wsRec.screen(true):'{\"err\":\"noscript\"}'}catch(e){return '{\"err\":\"'+e.message+'\"}'}})()");
+  if(!info || info.err){ toast('在網頁裡找不到影片，請先播放影片再試', true); return; }
+  SREC.on = true; SREC.rec = false;
+  SREC.title = (typeof pageVideoName === 'function' ? pageVideoName() : (BR.title || '影片')).replace(/\.[a-z0-9]{2,4}$/i, '');
+  setBrFull(true, true);
+  NAT.call('uiFull', true, info.w > info.h);
+  fabSync();
+  NAT.call('recCtl', 'ready');
+}
+async function srecBegin(){
   if(!NAT.call('dndOk')){
     var go = await new Promise(function(res){
-      dialog('允許勿擾設定', '錄影時要自動開啟勿擾模式、擋掉通知橫幅，需要先允許「網頁擷取」變更勿擾設定（只要設定一次）。<br><br>按「去設定」後，在清單裡打開「網頁擷取」，再回來按一次錄影。',
+      dialog('允許勿擾設定', '錄影時要自動開啟勿擾模式、擋掉通知橫幅，需要先允許「網頁擷取」變更勿擾設定（只要設定一次）。<br><br>按「去設定」後，在清單裡打開「網頁擷取」，回來再按一次 ●。',
         [['去設定', function(){ NAT.call('dndSettings'); res(false); }], ['這次不用勿擾', function(){ res(true); }], ['取消', function(){ res(false); }, '']]);
     });
     if(!go) return;
   }
   if(!NAT.call('audioOk')){
-    toast('要錄到影片聲音，請允許「錄音」權限（只錄 App 播出的聲音，不會錄麥克風）');
     NAT.call('audioAsk');
     await waitEv('perm', null, 30000);
   }
-  var info = await brRun("(function(){try{return window.__wsRec?__wsRec.screen(true):'{\"err\":\"noscript\"}'}catch(e){return '{\"err\":\"'+e.message+'\"}'}})()");
-  if(!info || info.err){ toast('在網頁裡找不到影片，請先播放影片再試', true); return; }
-  SREC.on = true; SREC.title = (typeof pageVideoName === 'function' ? pageVideoName() : (BR.title || '影片')).replace(/\.[a-z0-9]{2,4}$/i, '');
-  setBrFull(true, true);
-  NAT.call('uiFull', true, info.w > info.h);
-  fabSync();
-  setTimeout(function(){ NAT.call('srecAsk', SREC.title); }, 900);
+  await brRun("(function(){return JSON.stringify(window.__wsRec?__wsRec.screenRewind():'none')})()");
+  SREC.rec = true;
+  NAT.call('srecAsk', SREC.title);
 }
+on('recCtl', function(a){
+  if(!SREC.on) return;
+  if(a === 'toggle') brRun("(function(){return JSON.stringify(window.__wsRec?__wsRec.screenToggle():'none')})()");
+  else if(a === 'exit') srecCleanup();
+  else if(a === 'rec') srecBegin();
+});
 function srecCleanup(){
   if(!SREC.on) return;
-  SREC.on = false;
+  SREC.on = false; SREC.rec = false;
+  NAT.call('recCtl', 'hide');
   brRun("(function(){return window.__wsRec?__wsRec.screen(false):'{}'})()");
   setBrFull(false, true);
   NAT.call('uiFull', false, false);
@@ -401,6 +414,8 @@ function srecCleanup(){
 on('srec', function(d){
   if(!d) return;
   if(d.state === 'paused' || d.state === 'resumed') return;
+  /* 取消錄影：回到滿版播放（準備模式），不離開 */
+  if(d.state === 'cancel'){ SREC.rec = false; if(SREC.on) NAT.call('recCtl', 'ready'); toast('已取消錄影'); return; }
   if(d.state === 'start'){ setTimeout(function(){ brRun("(function(){return JSON.stringify(window.__wsRec?__wsRec.screenPlay():'none')})()"); }, 400); return; }
   srecCleanup();
   if(d.state === 'done'){

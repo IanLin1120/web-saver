@@ -175,8 +175,8 @@ final class ScreenRec {
             r.ta.start();
         }
         r.startMs = System.currentTimeMillis();
-        r.ctl = new RecCtl(a);
-        r.ctl.show();
+        r.ctl = RecCtl.get(a);
+        r.ctl.show(true);
         emit("start", r.need == 2 ? "錄影中（含聲音）" : "錄影中（沒有錄音權限，只錄畫面）");
     }
 
@@ -275,7 +275,7 @@ final class ScreenRec {
         if (r.paused) { r.pausedUs += (System.nanoTime() - r.pauseAt) / 1000; try { r.vd.setSurface(r.in); } catch (Throwable t) { /* ignore */ } r.paused = false; }
         r.stop = true;
         cur = null;
-        if (r.ctl != null) r.ctl.hide();
+
         Util.IO.execute(new Runnable() {
             @Override public void run() {
                 try { if (r.tv != null) r.tv.join(5000); } catch (Throwable t) { /* ignore */ }

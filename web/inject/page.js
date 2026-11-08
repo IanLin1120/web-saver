@@ -340,32 +340,31 @@
   var scr = null;
   function screen(on) {
     if (on) {
-      var v = pick('');
+      var v = (scr && scr.v) || pick('');
       if (!v) return JSON.stringify({err: 'novideo'});
-      scr = {v: v, style: v.getAttribute('style') || '', controls: v.controls};
-      try { v.pause(); } catch (e) {}
+      if (!scr) scr = {v: v, style: v.getAttribute('style'), controls: v.controls};
       v.controls = false;
-      var st = 'position:fixed!important;inset:0!important;left:0!important;top:0!important;width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;z-index:2147483647!important;object-fit:contain!important;background:#000!important;transform:none!important;margin:0!important';
-      v.setAttribute('style', st);
-      var bk = document.getElementById('__ws_recbk') || document.createElement('div');
-      bk.id = '__ws_recbk';
-      bk.setAttribute('style', 'position:fixed;inset:0;background:#000;z-index:2147483646');
-      (document.body || document.documentElement).appendChild(bk);
-      try { if (isFinite(v.duration) && v.duration > 0) v.currentTime = 0; } catch (e) {}
+      /* 跟原本「在目前分頁錄製」一樣：只改影片本身的樣式（不加遮罩，之前加黑色遮罩會在某些網站蓋住影片變成全黑） */
+      [['position', 'fixed'], ['inset', '0'], ['left', '0'], ['top', '0'], ['width', '100vw'], ['height', '100vh'], ['max-width', 'none'], ['max-height', 'none'],
+       ['z-index', '2147483647'], ['object-fit', 'contain'], ['background', '#000'], ['margin', '0'], ['transform', 'none']].forEach(function (p) { v.style.setProperty(p[0], p[1], 'important'); });
+      var pp = v.play(); if (pp && pp.catch) pp.catch(function () {});
       return JSON.stringify({w: v.videoWidth || 16, h: v.videoHeight || 9, dur: isFinite(v.duration) ? v.duration : 0});
     }
     if (scr) {
       clearInterval(scr.tm);
-      scr.v.setAttribute('style', scr.style); scr.v.controls = scr.controls;
-      try { scr.v.pause(); } catch (e) {}
+      if (scr.style == null) scr.v.removeAttribute('style'); else scr.v.setAttribute('style', scr.style);
+      scr.v.controls = scr.controls;
       scr = null;
     }
-    var b = document.getElementById('__ws_recbk'); if (b) b.remove();
+    window.__wsRecPaused = 0;
     return '{}';
   }
+  function screenToggle() { if (!scr) return 'none'; var v = scr.v; if (v.paused) { var p = v.play(); if (p && p.catch) p.catch(function () {}); return 'play'; } v.pause(); return 'pause'; }
+  function screenRewind() { if (!scr) return 'none'; try { scr.v.pause(); if (isFinite(scr.v.duration) && scr.v.duration > 0) scr.v.currentTime = 0; } catch (e) {} return 'ok'; }
   function screenPlay() {
     if (!scr) return 'none';
     var v = scr.v, maxT = 0, lastT = -1, stall = 0, t0 = Date.now(), done = false;
+    clearInterval(scr.tm);
     try { v.loop = false; v.muted = false; v.volume = 1; v.playbackRate = 1; } catch (e) {}
     var p = v.play(); if (p && p.catch) p.catch(function () {});
     function end() { if (done) return; done = true; clearInterval(scr && scr.tm); try { B.srecEnd(); } catch (e) {} }
@@ -382,7 +381,7 @@
     }, 1000);
     return 'ok';
   }
-  window.__wsRec = {start: start, stop: stop, screen: screen, screenPlay: screenPlay, can: function (src) {
+  window.__wsRec = {start: start, stop: stop, screen: screen, screenPlay: screenPlay, screenToggle: screenToggle, screenRewind: screenRewind, can: function (src) {
     var v = pick(src);
     if (!v) return 'novideo';
     try { var s = (v.captureStream || v.mozCaptureStream).call(v); s.getTracks().forEach(function (t) { t.stop(); }); return 'ok'; } catch (e) { return 'nocap'; }

@@ -214,19 +214,57 @@ function viewImages(it, body){
 }
 
 /* ---------- 影片／音訊 ---------- */
+/* 找出影片對應的字幕：下載時附上的、同檔名的、或檔名很像的（去掉畫質、空白、符號後相同） */
+function vpNorm(n){ return String(n || '').toLowerCase().replace(/\.[a-z0-9]{2,4}$/, '').replace(/[_\-. ]*(\(\d+\)|\d{3,4}p\d*|4k|2k|hd|fhd|uhd|錄製(\(部分\))?|螢幕錄影|x26[45]|h\.?26[45]|webm|mp4)\b/g, '').replace(/[\s_\-.,，。、·・()（）\[\]【】「」'"!！?？]+/g, ''); }
 function vpSubs(it){
   var out = [], seen = {};
-  var add = function(item, lang, label){ if(!item || seen[item.id]) return; seen[item.id] = 1; var l = lang || ''; out.push({item: item, lang: l, label: label || l || item.name, short: /^zh-(Hant|TW|HK)/i.test(l) ? '繁中' : /^zh/i.test(l) ? '中文' : /^en/i.test(l) ? '英文' : /^ja/i.test(l) ? '日文' : /^ko/i.test(l) ? '韓文' : (l || '開')}); };
+  var add = function(item, lang, label){
+    if(!item || seen[item.id]) return; seen[item.id] = 1; var l = lang || '';
+    var sh = /^zh-(Hant|TW|HK)/i.test(l) ? '繁中' : /^zh-(Hans|CN)/i.test(l) ? '簡中' : /^zh/i.test(l) ? '中文' : /^en/i.test(l) ? '英文' : /^ja/i.test(l) ? '日文' : /^ko/i.test(l) ? '韓文' : '';
+    out.push({item: item, lang: l, label: label && label !== l ? label : sh ? sh + '（' + l + '）' : (l || item.name), short: sh || l || '開'});
+  };
   (it.subs || []).forEach(function(x){ add(Lib.byId(x.id), x.lang, x.label); });
-  var stem = String(it.name || '').replace(/\.[^.]+$/, '').toLowerCase();
-  if(stem) Lib.items.forEach(function(x){
+  var stem = String(it.name || '').replace(/\.[^.]+$/, '').toLowerCase(), nv = vpNorm(it.name), nt = vpNorm(it.title);
+  Lib.items.forEach(function(x){
     var n = String(x.name || '').toLowerCase();
-    if(!/\.(srt|vtt)$/.test(n)) return;
-    var b = n.replace(/\.(srt|vtt)$/, '');
-    if(b === stem || b.indexOf(stem + '.') === 0) add(x, b === stem ? '' : b.slice(stem.length + 1));
+    if(!/\.(srt|vtt|ass|ssa)$/.test(n)) return;
+    var b = n.replace(/\.(srt|vtt|ass|ssa)$/, '');
+    if(stem && (b === stem || b.indexOf(stem + '.') === 0)){ add(x, b === stem ? '' : b.slice(stem.length + 1)); return; }
+    var lm = b.match(/\.([a-z]{2,3}(-[a-z0-9]{2,4})?)$/i), lang = lm ? lm[1] : '', nb = vpNorm(lm ? b.slice(0, -lm[0].length) : b);
+    if(nb && (nb === nv || (nt && nb === nt) || (nb.length > 6 && (nv.indexOf(nb) === 0 || nb.indexOf(nv) === 0)))) add(x, lang);
   });
   return out;
 }
+/* 字幕解析：SRT／VTT／ASS → [{s, e, t}] */
+function parseSubs(txt){
+  txt = String(txt || '').replace(/\r/g, '').replace(/^﻿/, '');
+  var cues = [];
+  if(/^\[Script Info\]/m.test(txt)){
+    var fmt = null;
+    txt.split('\n').forEach(function(l){
+      if(/^Format:/i.test(l) && !fmt) fmt = l.slice(7).split(',').map(function(x){ return x.trim().toLowerCase(); });
+      var m = l.match(/^Dialogue:\s*(.*)$/i);
+      if(m && fmt){
+        var parts = m[1].split(','), o = {};
+        fmt.forEach(function(k, i){ o[k] = i === fmt.length - 1 ? parts.slice(i).join(',') : parts[i]; });
+        var ts = function(x){ var p = String(x || '').trim().split(':'); return (+p[0]) * 3600 + (+p[1]) * 60 + parseFloat(p[2]); };
+        cues.push({s: ts(o.start), e: ts(o.end), t: String(o.text || '').replace(/\{[^}]*\}/g, '').replace(/\\N/gi, '\n').trim()});
+      }
+    });
+  } else {
+    var tsv = function(x){ var p = x.trim().replace(',', '.').split(':'); return p.length === 3 ? (+p[0]) * 3600 + (+p[1]) * 60 + parseFloat(p[2]) : (+p[0]) * 60 + parseFloat(p[1]); };
+    txt.split(/\n\n+/).forEach(function(b){
+      var ls = b.split('\n'), i = ls.findIndex(function(x){ return x.indexOf('-->') >= 0; });
+      if(i < 0) return;
+      var m = ls[i].match(/([\d:.,]+)\s*-->\s*([\d:.,]+)/); if(!m) return;
+      var t = ls.slice(i + 1).join('\n').replace(/<[^>]+>/g, '').replace(/\{\\[^}]*\}/g, '').trim();
+      if(t) cues.push({s: tsv(m[1]), e: tsv(m[2]), t: t});
+    });
+  }
+  return cues.sort(function(a, b){ return a.s - b.s; });
+}
+var SUBSTY_DEF = {size: 22, color: '#ffffff', bg: 'shadow', pos: 8, delay: 0, bold: true};
+function subStyle(){ return Object.assign({}, SUBSTY_DEF, lsGet('ws.subSty', {})); }
 async function viewVideo(it, body){
   /* 自己的播放器：跟 YouTube 分頁一樣的操作（點一下顯示控制、兩側連點快轉、長按 2 倍速、拖曳進度、全螢幕＋自動轉向） */
   var v = h('video', {autoplay: true, playsinline: true, preload: 'auto'});
@@ -248,42 +286,143 @@ async function viewVideo(it, body){
   function applyFit(){ v.style.objectFit = FITS[fitI][0]; fitB.textContent = FITS[fitI][1]; }
   fitB.onclick = function(e){ e.stopPropagation(); fitI = (fitI + 1) % FITS.length; lsSet('ws.vpFit', FITS[fitI][0]); applyFit(); fl('畫面：' + FITS[fitI][1]); show(); };
   applyFit();
-  /* 字幕：下載時附上的字幕，或檔案庫裡同檔名的 .srt／.vtt */
-  var subs = vpSubs(it), subI = -1;
-  var ccB = subs.length ? h('button', {class: 'vpC', text: '字幕'}) : null;
-  var tracks = [];
-  async function loadSub(i){
-    if(tracks[i]) return tracks[i];
-    var x = subs[i], txt = await (await Lib.blob(x.item)).text();
-    if(!/^WEBVTT/.test(txt)) txt = 'WEBVTT\n\n' + txt.replace(/\r/g, '').replace(/^\d+\n(?=\d\d:)/gm, '').replace(/(\d\d:\d\d:\d\d),(\d{3})/g, '$1.$2');
-    var tr = h('track', {kind: 'subtitles', label: x.label, srclang: x.lang || 'und', src: URL.createObjectURL(new Blob([txt], {type: 'text/vtt'}))});
-    v.appendChild(tr);
-    tracks[i] = tr;
-    return tr;
+  /* 字幕（自己畫，才能調大小、顏色、背景、位置、時間同步）：自動找對應的字幕檔 */
+  var subs = vpSubs(it), subI = -1, cues = [], ST = subStyle();
+  var subBox = h('div', {class: 'vpSub'}), subTxt = h('span');
+  subBox.appendChild(subTxt);
+  var ccB = h('button', {class: 'vpC', text: '字幕'});
+  function paintSubStyle(){
+    var bg = ST.bg;
+    subTxt.style.fontSize = 'calc(' + ST.size + 'px * var(--vpSubK, 1))';
+    subTxt.style.color = ST.color;
+    subTxt.style.fontWeight = ST.bold ? '700' : '500';
+    subTxt.style.background = bg === 'box' ? 'rgba(0,0,0,.78)' : bg === 'semi' ? 'rgba(0,0,0,.45)' : 'transparent';
+    subTxt.style.textShadow = bg === 'shadow' ? '0 0 3px #000,0 0 3px #000,1px 1px 2px #000,-1px -1px 2px #000' : bg === 'none' ? 'none' : '0 1px 2px rgba(0,0,0,.6)';
+    subBox.style.bottom = ST.pos + '%';
+    subBox.style.top = 'auto';
+    if(ST.pos >= 80){ subBox.style.top = (100 - ST.pos) + '%'; subBox.style.bottom = 'auto'; }
+  }
+  paintSubStyle();
+  var lastCue = '';
+  function subTick(){
+    if(subI < 0 || !cues.length){ if(lastCue){ lastCue = ''; subTxt.textContent = ''; subBox.classList.remove('on'); } return; }
+    var t = v.currentTime - (ST.delay || 0), cur = [];
+    for(var i = 0; i < cues.length; i++){ var c = cues[i]; if(c.s > t) break; if(c.e > t) cur.push(c.t); }
+    var txt = cur.join('\n');
+    if(txt !== lastCue){ lastCue = txt; subTxt.textContent = txt; subBox.classList.toggle('on', !!txt); }
   }
   async function setSub(i){
-    subI = i;
-    for(var k = 0; k < v.textTracks.length; k++) v.textTracks[k].mode = 'disabled';
+    subI = i; cues = []; lastCue = '\u0000';
     if(i >= 0){
-      try{ var tr = await loadSub(i); tr.track.mode = 'showing'; }catch(e){ fl('字幕讀取失敗'); subI = -1; }
+      try{ cues = parseSubs(await (await Lib.blob(subs[i].item)).text()); if(!cues.length) throw new Error('沒有字幕內容'); }
+      catch(e){ fl('字幕讀取失敗'); subI = -1; }
     }
-    if(ccB){ ccB.textContent = subI >= 0 ? '字幕：' + (subs[subI].short || '開') : '字幕：關'; ccB.classList.toggle('on', subI >= 0); }
-    lsSet('ws.vpSub', subI >= 0 ? (subs[subI].lang || 'on') : 'off');
+    ccB.textContent = subI >= 0 ? '字幕：' + (subs[subI].short || '開') : (subs.length ? '字幕：關' : '字幕');
+    ccB.classList.toggle('on', subI >= 0);
+    if(subs.length) lsSet('ws.vpSub', subI >= 0 ? (subs[subI].lang || 'on') : 'off');
+    subTick();
   }
-  if(ccB){
-    ccB.onclick = function(e){
-      e.stopPropagation(); show();
-      if(subs.length === 1){ setSub(subI >= 0 ? -1 : 0); fl(subI >= 0 ? '字幕：關' : '字幕：開'); return; }
-      menu('字幕', [['x', '關閉字幕', function(){ setSub(-1); }]].concat(subs.map(function(x, i){ return ['film', x.label + (i === subI ? '　✓' : ''), function(){ setSub(i); }]; })));
-    };
+  function subMenu(){
+    var items = [];
+    subs.forEach(function(x, i){ items.push(['film', x.label + (i === subI ? '　✓' : ''), function(){ setSub(i); fl('字幕：' + x.label); }, false, x.item.name]); });
+    if(subs.length) items.push(['x', '關閉字幕' + (subI < 0 ? '　✓' : ''), function(){ setSub(-1); fl('字幕：關'); }]);
+    items.push(['sliders', '字幕樣式與同步…', function(){ subSettings(); }, false, '大小、顏色、背景、位置、提早／延後']);
+    items.push(['folder', '從檔案庫選字幕檔…', function(){ pickSubFile(); }, false, 'SRT、VTT、ASS']);
+    menu('字幕', items);
+  }
+  function pickSubFile(){
+    var L = Lib.items.filter(function(x){ return /\.(srt|vtt|ass|ssa)$/i.test(x.name || ''); });
+    if(!L.length){ toast('檔案庫裡沒有字幕檔（.srt／.vtt／.ass）', true); return; }
+    menu('選擇字幕檔', L.slice(0, 60).map(function(x){ return ['film', x.name, function(){
+      var k = subs.findIndex(function(y){ return y.item.id === x.id; });
+      if(k < 0){ subs.push({item: x, lang: '', label: x.name, short: '開'}); k = subs.length - 1; }
+      var ls = (it.subs || []).filter(function(y){ return y.id !== x.id; }).concat([{id: x.id, lang: '', label: x.name}]);
+      it.subs = ls; if(isApp) NAT.call('libMeta', it.id, JSON.stringify({subs: ls}));
+      setSub(k); fl('已套用字幕');
+    }]; }));
+  }
+  function subSettings(){
+    var body2 = h('div');
+    function save(){ lsSet('ws.subSty', ST); paintSubStyle(); lastCue = '\u0000'; subTick(); }
+    function seg(label, opts, key){
+      var sg = h('div', {class: 'seg', style: {marginBottom: '12px'}});
+      opts.forEach(function(o){ sg.appendChild(h('button', {class: ST[key] === o[0] ? 'on' : '', html: o[1], onclick: function(){ ST[key] = o[0]; save(); qsa('button', sg).forEach(function(b){ b.classList.remove('on'); }); this.classList.add('on'); }})); });
+      return h('div', null, h('div', {class: 'lbl', style: {margin: '4px 2px 6px', fontWeight: 700}, text: label}), sg);
+    }
+    function range(label, key, min, max, step, fmt){
+      var val = h('b', {text: fmt(ST[key])});
+      var r = h('input', {type: 'range', min: min, max: max, step: step, value: ST[key], style: {width: '100%'}, oninput: function(){ ST[key] = +this.value; val.textContent = fmt(ST[key]); save(); }});
+      return h('div', {style: {marginBottom: '12px'}}, h('div', {style: {display: 'flex', justifyContent: 'space-between', margin: '4px 2px'}}, h('span', {style: {fontWeight: 700}, text: label}), val), r);
+    }
+    var dl = h('b', {text: (ST.delay > 0 ? '+' : '') + ST.delay.toFixed(1) + ' 秒'});
+    function dly(d){ ST.delay = Math.round((ST.delay + d) * 10) / 10; dl.textContent = (ST.delay > 0 ? '+' : '') + ST.delay.toFixed(1) + ' 秒'; save(); }
+    body2.appendChild(range('字體大小', 'size', 12, 48, 1, function(x){ return x + ' px'; }));
+    body2.appendChild(seg('字幕顏色', [['#ffffff', '白'], ['#ffeb3b', '黃'], ['#7cf27c', '綠'], ['#6fe3ff', '青'], ['#ffb3d1', '粉']], 'color'));
+    body2.appendChild(seg('背景', [['shadow', '描邊'], ['semi', '半透明'], ['box', '黑底'], ['none', '無']], 'bg'));
+    body2.appendChild(seg('粗細', [[true, '粗體'], [false, '一般']], 'bold'));
+    body2.appendChild(range('位置（離底部）', 'pos', 0, 90, 1, function(x){ return x >= 80 ? '畫面上方' : x + '%'; }));
+    body2.appendChild(h('div', {style: {marginBottom: '6px', fontWeight: 700}, text: '字幕同步（字幕比聲音早就按「延後」）'}));
+    body2.appendChild(h('div', {class: 'btn-row', style: {alignItems: 'center'}},
+      h('button', {class: 'btn sm', text: '提早 0.5', onclick: function(){ dly(-0.5); }}), h('button', {class: 'btn sm', text: '−0.1', onclick: function(){ dly(-0.1); }}),
+      dl, h('button', {class: 'btn sm', text: '+0.1', onclick: function(){ dly(0.1); }}), h('button', {class: 'btn sm', text: '延後 0.5', onclick: function(){ dly(0.5); }})));
+    body2.appendChild(h('div', {class: 'btn-row', style: {marginTop: '10px'}}, h('button', {class: 'btn ghost', text: '恢復預設', onclick: function(){ ST = Object.assign({}, SUBSTY_DEF); save(); sh.close(); subSettings(); }})));
+    var sh = openSheet({title: '字幕樣式與同步', icon: 'sliders', body: body2});
+  }
+  ccB.onclick = function(e){ e.stopPropagation(); show(); subMenu(); };
+  if(subs.length){
     var pref = lsGet('ws.vpSub', 'on');
     if(pref === 'off') setSub(-1);
     else { var pi = subs.findIndex(function(x){ return x.lang === pref; }); setSub(pi >= 0 ? pi : 0); }
   }
-  var bot = h('div', {class: 'vpBot'}, bar, h('div', {class: 'vpRow'}, tm, h('span', {style: {flex: 1}}), ccB, fitB, sp, fsB));
+  /* 其他功能（像 MX Player／VLC）：鎖定畫面、循環、旋轉、上一部／下一部、播完自動下一部、雙指縮放 */
+  var moreB = h('button', {class: 'vpI', html: icon('more')});
+  var vids = (Viewer.list && Viewer.list.length > 1 ? Viewer.list : Lib.items).filter(function(x){ return x.cat === 'video'; });
+  var vi = vids.findIndex(function(x){ return x.id === it.id; });
+  function goVid(d){ var n = vids[vi + d]; if(n){ Viewer.open(n, Viewer.list); } else fl(d > 0 ? '已經是最後一部' : '已經是第一部'); }
+  var LOOP = lsGet('ws.vpLoop', false), AUTONEXT = lsGet('ws.vpNext', false);
+  v.loop = LOOP;
+  var lockOv = h('div', {class: 'vpLock'}, h('button', {class: 'vpLockB', html: icon('key') + '<span>點兩下解鎖</span>'}));
+  var LOCK = false, lockTap = 0;
+  lockOv.addEventListener('click', function(e){
+    e.stopPropagation();
+    var now = Date.now();
+    lockOv.classList.add('show'); clearTimeout(lockOv.t); lockOv.t = setTimeout(function(){ lockOv.classList.remove('show'); }, 2500);
+    if(now - lockTap < 400){ LOCK = false; box.classList.remove('locked'); fl('已解鎖'); show(); }
+    lockTap = now;
+  });
+  var rotI = 0;
+  moreB.onclick = function(e){
+    e.stopPropagation(); show();
+    menu('播放器', [
+      ['key', '鎖定畫面', function(){ LOCK = true; box.classList.add('locked'); box.classList.remove('show'); fl('已鎖定：點兩下解鎖'); }, false, '避免誤觸'],
+      ['reload', (LOOP ? '✓ ' : '') + '循環播放', function(){ LOOP = !LOOP; v.loop = LOOP; lsSet('ws.vpLoop', LOOP); fl(LOOP ? '循環播放：開' : '循環播放：關'); }],
+      ['fwd', (AUTONEXT ? '✓ ' : '') + '播完自動播下一部', function(){ AUTONEXT = !AUTONEXT; lsSet('ws.vpNext', AUTONEXT); fl(AUTONEXT ? '自動下一部：開' : '自動下一部：關'); }],
+      ['back', '上一部', function(){ goVid(-1); }, false, vi > 0 ? vids[vi - 1].name : '沒有上一部'],
+      ['fwd', '下一部', function(){ goVid(1); }, false, vi < vids.length - 1 ? vids[vi + 1].name : '沒有下一部'],
+      ['phone', '旋轉畫面', function(){ rotI = (rotI + 1) % 2; if(!FS) setFs(true); if(isApp) NAT.call('uiFull', true, rotI === 1); fl(rotI === 1 ? '橫向' : '直向'); }],
+      ['search', '縮放還原', function(){ zoom = 1; zx = 0; zy = 0; applyZoom(); fl('縮放：100%'); }, false, '雙指可以放大縮小畫面'],
+      ['sliders', '字幕樣式與同步…', function(){ subSettings(); }]
+    ]);
+  };
+  v.addEventListener('ended', function(){ if(!LOOP && AUTONEXT && vi < vids.length - 1) goVid(1); });
+  /* 雙指縮放、平移 */
+  var zoom = 1, zx = 0, zy = 0, pts = {}, pz = null;
+  function applyZoom(){ v.style.transform = zoom === 1 ? '' : 'translate(' + zx + 'px,' + zy + 'px) scale(' + zoom + ')'; }
+  box.addEventListener('pointerdown', function(e){ pts[e.pointerId] = {x: e.clientX, y: e.clientY}; var k = Object.keys(pts); if(k.length === 2){ var a = pts[k[0]], b2 = pts[k[1]]; pz = {d: Math.hypot(a.x - b2.x, a.y - b2.y), z: zoom, cx: (a.x + b2.x) / 2, cy: (a.y + b2.y) / 2, zx: zx, zy: zy}; if(G){ clearTimeout(G.lp); G = null; } } }, true);
+  box.addEventListener('pointermove', function(e){
+    if(!pts[e.pointerId]) return; pts[e.pointerId] = {x: e.clientX, y: e.clientY};
+    var k = Object.keys(pts); if(k.length !== 2 || !pz || LOCK) return;
+    var a = pts[k[0]], b2 = pts[k[1]], d = Math.hypot(a.x - b2.x, a.y - b2.y);
+    zoom = Math.max(1, Math.min(4, pz.z * d / pz.d)); zx = pz.zx + ((a.x + b2.x) / 2 - pz.cx); zy = pz.zy + ((a.y + b2.y) / 2 - pz.cy);
+    if(zoom === 1){ zx = 0; zy = 0; }
+    applyZoom(); fl('縮放：' + Math.round(zoom * 100) + '%'); e.stopPropagation();
+  }, true);
+  function ptUp(e){ delete pts[e.pointerId]; if(Object.keys(pts).length < 2) pz = null; }
+  box.addEventListener('pointerup', ptUp, true); box.addEventListener('pointercancel', ptUp, true);
+  var bot = h('div', {class: 'vpBot'}, bar, h('div', {class: 'vpRow'}, tm, h('span', {style: {flex: 1}}), ccB, fitB, sp, moreB, fsB));
   var flash = h('div', {class: 'vpFlash'});
   ui.appendChild(mid); ui.appendChild(bot);
-  box.appendChild(ui); box.appendChild(flash);
+  box.appendChild(subBox); box.appendChild(ui); box.appendChild(flash); box.appendChild(lockOv);
   body.appendChild(box);
   paintIcons(box);
   var hideT = 0;
@@ -323,7 +462,7 @@ async function viewVideo(it, body){
   /* 手勢：點一下顯示控制、兩側連點快轉／快退、長按 2 倍速、左右滑拖曳 */
   var G = null, last = {t: 0, side: ''}, combo = {n: 0, side: '', t: 0}, tapT = 0;
   box.addEventListener('pointerdown', function(e){
-    if(e.target.closest('button') || e.target.closest('.vpBar')) return;
+    if(LOCK || e.target.closest('button') || e.target.closest('.vpBar') || e.target.closest('.vpLock')) return;
     var r = box.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width;
     G = {x: e.clientX, y: e.clientY, t: Date.now(), w: r.width, side: fx < .35 ? 'l' : fx > .65 ? 'r' : '', mode: '', c0: v.currentTime};
     G.lp = setTimeout(function(){ if(G && !G.mode){ G.mode = 'hold'; v.playbackRate = 2; fl('▶▶ 2 倍速'); } }, 450);
@@ -357,6 +496,8 @@ async function viewVideo(it, body){
     pv.innerHTML = icon(v.paused ? 'play' : 'pause');
   }
   ['timeupdate', 'play', 'pause', 'loadedmetadata', 'progress'].forEach(function(ev){ v.addEventListener(ev, upd); });
+  var subRaf = 0; (function loop(){ subTick(); subRaf = requestAnimationFrame(loop); })();
+  v.addEventListener('seeked', function(){ lastCue = '\u0000'; subTick(); });
   v.addEventListener('pause', function(){ show(true); });
   v.addEventListener('play', function(){ show(); });
   var posM = lsGet('ws.vpos', {});
@@ -365,6 +506,7 @@ async function viewVideo(it, body){
   Viewer.cleanup = function(){
     try{ posM = lsGet('ws.vpos', {}); posM[it.id] = v.currentTime; lsSet('ws.vpos', posM); v.pause(); v.removeAttribute('src'); v.load(); }catch(e){}
     window.removeEventListener('resize', onRot);
+    cancelAnimationFrame(subRaf);
     if(FS) setFs(false);
   };
 }

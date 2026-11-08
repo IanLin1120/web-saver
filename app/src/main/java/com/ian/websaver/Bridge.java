@@ -292,6 +292,10 @@ public class Bridge {
     @JavascriptInterface public void srecAsk(final String name) { ui(new Runnable() { @Override public void run() { ScreenRec.ask(a, name); } }); }
     @JavascriptInterface public void srecStop() { ui(new Runnable() { @Override public void run() { ScreenRec.stop(a); } }); }
     @JavascriptInterface public boolean srecOn() { return ScreenRec.cur != null; }
+    /** 懸浮控制鈕：ready＝準備（還沒錄影）、rec＝錄影中、hide＝收起 */
+    @JavascriptInterface public void recCtl(String mode) {
+        if ("hide".equals(mode)) RecCtl.get(a).hide(); else RecCtl.get(a).show("rec".equals(mode));
+    }
     /** 在瀏覽分頁執行一段程式，結果用指定的事件回傳 */
     @JavascriptInterface public void brRun(final String js, final String ev) {
         ui(new Runnable() { @Override public void run() {
