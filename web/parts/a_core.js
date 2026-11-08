@@ -299,6 +299,36 @@ var Dock = {
   remove: function(id){ var n = this.cards[id]; if(n){ n.remove(); delete this.cards[id]; Dock.changed(); } },
   changed: function(){ requestAnimationFrame(function(){ var z = uiZoom(), hgt = $('dock').getBoundingClientRect().height / z, nb = $('nav').getBoundingClientRect(); document.documentElement.style.setProperty('--dock', Math.round(hgt) + 'px'); document.documentElement.style.setProperty('--nav', Math.round((innerHeight - nb.top) / z) + 'px'); fire('layout'); }); }
 };
+/* ---------- 進行中的工作（下載、擷取、轉檔…）：APK 版統一顯示在懸浮下載按鈕（綠色外圈＋選單），不再佔用底部 ---------- */
+var Tasks = {
+  m: {},
+  set: function(id, o){
+    var cur = this.m[id] || {t: Date.now()};
+    this.m[id] = Object.assign(cur, o);
+    if(!isApp) Dock.set(id, this.card(id));
+    this.sync();
+  },
+  del: function(id){ var had = !!this.m[id]; delete this.m[id]; Dock.remove(id); if(had) this.sync(); },
+  has: function(id){ return !!this.m[id]; },
+  list: function(){ var m = this.m; return Object.keys(m).map(function(k){ return Object.assign({id: k}, m[k]); }).sort(function(a, b){ return a.t - b.t; }); },
+  card: function(id){
+    var o = this.m[id];
+    return h('div', {class: 'dockCard glass'}, o.pct == null || o.pct < 0 ? h('div', {class: 'spin'}) : h('span', {html: ring(o.pct)}),
+      h('div', {class: 't'}, h('b', {text: o.title || ''}), h('div', {class: 'sub ell', text: o.sub || ''})),
+      o.cancel ? h('button', {class: 'btn sm ghost', text: '取消', onclick: function(){ o.cancel(); toast('正在取消…'); }}) : null);
+  },
+  sync: function(){
+    if(this._p) return;
+    var self = this;
+    this._p = setTimeout(function(){
+      self._p = 0;
+      var L = self.list(), p = -1;
+      if(L.length){ var sum = 0; L.forEach(function(x){ sum += x.pct > 0 ? Math.min(1, x.pct) : 0; }); p = Math.max(0.03, sum / L.length); }
+      if(isApp) NAT.call('fabProg', p);
+      fire('tasks', L);
+    }, 120);
+  }
+};
 function ring(pct){
   var r = 13, c = 2 * Math.PI * r, p = Math.max(0, Math.min(1, pct));
   return '<svg class="ring" viewBox="0 0 30 30"><circle cx="15" cy="15" r="' + r + '" fill="none" stroke="var(--surface-2)" stroke-width="4"/>' +

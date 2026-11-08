@@ -24,6 +24,7 @@ function openMedia(force){
     drawMedia();
   };
   if(isApp) NAT.call('brMedia', CFG.media.minPx);
+  MEDIA.rec = ''; if(isApp && NAT.has('brRecCheck')) NAT.call('brRecCheck', '');
   else setTimeout(function(){ fire('media', {items: WEB.doc ? WSMedia.scan(WEB.doc, {minPx: CFG.media.minPx, live: false}) : [], page: WEB.url, title: BR.title}); }, 50);
 }
 $('bMedia').addEventListener('click', function(){ openMedia(); });
@@ -45,6 +46,7 @@ function drawMedia(){
   var body = s.body; body.textContent = '';
   var cnt = {all: MEDIA.items.length, image: 0, video: 0, audio: 0};
   MEDIA.items.forEach(function(m){ cnt[mKindGroup(m.kind)]++; });
+  var rc = recCard(); if(rc) body.appendChild(rc);
   if(!MEDIA.items.length){
     body.appendChild(h('div', {class: 'empty', html: '<div class="big">🎞</div>這個頁面沒有偵測到可下載的圖片或影片<br><span class="sub">影片請先按下播放，App 會從網路請求中找到真正的影片來源（m3u8／mp4），再按一次「媒體」。</span>'}));
     MEDIA.dlBtn.disabled = true; return;
@@ -221,6 +223,7 @@ function startMediaDl(){
     opts: {imgFmt: mo.imgFmt, imgMax: +mo.imgMax || 0, imgQ: +mo.imgQ || 90, vidOut: mo.vidOut, vidQ: mo.vidQ, zip: !!mo.zip && !(mo.audFmt && mo.audFmt !== 'orig' && pick.some(function(m){ return m.kind === 'audio' || mo.vidOut === 'm4a'; })), zipName: (MEDIA.title || '媒體').slice(0, 60) + '_媒體'}};
   if(MEDIA.sheet) MEDIA.sheet.close();
   dlCard(0, pick.length, '準備下載…', 0);
+  req.job = dlJobId(MEDIA.title || pick[0].name);
   if(isApp) NAT.call('dlStart', JSON.stringify(req)); else webMediaDl(req);
 }
 function mediaName(m, i){
@@ -246,22 +249,32 @@ function mediaName(m, i){
   return base + ext;
 }
 var DL = {n: 0};
+var DLJ = {};
+/* 還沒交給下載器之前（例如正在找串流網址）：先在懸浮按鈕顯示「準備中」 */
 function dlCard(i, n, name, pct){
-  DL.n = n;
-  var overall = n ? (i + Math.max(0, Math.min(1, pct || 0))) / n : 0;
-  Dock.set('dl', h('div', {class: 'dockCard glass'}, h('span', {html: ring(overall)}),
-    h('div', {class: 't'}, h('b', {text: '下載中 ' + Math.min(n, i + 1) + '/' + n + '・' + Math.round(overall * 100) + '%'}), h('div', {class: 'sub', text: name || ''})),
-    h('button', {class: 'btn sm ghost', text: '取消', onclick: function(){ if(isApp) NAT.call('dlCancel'); else DL.cancel = true; toast('正在取消…'); }})));
+  if(!isApp && n > 1){ Tasks.set('dlpre', {title: '下載中 ' + Math.min(n, i + 1) + '/' + n, sub: name || '', pct: (i + Math.max(0, Math.min(1, pct || 0))) / n, kind: 'dl', cancel: function(){ DL.cancel = true; }}); return; }
+  Tasks.set('dlpre', {title: '準備下載…', sub: name || '', pct: -1, kind: 'dl'});
 }
+function dlPreClear(){ Tasks.del('dlpre'); }
+function dlJobId(label){ var j = 'j' + uid(); DLJ[j] = {label: label || ''}; return j; }
 on('dl', function(d){
-  if(d.state === 'start') dlCard(0, d.n, '準備下載…', 0);
-  else if(d.state === 'item'){
+  var job = d.job || '', id = 'dl:' + (job || '0'), J = DLJ[job] = DLJ[job] || {label: ''};
+  var cancel = function(){ if(isApp) NAT.call(NAT.has('dlCancelJob') ? 'dlCancelJob' : 'dlCancel', job); else DL.cancel = true; };
+  if(d.state === 'queued'){
+    dlPreClear();
+    Tasks.set(id, {title: d.running >= d.max ? '排隊中（同時下載 ' + d.max + ' 個已滿）' : '開始下載…', sub: J.label, pct: 0, kind: 'dl', cancel: cancel});
+  } else if(d.state === 'start'){
+    dlPreClear(); J.n = d.n || 1; if(d.label) J.label = d.label;
+    Tasks.set(id, {title: '下載中 0%', sub: J.label, pct: 0, kind: 'dl', cancel: cancel});
+  } else if(d.state === 'item'){
+    var n = d.n || J.n || 1, p = Math.max(0, Math.min(1, d.pct > 0 ? d.pct : 0)), all = ((d.i || 0) + p) / n;
     var sz = d.got ? fmtSize(d.got) + (d.total > 0 ? ' / ' + fmtSize(d.total) : '') : (d.seg ? '片段 ' + d.seg : '');
-    dlCard(d.i, d.n, (d.name || '') + (sz ? '・' + sz : ''), d.pct > 0 ? d.pct : 0);
-  }
-  else if(d.state === 'zip') dlCard(DL.n - 1, DL.n, '打包成 ZIP…', 1);
-  else if(d.state === 'done'){
-    Dock.remove('dl'); Lib.refresh(); flashLib();
+    Tasks.set(id, {title: '下載中 ' + (n > 1 ? Math.min(n, (d.i || 0) + 1) + '/' + n + '・' : '') + Math.round(all * 100) + '%', sub: (d.name || J.label || '') + (sz ? '・' + sz : ''), pct: all, kind: 'dl', cancel: cancel});
+  } else if(d.state === 'zip'){
+    Tasks.set(id, {title: '打包成 ZIP…', sub: J.label, pct: 1, kind: 'dl'});
+  } else if(d.state === 'done'){
+    Tasks.del(id); delete DLJ[job]; if(!job) dlPreClear();
+    Lib.refresh(); flashLib();
     var items = d.items || [];
     if(d.fail && !d.ok && typeof ytWillRetry === 'function' && ytWillRetry(d)) return;
     if(d.fail && !d.ok) dialog('下載失敗', esc(d.msg || '').replace(/\n/g, '<br>'), [['好', null]]);
@@ -314,4 +327,33 @@ async function webMediaDl(req){
     }
   }catch(e){ errs.push('儲存：' + e.message); }
   fire('dl', {state: 'done', ok: ok, fail: fail, msg: errs.join('\n'), items: items, cancel: DL.cancel});
+}
+
+/* ---------- 錄製下載：把網頁上的影片（原畫面＋聲音）完整錄下來 ---------- */
+on('recCan', function(r){ MEDIA.rec = String(r || ''); if(MEDIA.sheet) drawMedia(); });
+function recCard(){
+  if(!isApp || !NAT.has('brRecCheck')) return null;
+  var r = MEDIA.rec;
+  if(!r || r === 'novideo' || r === 'noscript' || r === 'err') return null;
+  var ok = r === 'ok';
+  return h('div', {class: 'card glass', style: {padding: '12px 14px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '12px'}},
+    h('span', {class: 'oi', style: {background: ok ? 'var(--c-video)' : '#999', width: '40px', height: '40px', borderRadius: '12px', display: 'grid', placeItems: 'center', color: '#fff', flex: 'none'}, html: icon('film')}),
+    h('div', {class: 'grow', style: {minWidth: 0}}, h('b', {text: '錄製下載（畫面＋聲音）'}),
+      h('div', {class: 'sub', style: {fontSize: '12px'}, text: ok ? '偵測到可以錄製：錄下影片原本的畫面與聲音（最高畫質、只有影片畫面），需要跟影片一樣長的時間' : '這部影片有防錄製保護或來自其他網域，不能錄製，請用下面的一般下載'})),
+    ok ? h('button', {class: 'btn sm pri', text: '錄製', onclick: function(){ startRec(); }}) : null);
+}
+function startRec(){
+  var src = MEDIA.playing && MEDIA.playing.src || '';
+  var title = (pageVideoName ? pageVideoName() : (MEDIA.title || '影片')).replace(/\.[a-z0-9]{2,4}$/i, '');
+  function go(here){
+    if(MEDIA.sheet) MEDIA.sheet.close();
+    var req = {job: dlJobId(title), page: MEDIA.page, title: MEDIA.title, items: [{kind: 'rec', url: src, page: MEDIA.page, referer: MEDIA.page, here: here, name: title, src: MEDIA.page, title: MEDIA.title, thumbUrl: MEDIA.playing && MEDIA.playing.poster || ''}], opts: {zip: false}};
+    dlCard(0, 1, '準備錄製…', 0);
+    NAT.call('dlStart', JSON.stringify(req));
+    toast(here ? '開始錄製：這個分頁要保持開著，錄製期間影片不會發出聲音' : '在背景錄製：會在看不到的分頁從頭播放到結束');
+  }
+  menu('錄製方式', [
+    ['film', '在背景錄製（建議）', function(){ go(false); }, false, '另開一個看不到的分頁從頭錄到結束，你可以繼續用 App'],
+    ['play', '在目前分頁錄製', function(){ go(true); }, false, '網頁需要先點播放或登入時用這個；錄製期間不要離開這個網頁']
+  ]);
 }

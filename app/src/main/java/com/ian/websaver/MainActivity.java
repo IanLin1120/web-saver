@@ -145,17 +145,24 @@ public class MainActivity extends Activity {
             }
         });
     }
-    private Browser grabBr, bgBr;
+    private Browser grabBr, bgBr, recBr;
 
     /** 背景用的隱藏瀏覽器：放在最底層（被 App 介面蓋住），照常載入與播放，但使用者看不到 */
     Browser hidden(String tag) {
-        Browser b = "grab".equals(tag) ? grabBr : bgBr;
+        Browser b = "grab".equals(tag) ? grabBr : "rec".equals(tag) ? recBr : bgBr;
         if (b == null) {
             b = new Browser(this, tag);
             root.removeView(b.wv);
             root.addView(b.wv, 0, new android.widget.FrameLayout.LayoutParams(-1, -1));
             b.wv.setVisibility(View.VISIBLE);
-            if ("grab".equals(tag)) grabBr = b; else bgBr = b;
+            if ("grab".equals(tag)) grabBr = b; else if ("rec".equals(tag)) recBr = b; else bgBr = b;
+        }
+        if ("rec".equals(tag) && br != null && b.wv.getWidth() == 0) {
+            /* 錄製用：橫向的大畫面，讓網站播放器選最高畫質 */
+            android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+            b.wv.setLayoutParams(new android.widget.FrameLayout.LayoutParams(Math.max(dm.widthPixels, dm.heightPixels), Math.min(dm.widthPixels, dm.heightPixels)));
+            b.mode = br.mode;
+            b.wv.getSettings().setUserAgentString(br.wv.getSettings().getUserAgentString());
         }
         if ("bg".equals(tag) && br != null) {
             /* 背景擷取用和瀏覽分頁相同的版面大小與模式 */

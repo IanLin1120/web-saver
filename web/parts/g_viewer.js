@@ -67,10 +67,10 @@ function fileInfo(it){
 }
 function toPdf(it){
   if(!isApp){ Lib.blob(it).then(function(b){ return b.text(); }).then(function(html){ printHtml(html, CFG.cap); }); return; }
-  Dock.set('pdf_' + it.id, h('div', {class: 'dockCard glass'}, h('div', {class: 'spin'}), h('div', {class: 't'}, h('b', {text: '轉成 PDF 中…'}), h('div', {class: 'sub', text: it.name}))));
+  Tasks.set('pdf_' + it.id, {title: '轉成 PDF 中…', sub: it.name, pct: -1, kind: 'pdf'});
   NAT.call('libToPdf', it.id, JSON.stringify({paper: CFG.cap.paper, landscape: !!CFG.cap.landscape, margin: +CFG.cap.margin || 0}));
   on('pdf', function once(d){
-    Dock.remove('pdf_' + it.id);
+    Tasks.del('pdf_' + it.id);
     BUS.pdf = (BUS.pdf || []).filter(function(f){ return f !== once; });
     if(d.ok) toast('✓ 已轉成 PDF', false, ['開啟', function(){ Viewer.open(Lib.byId(d.item.id) || d.item); }]);
     else toast('PDF 轉換失敗：' + d.err, true);
@@ -214,6 +214,19 @@ function viewImages(it, body){
 }
 
 /* ---------- 影片／音訊 ---------- */
+function vpSubs(it){
+  var out = [], seen = {};
+  var add = function(item, lang, label){ if(!item || seen[item.id]) return; seen[item.id] = 1; var l = lang || ''; out.push({item: item, lang: l, label: label || l || item.name, short: /^zh-(Hant|TW|HK)/i.test(l) ? '繁中' : /^zh/i.test(l) ? '中文' : /^en/i.test(l) ? '英文' : /^ja/i.test(l) ? '日文' : /^ko/i.test(l) ? '韓文' : (l || '開')}); };
+  (it.subs || []).forEach(function(x){ add(Lib.byId(x.id), x.lang, x.label); });
+  var stem = String(it.name || '').replace(/\.[^.]+$/, '').toLowerCase();
+  if(stem) Lib.items.forEach(function(x){
+    var n = String(x.name || '').toLowerCase();
+    if(!/\.(srt|vtt)$/.test(n)) return;
+    var b = n.replace(/\.(srt|vtt)$/, '');
+    if(b === stem || b.indexOf(stem + '.') === 0) add(x, b === stem ? '' : b.slice(stem.length + 1));
+  });
+  return out;
+}
 async function viewVideo(it, body){
   /* 自己的播放器：跟 YouTube 分頁一樣的操作（點一下顯示控制、兩側連點快轉、長按 2 倍速、拖曳進度、全螢幕＋自動轉向） */
   var v = h('video', {autoplay: true, playsinline: true, preload: 'auto'});
@@ -235,7 +248,39 @@ async function viewVideo(it, body){
   function applyFit(){ v.style.objectFit = FITS[fitI][0]; fitB.textContent = FITS[fitI][1]; }
   fitB.onclick = function(e){ e.stopPropagation(); fitI = (fitI + 1) % FITS.length; lsSet('ws.vpFit', FITS[fitI][0]); applyFit(); fl('畫面：' + FITS[fitI][1]); show(); };
   applyFit();
-  var bot = h('div', {class: 'vpBot'}, bar, h('div', {class: 'vpRow'}, tm, h('span', {style: {flex: 1}}), fitB, sp, fsB));
+  /* 字幕：下載時附上的字幕，或檔案庫裡同檔名的 .srt／.vtt */
+  var subs = vpSubs(it), subI = -1;
+  var ccB = subs.length ? h('button', {class: 'vpC', text: '字幕'}) : null;
+  var tracks = [];
+  async function loadSub(i){
+    if(tracks[i]) return tracks[i];
+    var x = subs[i], txt = await (await Lib.blob(x.item)).text();
+    if(!/^WEBVTT/.test(txt)) txt = 'WEBVTT\n\n' + txt.replace(/\r/g, '').replace(/^\d+\n(?=\d\d:)/gm, '').replace(/(\d\d:\d\d:\d\d),(\d{3})/g, '$1.$2');
+    var tr = h('track', {kind: 'subtitles', label: x.label, srclang: x.lang || 'und', src: URL.createObjectURL(new Blob([txt], {type: 'text/vtt'}))});
+    v.appendChild(tr);
+    tracks[i] = tr;
+    return tr;
+  }
+  async function setSub(i){
+    subI = i;
+    for(var k = 0; k < v.textTracks.length; k++) v.textTracks[k].mode = 'disabled';
+    if(i >= 0){
+      try{ var tr = await loadSub(i); tr.track.mode = 'showing'; }catch(e){ fl('字幕讀取失敗'); subI = -1; }
+    }
+    if(ccB){ ccB.textContent = subI >= 0 ? '字幕：' + (subs[subI].short || '開') : '字幕：關'; ccB.classList.toggle('on', subI >= 0); }
+    lsSet('ws.vpSub', subI >= 0 ? (subs[subI].lang || 'on') : 'off');
+  }
+  if(ccB){
+    ccB.onclick = function(e){
+      e.stopPropagation(); show();
+      if(subs.length === 1){ setSub(subI >= 0 ? -1 : 0); fl(subI >= 0 ? '字幕：關' : '字幕：開'); return; }
+      menu('字幕', [['x', '關閉字幕', function(){ setSub(-1); }]].concat(subs.map(function(x, i){ return ['film', x.label + (i === subI ? '　✓' : ''), function(){ setSub(i); }]; })));
+    };
+    var pref = lsGet('ws.vpSub', 'on');
+    if(pref === 'off') setSub(-1);
+    else { var pi = subs.findIndex(function(x){ return x.lang === pref; }); setSub(pi >= 0 ? pi : 0); }
+  }
+  var bot = h('div', {class: 'vpBot'}, bar, h('div', {class: 'vpRow'}, tm, h('span', {style: {flex: 1}}), ccB, fitB, sp, fsB));
   var flash = h('div', {class: 'vpFlash'});
   ui.appendChild(mid); ui.appendChild(bot);
   box.appendChild(ui); box.appendChild(flash);

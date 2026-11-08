@@ -80,8 +80,7 @@ function capOpts(nm){
     paper: c.paper, landscape: !!c.landscape, margin: +c.margin || 0};
 }
 function capCard(pct, msg){
-  Dock.set('cap', h('div', {class: 'dockCard glass'}, h('span', {html: ring(pct / 100)}),
-    h('div', {class: 't'}, h('b', {text: '擷取中 ' + Math.round(pct) + '%'}), h('div', {class: 'sub', text: msg || ''}))));
+  Tasks.set('cap', {title: '擷取中 ' + Math.round(pct) + '%', sub: msg || '', pct: pct / 100, kind: 'cap'});
 }
 function runCapture(nm){
   CAPTURING = true;
@@ -101,7 +100,7 @@ on('cap', function(d){
   if(!d) return;
   if(d.state === 'progress') capCard(d.pct || 0, d.msg);
   else if(d.state === 'done'){
-    CAPTURING = false; Dock.remove('cap');
+    CAPTURING = false; Tasks.del('cap');
     if(CAP_NEXT){ var nx = CAP_NEXT; CAP_NEXT = null; Lib.refresh(); CAPTURING = true; capCard(1, '製作無縫圖片 PDF…'); if(isApp) NAT.call('brComic', JSON.stringify(nx)); else webComic(nx); return; }
     var items = d.items || [];
     Lib.refresh();
@@ -109,7 +108,7 @@ on('cap', function(d){
     toast('✓ 已儲存 ' + items.map(function(x){ return (CAT[x.cat] || CAT.other).name; }).join('＋') + '（' + fmtSize(items.reduce(function(s, x){ return s + (x.size || 0); }, 0)) + '）', false,
       items.length ? ['開啟', function(){ Viewer.open(Lib.byId(items[0].id) || items[0]); }] : null);
   } else if(d.state === 'error'){
-    CAPTURING = false; Dock.remove('cap'); CAP_NEXT = null;
+    CAPTURING = false; Tasks.del('cap'); CAP_NEXT = null;
     dialog('擷取失敗', esc(d.msg || '未知錯誤') + '<br><br>可以試試：切換「只要文章」、關閉「嵌入字型」，或重新整理網頁後再擷取。', [['好', null]]);
   }
 });

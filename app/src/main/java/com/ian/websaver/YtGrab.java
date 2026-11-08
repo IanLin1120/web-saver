@@ -31,6 +31,17 @@ final class YtGrab {
     static volatile Job cur;
 
     static Object[] run(final MainActivity a, Lib lib, JSONObject it, String base, int i, int n, String shown) throws Exception {
+        /* 背景錄製只有一個看不到的播放器：同時有多個錄製時依序排隊（其他直接下載不受影響） */
+        while (!LOCK.tryAcquire(1, TimeUnit.SECONDS)) {
+            if (MediaDl.cancel()[0]) throw new Exception("已取消");
+            emit(i, n, "排隊中：等前一個錄製完成・" + shown, 0, 0);
+        }
+        try { return run2(a, lib, it, base, i, n, shown); } finally { LOCK.release(); }
+    }
+
+    static final java.util.concurrent.Semaphore LOCK = new java.util.concurrent.Semaphore(1);
+
+    private static Object[] run2(final MainActivity a, Lib lib, JSONObject it, String base, int i, int n, String shown) throws Exception {
         final String vid = it.optString("vid");
         final boolean audio = it.optBoolean("audioOnly", false);
         final Job j = new Job();
@@ -58,7 +69,7 @@ final class YtGrab {
         double lastPct = -1;
         try {
             while (!j.done.await(700, TimeUnit.MILLISECONDS)) {
-                if (MediaDl.cancel[0]) throw new Exception("已取消");
+                if (MediaDl.cancel()[0]) throw new Exception("已取消");
                 long now = System.currentTimeMillis();
                 if (now - j.lastData > (j.vBytes + j.aBytes == 0 ? 60000 : 90000))
                     throw new Exception(j.vBytes + j.aBytes == 0 ? "背景播放器 60 秒內沒有開始播放（可能需要登入、影片有年齡限制或地區限制）" : "背景播放器超過 90 秒沒有收到新資料（網路中斷？）");
@@ -129,6 +140,96 @@ final class YtGrab {
                 try { Lib.get(a).add(j.a, stem + "_聲音" + (aw ? ".webm" : ".m4a"), aw ? "audio/webm" : "audio/mp4", it.optString("src"), it.optString("title"), null); } catch (Throwable x) { /* ignore */ }
             }
             return new Object[] {j.v, stem + "." + cont, vw ? "video/webm" : "video/mp4"};
+        }
+    }
+
+    /* ================= 一般網頁影片：錄製下載（影片原畫面＋聲音） ================= */
+    static Object[] runRec(final MainActivity a, Lib lib, JSONObject it, String base, int i, int n, String shown) throws Exception {
+        while (!LOCK.tryAcquire(1, TimeUnit.SECONDS)) {
+            if (MediaDl.cancel()[0]) throw new Exception("已取消");
+            emit(i, n, "排隊中：等前一個錄製完成・" + shown, 0, 0);
+        }
+        try { return rec2(a, lib, it, base, i, n, shown); } finally { LOCK.release(); }
+    }
+
+    private static Object[] rec2(final MainActivity a, Lib lib, JSONObject it, String base, int i, int n, String shown) throws Exception {
+        final Job j = new Job();
+        j.v = lib.tmpFile("v");
+        j.a = lib.tmpFile("a");
+        j.vo = new FileOutputStream(j.v);
+        j.ao = new FileOutputStream(j.a);
+        cur = j;
+        final boolean here = it.optBoolean("here", false);
+        final String page = it.optString("page", it.optString("referer", ""));
+        JSONObject o = new JSONObject();
+        o.put("src", it.optString("url"));
+        o.put("keepPos", false);
+        final String js = "(function(){try{[].forEach.call(document.querySelectorAll('video'),function(v){if(!v.__wsSrcNode)v.muted=true;});"
+            + "return window.__wsRec?__wsRec.start(" + o.toString() + "):'noscript';}catch(e){return 'err:'+e.message;}})()";
+        final String[] res = {""};
+        if (!here) {
+            Util.MAIN.post(new Runnable() { @Override public void run() { Browser b = a.hidden("rec"); b.wv.loadUrl(page); } });
+        }
+        String stem = base.replaceAll("\\.[A-Za-z0-9]{2,5}$", "");
+        long start = System.currentTimeMillis(), lastTry = 0;
+        boolean started = false;
+        double lastPct = -1;
+        try {
+            while (!j.done.await(1000, TimeUnit.MILLISECONDS)) {
+                if (MediaDl.cancel()[0]) throw new Exception("已取消");
+                long now = System.currentTimeMillis();
+                if (!started) {
+                    String r = res[0];
+                    if (r.equals("ok")) { started = true; j.lastData = now; continue; }
+                    if (r.startsWith("nocap")) throw new Exception("這部影片不能錄製（有防錄製保護，或影片來自其他網域）。請改用一般下載。" + (r.length() > 6 ? "\n" + r.substring(6) : ""));
+                    if (now - start > 75000) throw new Exception((r.equals("novideo") ? "在網頁裡找不到影片（可能要先點播放，試試「在目前分頁錄製」）" : "影片沒有開始播放（" + r + "）"));
+                    if (now - start > (here ? 0 : 3500) && now - lastTry > 2500) {
+                        lastTry = now;
+                        Util.MAIN.post(new Runnable() {
+                            @Override public void run() {
+                                Browser b = here ? a.br : a.hidden("rec");
+                                b.wv.evaluateJavascript(js, new android.webkit.ValueCallback<String>() {
+                                    @Override public void onReceiveValue(String v) { res[0] = v == null ? "" : v.replaceAll("^\"|\"$", ""); }
+                                });
+                            }
+                        });
+                    }
+                    emit(i, n, "載入影片、準備錄製…・" + shown, 0, 0);
+                    continue;
+                }
+                if (now - j.lastData > 150000) throw new Exception("超過 2 分半沒有收到錄影資料（影片卡住或網路中斷）");
+                lastPct = j.pct;
+                emit(i, n, (j.note.isEmpty() ? "錄製中" : j.note) + "・" + shown, lastPct, j.vBytes);
+                if (now - start > 6 * 3600_000L) throw new Exception("錄製時間過長");
+            }
+            if (j.err != null && !j.err.isEmpty()) throw new Exception(j.err);
+        } finally {
+            cur = null;
+            try { j.vo.close(); } catch (Throwable t) { /* ignore */ }
+            try { j.ao.close(); } catch (Throwable t) { /* ignore */ }
+            j.a.delete();
+            if (!started || MediaDl.cancel()[0]) {
+                Util.MAIN.post(new Runnable() { @Override public void run() {
+                    Browser b = here ? a.br : a.hidden("rec");
+                    b.wv.evaluateJavascript("window.__wsRec&&__wsRec.stop()", null);
+                } });
+            }
+            if (!here) Util.MAIN.postDelayed(new Runnable() { @Override public void run() { a.hidden("rec").wv.loadUrl("about:blank"); } }, 1500);
+        }
+        if (j.vBytes == 0) throw new Exception("沒有錄到任何畫面");
+        emit(i, n, "整理錄影檔…・" + shown, 1, j.vBytes);
+        String mm = j.vMime.toLowerCase();
+        boolean mp4 = mm.contains("mp4"), h264 = mm.contains("h264") || mm.contains("avc");
+        File raw = j.v;
+        File out = lib.tmpFile(mp4 || h264 ? "mp4" : "webm");
+        try {
+            Mux.mux(raw, null, out, false, mp4 || h264 ? android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4 : android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_WEBM);
+            if (durationOf(out) <= 0) throw new Exception("remux");
+            raw.delete();
+            return new Object[] {out, stem + "_錄製." + (mp4 || h264 ? "mp4" : "webm"), mp4 || h264 ? "video/mp4" : "video/webm"};
+        } catch (Throwable e) {
+            out.delete();
+            return new Object[] {raw, stem + "_錄製." + (mp4 ? "mp4" : "webm"), mp4 ? "video/mp4" : "video/webm"};
         }
     }
 

@@ -178,7 +178,7 @@ final class Browser {
         a = act;
         tag = tg;
         ytTab = "yt".equals(tg) || "grab".equals(tg);
-        hiddenBr = "grab".equals(tg) || "bg".equals(tg);
+        hiddenBr = "grab".equals(tg) || "bg".equals(tg) || "rec".equals(tg);
         android.content.SharedPreferences p = a.prefs;
         mode = p.getString("brMode", "mobile");
         popups = p.getString("brPopups", "smart");

@@ -539,3 +539,7 @@ body.vpFsOn #vwTop{display:none!important}
 .incogOn #brTop .ib{color:#ddd}
 #incogBadge{display:none;flex:none;font:800 11px/1 sans-serif;color:#fff;background:#6b5b7b;border-radius:99px;padding:5px 8px;margin-right:2px}
 .incogOn #incogBadge{display:inline-block}
+.ydRow.ydChk .ydRad{border-radius:6px}
+.ydRow.ydChk.on .ydRad{border:2px solid var(--accent);background:var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/80% no-repeat}
+.vpC.on{background:rgba(255,255,255,.92)!important;color:#222!important}
+.vp video::cue{font:600 clamp(15px,4.4vw,30px)/1.35 -apple-system,"Noto Sans TC",sans-serif;background:rgba(0,0,0,.55);color:#fff}

@@ -273,8 +273,7 @@ var AUDIO_FMTS = {
 };
 Conv.add = function(item, fmt, opts){ this.q.push({item: item, fmt: fmt, opts: opts || {}}); this.next(); };
 Conv.card = function(job, pct, msg){
-  Dock.set('conv', h('div', {class: 'dockCard glass'}, h('span', {html: ring(pct)}),
-    h('div', {class: 't'}, h('b', {text: '轉成 ' + AUDIO_FMTS[job.fmt].name + ' ' + Math.round(pct * 100) + '%' + (this.q.length ? '（還有 ' + this.q.length + ' 個）' : '')}), h('div', {class: 'sub', text: msg || job.item.name}))));
+  Tasks.set('conv', {title: '轉成 ' + AUDIO_FMTS[job.fmt].name + ' ' + Math.round(pct * 100) + '%' + (this.q.length ? '（還有 ' + this.q.length + ' 個）' : ''), sub: msg || job.item.name, pct: pct, kind: 'conv'});
 };
 Conv.next = async function(){
   if(this.busy || !this.q.length) return;
@@ -310,7 +309,7 @@ Conv.next = async function(){
   }catch(e){
     toast('轉檔失敗：' + (e && e.message || e), true);
   }finally{
-    Dock.remove('conv'); this.busy = false;
+    Tasks.del('conv'); this.busy = false;
     if(isApp && !this.q.length) NAT.call('keep', 'conv', '');
     this.next();
   }

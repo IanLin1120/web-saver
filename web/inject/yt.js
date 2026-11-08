@@ -6,13 +6,28 @@
   window.__wsYT = 1;
   var KEYS = ['adPlacements', 'playerAds', 'adSlots', 'adBreakHeartbeatParams', 'adBreakParams'];
   var PR = window.__wsPR = window.__wsPR || {};
+  /* 直播：不改串流、不限制編碼（直播常常只有 H.264＋AAC，限制了就會「發生錯誤」） */
+  var LIVE = window.__wsLIVE = window.__wsLIVE || {};
+  /* 安全模式：某部影片在我們的修改下播放出錯時，自動重新載入並對這部影片停用所有串流／編碼修改 */
+  function curVid() { try { var u = new URL(location.href); return u.searchParams.get('v') || ((u.pathname.match(/\/(shorts|live)\/([\w-]{11})/) || [])[2]) || ''; } catch (e) { return ''; } }
+  function safeNow() { try { var id = curVid(); return !!id && sessionStorage.getItem('__wsSafe') === id; } catch (e) { return false; } }
+  function liveNow() {
+    if (safeNow()) return true;
+    try {
+      if (/^\/live\//.test(location.pathname)) return true;
+      var id = new URL(location.href).searchParams.get('v');
+      return !!(id && LIVE[id]);
+    } catch (e) { return false; }
+  }
   function prune(o, depth) {
     if (!o || typeof o !== 'object' || (depth || 0) > 6) return o;
     try { if (o.streamingData && o.videoDetails && o.videoDetails.videoId) PR[o.videoDetails.videoId] = o; } catch (e) {}
     /* 有傳統串流網址時，關掉 SABR 新串流，讓播放器改用一般網址（App 才攔截得到可下載的完整網址） */
     try {
       var sd0 = o.streamingData;
-      if (sd0 && sd0.serverAbrStreamingUrl && !(window.__wsCfg && window.__wsCfg.yt && window.__wsCfg.yt.sabr)) {
+      var live0 = o.videoDetails && (o.videoDetails.isLive || o.videoDetails.isLiveContent || o.videoDetails.isPostLiveDvr);
+      if (live0 && o.videoDetails.videoId) LIVE[o.videoDetails.videoId] = 1;
+      if (sd0 && sd0.serverAbrStreamingUrl && !live0 && !safeNow() && !(window.__wsCfg && window.__wsCfg.yt && window.__wsCfg.yt.sabr)) {
         var af0 = sd0.adaptiveFormats || [];
         if (af0.length && af0.every(function (f) { return f.url || f.signatureCipher || f.cipher; })) delete sd0.serverAbrStreamingUrl;
       }
@@ -195,6 +210,7 @@
       var its = MS.isTypeSupported.bind(MS);
       MS.isTypeSupported = function (t) {
         t = String(t || '');
+        if (!GC && liveNow()) return its(t);
         /* mp4：H.264／AV1＋AAC（4K 用 AV1 才能放進 MP4）；webm：VP9＋Opus；h264：只用 H.264（最高 1080p） */
         if (CODEC === 'mp4') { if (/webm|vp0?9|vp8|opus/i.test(t)) return false; return its(t); }
         if (/av01/i.test(t)) return false;
@@ -244,6 +260,7 @@
       });
       out.hls = sd.hlsManifestUrl || '';
       out.live = !!vd.isLive;
+      try { out.visitor = (window.ytcfg && ytcfg.get && ytcfg.get('VISITOR_DATA')) || ''; } catch (e) {}
       out.sabr = !!sd.serverAbrStreamingUrl;
       try {
         out.captions = (((r.captions || {}).playerCaptionsTracklistRenderer || {}).captionTracks || []).map(function (t) {
@@ -418,7 +435,8 @@
         'html.__wsfs,html.__wsfs body{overflow:hidden!important;background:#000!important}' +
         'html.__wsfs .html5-video-container{position:absolute!important;inset:0!important;width:100%!important;height:100%!important}' +
         'html.__wsfs .html5-video-player video{position:absolute!important;left:0!important;top:0!important;width:100%!important;height:100%!important;object-fit:contain!important;transform:none!important}' +
-        'html.__wsfs.__wsfill .html5-video-player video{object-fit:cover!important}';
+        'html.__wsfs.__wsfill .html5-video-player video{object-fit:cover!important}' +
+        'html.__wserr #__ws_skin{display:none!important}html.__wserr.__wsskin .ytm-player-error-overlay-renderer-host{display:block!important}';
       (document.head || document.documentElement).appendChild(skinCss);
     }
     document.documentElement.classList.add('__wsskin');
@@ -906,4 +924,23 @@
       if (stuck > 24) { stuck = 0; try { v.currentTime = Math.min(d - 0.2, be + 0.05); } catch (e) {} }
     }, 300);
   })();
+})();
+
+/* 播放出錯（例如直播「發生錯誤，請重新整理」）：自動以安全模式重新載入一次 */
+(function () {
+  if (window.__wsSafeWatch) return; window.__wsSafeWatch = 1;
+  setInterval(function () {
+    try {
+      if (window.__wsCfg && window.__wsCfg.grab) return;
+      var u = new URL(location.href), id = u.searchParams.get('v') || ((u.pathname.match(/\/(shorts|live)\/([\w-]{11})/) || [])[2]) || '';
+      if (!id) return;
+      var err = document.querySelector('.ytp-error, ytm-player-error-message-renderer, .player-error-message-container');
+      var on = !!(err && err.getClientRects().length);
+      document.documentElement.classList.toggle('__wserr', on && sessionStorage.getItem('__wsSafe') === id);
+      if (!on) return;
+      if (sessionStorage.getItem('__wsSafe') === id) return;
+      sessionStorage.setItem('__wsSafe', id);
+      location.reload();
+    } catch (e) {}
+  }, 1500);
 })();

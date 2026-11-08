@@ -108,6 +108,14 @@ public class Bridge {
     }
 
     /** 清空瀏覽分頁偵測到的媒體（離開網頁、回首頁時） */
+    /** 目前網頁裡的影片能不能錄製（DRM／跨網域的不行）：結果用 recCan 事件回傳 */
+    @JavascriptInterface public void brRecCheck(final String src) {
+        ui(new Runnable() { @Override public void run() {
+            a.br.wv.evaluateJavascript("(function(){try{return window.__wsRec?__wsRec.can(" + org.json.JSONObject.quote(src == null ? "" : src) + "):'noscript'}catch(e){return 'err'}})()", new android.webkit.ValueCallback<String>() {
+                @Override public void onReceiveValue(String v) { MainActivity.emit("recCan", v == null ? "" : v.replaceAll("^\"|\"$", "")); }
+            });
+        } });
+    }
     @JavascriptInterface public void brMediaClear() { ui(new Runnable() { @Override public void run() { a.br.clearMedia(); } }); }
 
     @JavascriptInterface public void ytRect(final float top, final float bottom, final float left, final float right) {
@@ -253,7 +261,19 @@ public class Bridge {
         try { MediaDl.start(a, new JSONObject(json)); } catch (Throwable t) { MainActivity.toast("下載設定錯誤"); }
     }
 
-    @JavascriptInterface public void dlCancel() { MediaDl.cancel[0] = true; }
+    @JavascriptInterface public void dlCancel() { MediaDl.cancel(""); }
+    @JavascriptInterface public void dlCancelJob(String id) { MediaDl.cancel(id); }
+    @JavascriptInterface public void dlMax(int n) { a.prefs.edit().putInt("dlMax", n).apply(); MediaDl.setMax(n); }
+    @JavascriptInterface public int dlMaxGet() { return a.prefs.getInt("dlMax", 3); }
+    @JavascriptInterface public int dlRunning() { return MediaDl.JOBS.size(); }
+    /** 把網址交給指定的 App（例如 Snaptube）；沒裝就回傳 false */
+    @JavascriptInterface public boolean sendTo(String pkg, String text) {
+        try {
+            android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, text).setPackage(pkg).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            a.startActivity(i);
+            return true;
+        } catch (Throwable t) { return false; }
+    }
 
     @JavascriptInterface public void hlsInfo(String url, String ref) { MediaDl.hlsInfo(url, ref); }
 

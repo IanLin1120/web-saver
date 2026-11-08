@@ -25,17 +25,63 @@ import java.util.zip.ZipOutputStream;
 final class MediaDl {
     private MediaDl() { }
 
-    static final boolean[] cancel = {false};
-    private static final java.util.concurrent.ExecutorService Q = java.util.concurrent.Executors.newSingleThreadExecutor();
+    /** 每個下載工作各自的取消旗標；可同時進行多個（數量在設定裡調整），互不干擾 */
+    static final class Job { final String id; final boolean[] cancel = {false}; Job(String id) { this.id = id; } }
+    static final java.util.Map<String, Job> JOBS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final ThreadLocal<Job> CUR = new ThreadLocal<>();
+    private static final boolean[] NONE = {false};
+    private static final java.util.concurrent.ThreadPoolExecutor Q = new java.util.concurrent.ThreadPoolExecutor(3, 3, 30, java.util.concurrent.TimeUnit.SECONDS, new java.util.concurrent.LinkedBlockingQueue<Runnable>());
+    static { Q.allowCoreThreadTimeOut(true); }
+    private static int seq = 0;
 
-    static void emit(JSONObject o) { MainActivity.emit("dl", o.toString()); }
+    static boolean[] cancel() { Job j = CUR.get(); return j == null ? NONE : j.cancel; }
+
+    static synchronized void setMax(int n) {
+        n = Math.max(1, Math.min(8, n));
+        if (n == Q.getMaximumPoolSize()) return;
+        if (n > Q.getMaximumPoolSize()) { Q.setMaximumPoolSize(n); Q.setCorePoolSize(n); }
+        else { Q.setCorePoolSize(n); Q.setMaximumPoolSize(n); }
+    }
+
+    static void cancel(String id) {
+        if (id == null || id.isEmpty()) { for (Job j : JOBS.values()) j.cancel[0] = true; return; }
+        Job j = JOBS.get(id);
+        if (j != null) j.cancel[0] = true;
+    }
+
+    private static void keep(MainActivity a) {
+        int n = JOBS.size();
+        KeepAlive.set(a, "dl", n == 0 ? null : "下載中（" + n + " 個工作）");
+    }
+
+    /** 在背景執行緒跑一個下載工作；進度事件會自動帶上工作編號 */
+    private static void submit(final MainActivity a, String id, final Runnable r) {
+        final Job j = new Job(id == null || id.isEmpty() ? "n" + (++seq) : id);
+        JOBS.put(j.id, j);
+        keep(a);
+        try { emit(new JSONObject().put("state", "queued").put("job", j.id).put("running", Q.getActiveCount()).put("max", Q.getMaximumPoolSize())); } catch (Throwable t) { /* ignore */ }
+        Q.execute(new Runnable() {
+            @Override public void run() {
+                CUR.set(j);
+                try { r.run(); }
+                finally { CUR.remove(); JOBS.remove(j.id); keep(a); }
+            }
+        });
+    }
+
+    static void emit(JSONObject o) {
+        Job j = CUR.get();
+        try { if (j != null && !o.has("job")) o.put("job", j.id); } catch (Throwable t) { /* ignore */ }
+        MainActivity.emit("dl", o.toString());
+    }
 
     /** 瀏覽器裡一般的檔案下載（PDF、ZIP…） */
     static void single(final MainActivity a, final String url, final String ref, final String name, final String mime) {
         MainActivity.toast("開始下載：" + name);
-        Q.execute(new Runnable() {
+        submit(a, null, new Runnable() {
             @Override public void run() {
                 try {
+                    emit(new JSONObject().put("state", "start").put("n", 1).put("label", name));
                     if (url.startsWith("blob:") || url.startsWith("data:")) throw new Exception("這種下載連結（" + url.substring(0, 5) + "）無法由 App 取得");
                     File t = Lib.get(a).tmpFile(Util.extOf(name));
                     final String nm = name;
@@ -64,8 +110,8 @@ final class MediaDl {
     }
 
     static void start(final MainActivity a, final JSONObject req) {
-        cancel[0] = false;
-        Q.execute(new Runnable() { @Override public void run() { runJob(a, req); } });
+        setMax(a.prefs.getInt("dlMax", 3));
+        submit(a, req.optString("job", ""), new Runnable() { @Override public void run() { runJob(a, req); } });
     }
 
     private static void runJob(MainActivity a, JSONObject req) {
@@ -84,11 +130,10 @@ final class MediaDl {
         int ok = 0, fail = 0;
         StringBuilder errs = new StringBuilder();
         final int n = items.length();
-        try { emit(new JSONObject().put("state", "start").put("n", n)); } catch (Throwable t) { /* ignore */ }
-        KeepAlive.set(a, "dl", "下載中（" + n + " 個）");
+        try { emit(new JSONObject().put("state", "start").put("n", n).put("label", title)); } catch (Throwable t) { /* ignore */ }
         Set<String> usedNames = new HashSet<>();
         for (int i = 0; i < n; i++) {
-            if (cancel[0]) break;
+            if (cancel()[0]) break;
             JSONObject it = items.optJSONObject(i);
             if (it == null) continue;
             final int idx = i;
@@ -110,6 +155,9 @@ final class MediaDl {
                     String pref = it.optString("variant", "");
                     if (pref.isEmpty()) pref = o.optString("vidQ", "max");
                     Object[] r = hls(lib, url, ref, base, pref, it.optString("vidOut", o.optString("vidOut", "mp4")), idx, n, shown);
+                    f = (File) r[0]; name = (String) r[1]; mime = (String) r[2];
+                } else if (kind.equals("rec")) {
+                    Object[] r = YtGrab.runRec(a, lib, it, base, idx, n, shown);
                     f = (File) r[0]; name = (String) r[1]; mime = (String) r[2];
                 } else if (kind.equals("grab")) {
                     Object[] r = YtGrab.run(a, lib, it, base, idx, n, shown);
@@ -182,8 +230,7 @@ final class MediaDl {
             } catch (Throwable e) { errs.append("ZIP：").append(e.getMessage()).append('\n'); }
         }
         if (a.prefs.getBoolean("autoExport", false) && saved.length() > 0) Exporter.toDownloads(a, saved, true);
-        KeepAlive.set(a, "dl", null);
-        try { emit(new JSONObject().put("state", "done").put("ok", ok).put("fail", fail).put("cancel", cancel[0]).put("msg", errs.toString().trim()).put("items", saved)); } catch (Throwable t) { /* ignore */ }
+        try { emit(new JSONObject().put("state", "done").put("ok", ok).put("fail", fail).put("cancel", cancel()[0]).put("msg", errs.toString().trim()).put("items", saved)); } catch (Throwable t) { /* ignore */ }
         MainActivity.emit("lib", "");
     }
 
@@ -259,7 +306,7 @@ final class MediaDl {
             String au = it.optString("url");
             String srcExt = it.optString("ext", "m4a");
             File a = lib.tmpFile(srcExt);
-            Fetcher.chunked(au, ua, ref, ck, a, prog(i, n, shown, 0, 1), cancel);
+            Fetcher.chunked(au, ua, ref, ck, a, prog(i, n, shown, 0, 1), cancel());
             String out = it.optString("audioOut", "orig");
             if (out.equals("opus") && srcExt.equals("webm") && android.os.Build.VERSION.SDK_INT >= 29) {
                 File o = lib.tmpFile("opus");
@@ -277,10 +324,10 @@ final class MediaDl {
         String vu = it.optString("url"), au = it.optString("audioUrl", "");
         String cont = it.optString("container", "mp4");
         File v = lib.tmpFile(cont);
-        Fetcher.chunked(vu, ua, ref, ck, v, prog(i, n, shown + "（影像）", 0, au.isEmpty() ? 1 : 0.85), cancel);
+        Fetcher.chunked(vu, ua, ref, ck, v, prog(i, n, shown + "（影像）", 0, au.isEmpty() ? 1 : 0.85), cancel());
         if (au.isEmpty()) return new Object[] {v, stem + "." + cont, cont.equals("webm") ? "video/webm" : "video/mp4"};
         File a = lib.tmpFile("aud");
-        Fetcher.chunked(au, ua, ref, ck, a, prog(i, n, shown + "（音訊）", 0.85, 0.15), cancel);
+        Fetcher.chunked(au, ua, ref, ck, a, prog(i, n, shown + "（音訊）", 0.85, 0.15), cancel());
         try { emit(new JSONObject().put("state", "item").put("i", i).put("n", n).put("name", shown + "（合併影像與聲音）").put("pct", 1)); } catch (Throwable x) { /* ignore */ }
         File out = lib.tmpFile(cont);
         Mux.mux(v, a, out, false, cont.equals("webm") ? android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_WEBM : android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
@@ -351,7 +398,7 @@ final class MediaDl {
             @Override public void on(int d, int t) {
                 try { emit(new JSONObject().put("state", "item").put("i", i).put("n", n).put("name", shown).put("pct", (hasAudio ? 0.8 : 1.0) * d / Math.max(1, t)).put("seg", d + "/" + t)); } catch (Throwable x) { /* ignore */ }
             }
-        }, cancel);
+        }, cancel());
         File a = null;
         if (hasAudio && !out.equals("orig-video")) {
             a = lib.tmpFile("aud");
@@ -359,7 +406,7 @@ final class MediaDl {
                 @Override public void on(int d, int t) {
                     try { emit(new JSONObject().put("state", "item").put("i", i).put("n", n).put("name", shown + "（音軌）").put("pct", audOnly ? (double) d / Math.max(1, t) : 0.8 + 0.2 * d / Math.max(1, t))); } catch (Throwable x) { /* ignore */ }
                 }
-            }, cancel);
+            }, cancel());
         }
         String stem = base.replaceAll("\\.(m3u8|[A-Za-z0-9]{2,4})$", "");
         if (stem.isEmpty() || stem.equalsIgnoreCase("index") || stem.equalsIgnoreCase("master") || stem.equalsIgnoreCase("playlist")) stem = "影片";

@@ -226,3 +226,107 @@
   refresh();
   try { mo.observe(document.documentElement, {childList: true, subtree: true}); setTimeout(function () { mo.disconnect(); }, 20000); } catch (e) {}
 })();
+
+/* ---------- 錄製下載：把網頁上正在播放的影片「原畫面＋原聲音」直接錄下來（由 App 在看不到的分頁裡執行） ----------
+   用影片本身的畫面（不是螢幕截圖），解析度就是影片當下的解析度，不會有網頁的其他東西；
+   聲音改走 Web Audio 送進錄影，不會從喇叭播出來。受保護（DRM）或跨網域的影片瀏覽器不允許錄製。 */
+(function () {
+  if (window.__wsRec) return;
+  var B = window.WSPage;
+  if (!B || !B.grabData) return;
+  var st = null;
+  function vids() {
+    var out = [].slice.call(document.querySelectorAll('video'));
+    [].slice.call(document.querySelectorAll('iframe')).forEach(function (f) { try { out = out.concat([].slice.call(f.contentDocument.querySelectorAll('video'))); } catch (e) {} });
+    return out;
+  }
+  function pick(src) {
+    var vs = vids(), best = null;
+    if (src) vs.forEach(function (v) { if (!best && (v.currentSrc === src || v.src === src)) best = v; });
+    if (!best) best = vs.sort(function (a, b) { return (b.videoWidth * b.videoHeight || b.clientWidth * b.clientHeight) - (a.videoWidth * a.videoHeight || a.clientWidth * a.clientHeight); })[0] || null;
+    return best;
+  }
+  function b64(buf) {
+    var u = new Uint8Array(buf), s = '', CH = 0x8000;
+    for (var i = 0; i < u.length; i += CH) s += String.fromCharCode.apply(null, u.subarray(i, i + CH));
+    return btoa(s);
+  }
+  function mimeOf() {
+    var c = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=h264,opus', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+    for (var i = 0; i < c.length; i++) { try { if (MediaRecorder.isTypeSupported(c[i])) return c[i]; } catch (e) {} }
+    return '';
+  }
+  function start(o) {
+    o = o || {};
+    if (st) return 'busy';
+    var v = pick(o.src);
+    if (!v) return 'novideo';
+    if (!(v.readyState >= 1)) { try { v.muted = true; var p0 = v.play(); if (p0 && p0.catch) p0.catch(function () {}); } catch (e) {} return 'wait'; }
+    var cap = v.captureStream || v.mozCaptureStream;
+    if (!cap) return 'nocap:這個瀏覽器不支援錄製影片';
+    var vs;
+    try { vs = cap.call(v); } catch (e) { return 'nocap:' + (e && e.message || e); }
+    var tracks = vs.getVideoTracks();
+    if (!tracks.length) return 'wait';
+    /* 聲音：接到 Web Audio，只送進錄影、不從喇叭播放 */
+    var ac = null, dst = null;
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      ac = new AC();
+      var srcN = v.__wsSrcNode || (v.__wsSrcNode = ac.createMediaElementSource(v));
+      dst = ac.createMediaStreamDestination();
+      srcN.connect(dst);
+      if (ac.resume) ac.resume();
+      v.muted = false; v.volume = 1;
+    } catch (e) { ac = null; dst = null; }
+    var stream = new MediaStream(tracks.concat(dst ? dst.stream.getAudioTracks() : vs.getAudioTracks()));
+    var mime = mimeOf();
+    var w = v.videoWidth || 1280, h = v.videoHeight || 720;
+    var bps = Math.min(24e6, Math.max(2.5e6, Math.round(w * h * 30 * 0.14)));
+    var rec;
+    try { rec = new MediaRecorder(stream, mime ? {mimeType: mime, videoBitsPerSecond: bps, audioBitsPerSecond: 192000} : {videoBitsPerSecond: bps}); }
+    catch (e) { return 'nocap:' + (e && e.message || e); }
+    B.grabMime('v', rec.mimeType || mime || 'video/webm');
+    st = {v: v, rec: rec, ac: ac, q: Promise.resolve(), last: -1, dur: 0, t0: Date.now(), w: w, h: h};
+    rec.ondataavailable = function (e) {
+      if (!e.data || !e.data.size) return;
+      var d = e.data;
+      st.q = st.q.then(function () { return d.arrayBuffer(); }).then(function (buf) {
+        for (var i = 0; i < buf.byteLength; i += 4 << 20) B.grabData('v', b64(buf.slice(i, Math.min(buf.byteLength, i + (4 << 20)))), false);
+      }).catch(function (err) { B.grabDone('寫入錄影資料失敗：' + err); });
+    };
+    rec.onstop = function () {
+      var s = st;
+      s.q.then(function () { try { if (s.ac) s.ac.close(); } catch (e) {} B.grabDone(''); });
+    };
+    /* 從頭開始、以原速播放到結束 */
+    try { v.loop = false; v.playbackRate = 1; if (!o.keepPos && isFinite(v.duration) && v.duration > 0) v.currentTime = 0; } catch (e) {}
+    try { v.style.setProperty('position', 'fixed', 'important'); v.style.setProperty('inset', '0', 'important'); v.style.setProperty('width', '100vw', 'important'); v.style.setProperty('height', '100vh', 'important'); v.style.setProperty('z-index', '2147483647', 'important'); v.style.setProperty('object-fit', 'contain', 'important'); v.style.setProperty('background', '#000', 'important'); } catch (e) {}
+    var p = v.play(); if (p && p.catch) p.catch(function () {});
+    rec.start(2000);
+    var stall = 0, lastT = -1;
+    st.tm = setInterval(function () {
+      var d = isFinite(v.duration) ? v.duration : 0, t = v.currentTime || 0;
+      if (v.paused && !v.ended) { var pp = v.play(); if (pp && pp.catch) pp.catch(function () {}); }
+      if (Math.abs(t - lastT) < 0.05) stall++; else stall = 0;
+      lastT = t;
+      B.grabProg(d > 0 ? Math.min(0.99, t / d) : 0, (v.videoWidth || w) + '×' + (v.videoHeight || h) + ' 錄製中 ' + fmt(t) + (d > 0 ? ' / ' + fmt(d) : ''));
+      if (v.ended || (d > 0 && t >= d - 0.25) || stall > 90) stop();
+    }, 1000);
+    v.addEventListener('ended', stop);
+    return 'ok';
+  }
+  function fmt(t) { t = Math.floor(t || 0); var m = Math.floor(t / 60), s = t % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
+  function stop() {
+    if (!st || st.stopping) return;
+    st.stopping = true;
+    clearInterval(st.tm);
+    try { st.v.pause(); } catch (e) {}
+    try { st.rec.stop(); } catch (e) { B.grabDone(''); }
+  }
+  window.__wsRec = {start: start, stop: stop, can: function (src) {
+    var v = pick(src);
+    if (!v) return 'novideo';
+    try { var s = (v.captureStream || v.mozCaptureStream).call(v); s.getTracks().forEach(function (t) { t.stop(); }); return 'ok'; } catch (e) { return 'nocap'; }
+  }};
+})();

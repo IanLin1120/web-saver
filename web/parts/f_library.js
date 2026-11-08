@@ -431,8 +431,7 @@ async function runBatchPdf(items, mode){
   NAT.call('keep', 'cap', '批次轉 PDF');
   for(var i = 0; i < items.length; i++){
     var it = items[i];
-    Dock.set('bpdf', h('div', {class: 'dockCard glass'}, h('span', {html: ring(i / items.length)}),
-      h('div', {class: 't'}, h('b', {text: '批次轉 PDF ' + (i + 1) + ' / ' + items.length}), h('div', {class: 'sub ell', text: it.name}))));
+    Tasks.set('bpdf', {title: '批次轉 PDF ' + (i + 1) + ' / ' + items.length, sub: it.name, pct: i / items.length, kind: 'pdf'});
     var d;
     if(mode === 'seamless'){
       CAPTURING = true;
@@ -448,7 +447,7 @@ async function runBatchPdf(items, mode){
       if(d && d.ok) BATCH_PDF.ok++; else BATCH_PDF.fail++;
     }
   }
-  Dock.remove('bpdf');
+  Tasks.del('bpdf');
   NAT.call('keep', 'cap', '');
   var r = BATCH_PDF; BATCH_PDF = null;
   await Lib.refresh(); renderLib();
