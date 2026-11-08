@@ -23,7 +23,7 @@ final class YtGrab {
         String vMime = "", aMime = "", err = null, note = "";
         boolean slow = false;
         long vBytes = 0, aBytes = 0;
-        volatile long lastData = System.currentTimeMillis();
+        volatile long lastData = System.currentTimeMillis(), lastPing = System.currentTimeMillis();
         volatile double pct = 0;
         final CountDownLatch done = new CountDownLatch(1);
     }
@@ -174,10 +174,13 @@ final class YtGrab {
         long start = System.currentTimeMillis(), lastTry = 0;
         boolean started = false;
         double lastPct = -1;
+        String partial = null;
         try {
             while (!j.done.await(1000, TimeUnit.MILLISECONDS)) {
                 if (MediaDl.cancel()[0]) throw new Exception("已取消");
                 long now = System.currentTimeMillis();
+                /* 錄製頁面不見了（網頁跳轉、被關掉）：保留已經錄到的部分 */
+                if (started && now - j.lastPing > 20000) { partial = "網頁停止回應"; break; }
                 if (!started) {
                     String r = res[0];
                     if (r.equals("ok")) { started = true; j.lastData = now; continue; }
@@ -197,18 +200,22 @@ final class YtGrab {
                     emit(i, n, "載入影片、準備錄製…・" + shown, 0, 0);
                     continue;
                 }
-                if (now - j.lastData > 150000) throw new Exception("超過 2 分半沒有收到錄影資料（影片卡住或網路中斷）");
+                if (now - j.lastData > 150000) { partial = "影片卡住"; break; }
                 lastPct = j.pct;
                 emit(i, n, (j.note.isEmpty() ? "錄製中" : j.note) + "・" + shown, lastPct, j.vBytes);
-                if (now - start > 6 * 3600_000L) throw new Exception("錄製時間過長");
+                if (now - start > 6 * 3600_000L) { partial = "錄製時間過長"; break; }
             }
-            if (j.err != null && !j.err.isEmpty()) throw new Exception(j.err);
+            if (j.err != null && !j.err.isEmpty()) partial = j.err;
+        } catch (Exception e) {
+            /* 已經錄到一部分：除非是你按取消，否則把錄到的部分存起來 */
+            if (!started || j.vBytes == 0 || MediaDl.cancel()[0]) throw e;
+            partial = e.getMessage();
         } finally {
             cur = null;
             try { j.vo.close(); } catch (Throwable t) { /* ignore */ }
             try { j.ao.close(); } catch (Throwable t) { /* ignore */ }
             j.a.delete();
-            if (!started || MediaDl.cancel()[0]) {
+            if (!started || MediaDl.cancel()[0] || partial != null) {
                 Util.MAIN.post(new Runnable() { @Override public void run() {
                     Browser b = here ? a.br : a.hidden("rec");
                     b.wv.evaluateJavascript("window.__wsRec&&__wsRec.stop()", null);
@@ -226,10 +233,10 @@ final class YtGrab {
             Mux.mux(raw, null, out, false, mp4 || h264 ? android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4 : android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_WEBM);
             if (durationOf(out) <= 0) throw new Exception("remux");
             raw.delete();
-            return new Object[] {out, stem + "_錄製." + (mp4 || h264 ? "mp4" : "webm"), mp4 || h264 ? "video/mp4" : "video/webm"};
+            return new Object[] {out, stem + (partial != null ? "_錄製(部分)." : "_錄製.") + (mp4 || h264 ? "mp4" : "webm"), mp4 || h264 ? "video/mp4" : "video/webm"};
         } catch (Throwable e) {
             out.delete();
-            return new Object[] {raw, stem + "_錄製." + (mp4 ? "mp4" : "webm"), mp4 ? "video/mp4" : "video/webm"};
+            return new Object[] {raw, stem + (partial != null ? "_錄製(部分)." : "_錄製.") + (mp4 ? "mp4" : "webm"), mp4 ? "video/mp4" : "video/webm"};
         }
     }
 
@@ -273,6 +280,7 @@ final class YtGrab {
         if (j == null) return;
         j.pct = pct;
         j.note = note == null ? "" : note;
+        j.lastPing = System.currentTimeMillis();
         j.lastData = Math.max(j.lastData, System.currentTimeMillis() - 30000);
     }
 

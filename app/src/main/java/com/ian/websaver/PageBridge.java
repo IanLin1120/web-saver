@@ -43,6 +43,8 @@ public class PageBridge {
 
     @JavascriptInterface public void grabDone(String err) { YtGrab.finish(err); }
 
+    @JavascriptInterface public void srecEnd() { Util.ui(new Runnable() { @Override public void run() { ScreenRec.stop(b.a); } }); }
+
     @JavascriptInterface public void ytStream(String url) { if (url != null && url.contains("googlevideo.com/videoplayback")) YtSniff.note(b, url); }
 
     @JavascriptInterface public void ytInfo(String vid, String json) { YtSniff.info(vid, json); MainActivity.emit("ytInfo", vid); }

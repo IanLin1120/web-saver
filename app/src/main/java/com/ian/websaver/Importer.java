@@ -33,12 +33,17 @@ final class Importer {
         try { return new JSONArray(a.prefs.getString("watchDirs", "[]")); } catch (Throwable t) { return new JSONArray(); }
     }
 
-    static void addDir(MainActivity a, Uri tree) {
+    static void addDir(MainActivity a, Uri tree, String pkg, String label) {
         try {
             JSONArray d = dirs(a), out = new JSONArray();
-            for (int i = 0; i < d.length(); i++) if (!d.getJSONObject(i).optString("uri").equals(tree.toString())) out.put(d.get(i));
+            for (int i = 0; i < d.length(); i++) {
+                JSONObject o = d.getJSONObject(i);
+                if (o.optString("uri").equals(tree.toString()) && o.optString("pkg").equals(pkg == null ? "" : pkg)) continue;
+                if (pkg != null && !pkg.isEmpty() && pkg.equals(o.optString("pkg"))) continue;   // 每個 App 一個資料夾：換新的
+                out.put(o);
+            }
             String name = Uri.decode(tree.getLastPathSegment() == null ? "" : tree.getLastPathSegment()).replaceFirst("^[^:]*:", "");
-            out.put(new JSONObject().put("uri", tree.toString()).put("name", name.isEmpty() ? "資料夾" : name));
+            out.put(new JSONObject().put("uri", tree.toString()).put("name", name.isEmpty() ? "資料夾" : name).put("pkg", pkg == null ? "" : pkg).put("label", label == null ? "" : label));
             a.prefs.edit().putString("watchDirs", out.toString()).apply();
         } catch (Throwable t) { /* ignore */ }
     }

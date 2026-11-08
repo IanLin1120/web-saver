@@ -13,7 +13,6 @@ window.onNativeBack = function(){
   if(LV.selMode){ LV.selMode = false; LV.sel.clear(); renderLib(); return true; }
   if(BR.zap){ $('bZap').click(); return true; }
   if(document.activeElement === urlIn){ urlIn.blur(); return true; }
-  if(document.body.classList.contains('brFull') && curView === 'browse'){ setBrFull(false); return true; }
   /* YouTube 分頁：返回＝YouTube 的上一頁，不會跳到「瀏覽」分頁 */
   if(curView === 'yt'){
     if(YTB.back) return false;

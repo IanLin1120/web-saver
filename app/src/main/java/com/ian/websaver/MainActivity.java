@@ -342,6 +342,9 @@ public class MainActivity extends Activity {
         } catch (Throwable t) { toast("無法開啟資料夾選擇器"); }
     }
 
+    String watchPkg = "", watchLabel = "";
+    void pickWatch(String pkg, String label) { watchPkg = pkg == null ? "" : pkg; watchLabel = label == null ? "" : label; pickWatch(); }
+
     void pickWatch() {
         try {
             Intent it = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
@@ -387,11 +390,13 @@ public class MainActivity extends Activity {
                 fileCb.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(res, data));
                 fileCb = null;
             }
+        } else if (req == ScreenRec.REQ) {
+            ScreenRec.onResult(this, res, data);
         } else if (req == REQ_WATCH) {
             if (res == RESULT_OK && data != null && data.getData() != null) {
                 Uri tree = data.getData();
                 try { getContentResolver().takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION); } catch (Throwable t) { /* ignore */ }
-                Importer.addDir(this, tree);
+                Importer.addDir(this, tree, watchPkg, watchLabel);
                 Importer.scan(this, true);
             }
             emit("watchDirs", Importer.dirs(this).toString());

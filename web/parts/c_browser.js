@@ -522,12 +522,12 @@ function openToolsMenu(){
 $('bMore').addEventListener('click', openToolsMenu);
 
 /* ---------- 滿版瀏覽：整個螢幕只顯示網頁（隱藏網址列、底部分頁、狀態列）；用懸浮按鈕或返回鍵切回來 ---------- */
-function setBrFull(on){
+function setBrFull(on, quiet){
   document.body.classList.toggle('brFull', !!on);
   if(isApp) NAT.call('uiFull', !!on, false);
   lsSet('ws.brFull', !!on);
   syncLayout(); setTimeout(syncLayout, 250); setTimeout(syncLayout, 700);
   fabSync();
-  if(on) toast('滿版瀏覽：點懸浮按鈕或按返回鍵切回一般版面');
+  if(on && !quiet) toast('滿版瀏覽：點懸浮下載按鈕 →「離開滿版瀏覽」切回一般版面');
 }
 on('view', function(e){ if(e.v !== 'browse' && document.body.classList.contains('brFull')) setBrFull(false); });

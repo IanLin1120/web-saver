@@ -407,10 +407,7 @@ async function openYt(id){
     name.oninput = function(){ nameRow.firstChild.textContent = '檔名：' + nm(); };
     body.appendChild(nameRow);
     if(!more && !d.page) body.appendChild(h('div', {class: 'sub', style: {fontSize: '11.5px', margin: '8px 2px', lineHeight: '1.6'}, html: '來源：' + esc(d.src)}));
-    if(isApp && NAT.has('shareDl')) body.appendChild(h('div', {class: 'btn-row', style: {marginTop: '6px'}},
-      h('button', {class: 'btn ghost', style: {flex: 1}, text: '交給 Snaptube', onclick: function(){ s.close(); handOff('https://youtu.be/' + d.id, 'com.snaptube.premium'); }}),
-      h('button', {class: 'btn ghost', style: {flex: 1}, text: '交給其他 App…', onclick: function(){ s.close(); handOff('https://youtu.be/' + d.id); }})));
-    if(isApp && NAT.has('shareDl')) body.appendChild(h('div', {class: 'sub', style: {fontSize: '11.5px', margin: '4px 2px'}, text: '其他 App 下載完，影片和字幕會自動搬回檔案庫並刪除原檔'}));
+    var hob = handOffButtons('https://youtu.be/' + d.id, function(){ s.close(); }); if(hob) body.appendChild(hob);
     var rows = qsa('.ydRow:not(.ydChk)', body), last = lsGet('ws.ytLastK', '');
     var pre = rows.filter(function(r){ return r.dataset.k === last; })[0] || rows.filter(function(r){ return /^v/.test(r.dataset.k || ''); }).pop() || rows[0];
     if(pre && pre.dataset.k) pre.click();

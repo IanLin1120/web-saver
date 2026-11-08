@@ -7,6 +7,8 @@ var YT_HOME = 'https://m.youtube.com/';
 
 function ytSyncLayout(){
   if(!isApp) return;
+  var tb = $('ytTop').getBoundingClientRect();
+  if(tb.height) document.documentElement.style.setProperty('--ytTop', Math.round(tb.bottom / uiZoom() + 4) + 'px');
   requestAnimationFrame(function(){
     var a = $('ytArea').getBoundingClientRect();
     NAT.call('ytRect', a.top, Math.max(0, innerHeight - a.bottom), a.left, Math.max(0, innerWidth - a.right));
@@ -37,6 +39,7 @@ function renderYt(){
   var bar = $('ytBar'), loading = YTB.progress < 100;
   bar.classList.toggle('on', loading); bar.firstChild.style.width = (loading ? Math.max(8, YTB.progress) : 100) + '%';
   $('ytReload').innerHTML = icon(loading ? 'stop' : 'reload');
+  $('ytStart').classList.toggle('gone', isApp && YTB.started && !!YTB.url && YTB.progress >= 60);
 }
 function renderYtStart(){
   var st = $('ytStart'); st.textContent = '';
@@ -115,7 +118,7 @@ var FAB = {popup: false};
 function fabSync(){
   if(!isApp) return;
   var on = false, label = '';
-  if(CFG.fab){
+  if(CFG.fab && !SREC.on){
     if(curView === 'yt') on = !!ytCurId() && !YTB.fs;
     else if(curView === 'browse'){ on = (!BR.home && BR.loaded && !!BR.url && !/^(about|data):/.test(BR.url)) || document.body.classList.contains('brFull'); label = on && BR.mediaN ? String(BR.mediaN > 99 ? '99+' : BR.mediaN) : ''; }
   }
@@ -168,16 +171,44 @@ function openFabMenu(ytId){
 
 /* ---------- 交給外部下載 App（Snaptube、Quetta、影片下載工具…），下載完自動搬回檔案庫並刪掉原檔 ---------- */
 function watchDirs(){ try{ return isApp && NAT.has('watchDirs') ? JSON.parse(NAT.call('watchDirs') || '[]') : []; }catch(e){ return []; } }
-function handOff(url, pkg){
+var SHARE_APPS = null;
+function shareApps(){ if(!SHARE_APPS){ try{ SHARE_APPS = JSON.parse(NAT.call('shareApps') || '[]'); }catch(e){ SHARE_APPS = []; } } return SHARE_APPS; }
+var DL_APPS = [['com.snaptube.premium', 'Snaptube'], ['com.snaptube.premium.lite', 'Snaptube'], ['com.quetta.browser', 'Quetta']];
+function appDir(pkg){ return watchDirs().filter(function(d){ return d.pkg === pkg; })[0] || null; }
+/* 下載面板上的「交給 App」按鈕：已設定資料夾的 App、已安裝的常見下載工具各自一顆，最後是「其他 App…」 */
+function handOffButtons(url, before){
+  if(!isApp || !NAT.has('shareApps')) return null;
+  var apps = shareApps(), list = [], seen = {};
+  watchDirs().forEach(function(d){ if(d.pkg && !seen[d.pkg]){ var a = apps.filter(function(x){ return x.pkg === d.pkg; })[0]; if(a){ seen[d.pkg] = 1; list.push(a); } } });
+  DL_APPS.forEach(function(k){ var a = apps.filter(function(x){ return x.pkg === k[0] || x.label === k[1]; })[0]; if(a && !seen[a.pkg]){ seen[a.pkg] = 1; list.push(a); } });
+  var row = h('div', {class: 'hoRow'});
+  list.forEach(function(a){
+    row.appendChild(h('button', {class: 'hoBtn', onclick: function(){ if(before) before(); handOff(url, a.pkg, a.label); }},
+      a.icon ? h('img', {src: a.icon, alt: ''}) : h('span', {html: icon('download')}), h('span', {class: 'ell', text: a.label})));
+  });
+  row.appendChild(h('button', {class: 'hoBtn', onclick: function(){ if(before) before(); pickShareApp(url); }}, h('span', {class: 'more', html: icon('more')}), h('span', {text: '其他 App…'})));
+  return h('div', null, h('div', {class: 'ydSect', text: '交給其他 App 下載（下載完自動搬回、刪除原檔）'}), row);
+}
+function pickShareApp(url, then){
+  var apps = shareApps(), body = h('div');
+  var s = openSheet({title: '交給哪個 App？', icon: 'share', body: body, tall: true});
+  apps.forEach(function(a){
+    var d = appDir(a.pkg);
+    body.appendChild(h('div', {class: 'setRow', onclick: function(){ s.close(); if(then) then(a); else handOff(url, a.pkg, a.label); }},
+      a.icon ? h('img', {src: a.icon, style: {width: '36px', height: '36px', borderRadius: '9px', flex: 'none'}}) : h('span', {class: 'ic', html: icon('download')}),
+      h('div', {class: 'grow'}, h('b', {text: a.label}), h('div', {class: 'sub ell', text: d ? '下載資料夾：' + d.name : a.pkg})), h('span', {class: 'chev', text: '›'})));
+  });
+  if(!apps.length) body.appendChild(h('div', {class: 'empty', text: '找不到可以接收網址的 App'}));
+}
+function handOff(url, pkg, label){
   if(!isApp || !NAT.has('shareDl')){ toast('需要 APK 版', true); return; }
-  function go(){
-    if(pkg){ if(!NAT.call('sendTo', pkg, url)) toast('這支手機沒有安裝這個 App', true); }
-    else NAT.call('shareDl', url);
-  }
-  if(!watchDirs().length){
-    dialog('先設定「自動搬回」', '要讓其他 App 下載完的影片自動回到這裡，需要先選一次那個 App 的下載資料夾（只要設定一次）。<br><br>' +
-      '・Snaptube：內部儲存空間 → <b>snaptube</b> → <b>download</b><br>・其他 App：到它的設定裡看「下載位置」<br><br>選好後，App 回到前景時會自動把下載完的影片、音樂、字幕搬進檔案庫，並刪掉原檔。',
-      [['選擇資料夾', function(){ NAT.call('watchAdd'); setTimeout(go, 600); }], ['先不要，直接分享', go], ['取消', null, '']]);
+  label = label || pkg;
+  function go(){ if(!NAT.call('sendTo', pkg, url)) toast('沒有安裝 ' + label, true); }
+  if(!appDir(pkg)){
+    dialog('設定「' + esc(label) + '」的下載資料夾', '要讓 ' + esc(label) + ' 下載完的影片自動回到這裡，請選一次它存放下載檔案的資料夾（每個 App 各設定一次）。<br><br>' +
+      (/snaptube/i.test(pkg + label) ? '・Snaptube：內部儲存空間 → <b>snaptube</b> → <b>download</b><br>' : '・不知道在哪：打開 ' + esc(label) + ' 的設定，找「下載位置／儲存路徑」<br>') +
+      '<br>之後 App 回到前景時會自動把下載完的影片、音樂、字幕搬進檔案庫，並刪掉原檔。',
+      [['選擇資料夾', function(){ NAT.call('watchAddFor', pkg, label); waitEv('watchDirs', null, 120000).then(function(){ if(appDir(pkg)) go(); }); }], ['先不要，直接傳過去', go], ['取消', null, '']]);
     return;
   }
   go();
@@ -194,20 +225,24 @@ on('imported', function(d){
 });
 function openWatchSettings(){
   var body = h('div');
-  var s = openSheet({title: '其他 App 下載自動搬回', icon: 'download', body: body});
+  var s = openSheet({title: '其他 App 下載自動搬回', icon: 'download', body: body, tall: true});
   function draw(){
     body.textContent = '';
-    body.appendChild(h('div', {class: 'sub', style: {lineHeight: '1.7', marginBottom: '10px'}, text: '用 Snaptube、Quetta 等 App 下載的影片，下載完會自動搬進檔案庫（字幕也一起，會接在影片上），搬完刪掉原檔。App 回到前景時會檢查，交給其他 App 下載後的 3 小時內也會每 15 秒檢查一次。'}));
-    var ds = watchDirs();
-    if(!ds.length) body.appendChild(h('div', {class: 'empty', html: '還沒有設定資料夾'}));
+    body.appendChild(h('div', {class: 'sub', style: {lineHeight: '1.7', marginBottom: '10px'}, text: '每個下載 App 各設定一個下載資料夾。用它們下載完的影片、音樂、字幕會自動搬進檔案庫（字幕接在影片上），搬完刪掉原檔。App 回到前景時會檢查，交給其他 App 下載後的 3 小時內也會每 15 秒檢查一次。'}));
+    var apps = shareApps(), ds = watchDirs();
+    if(!ds.length) body.appendChild(h('div', {class: 'empty', html: '還沒有設定任何 App'}));
     ds.forEach(function(d){
-      body.appendChild(h('div', {class: 'setRow'}, h('span', {class: 'ic', html: icon('folder')}), h('div', {class: 'grow'}, h('b', {text: d.name})),
-        h('button', {class: 'btn sm ghost', text: '移除', onclick: function(){ NAT.call('watchRemove', d.uri); }})));
+      var a = apps.filter(function(x){ return x.pkg === d.pkg; })[0];
+      body.appendChild(h('div', {class: 'setRow'},
+        a && a.icon ? h('img', {src: a.icon, style: {width: '36px', height: '36px', borderRadius: '9px', flex: 'none'}}) : h('span', {class: 'ic', html: icon('folder')}),
+        h('div', {class: 'grow', style: {minWidth: 0}}, h('b', {text: d.label || (a && a.label) || '（不指定 App）'}), h('div', {class: 'sub ell', text: '資料夾：' + d.name})),
+        d.pkg ? h('button', {class: 'btn sm ghost', text: '更換', onclick: function(){ NAT.call('watchAddFor', d.pkg, d.label || ''); }}) : null,
+        h('button', {class: 'btn sm ghost', text: '移除', onclick: function(){ NAT.call('watchRemoveFor', d.uri, d.pkg || ''); }})));
     });
     var del = h('input', {type: 'checkbox', checked: NAT.call('importDelGet'), onchange: function(){ NAT.call('importDel', this.checked); }});
     body.appendChild(h('label', {class: 'opt'}, del, h('div', {class: 'grow'}, h('b', {text: '搬回後刪除原檔'}), h('div', {class: 'sub', text: '避免手機裡存兩份'}))));
     body.appendChild(h('div', {class: 'btn-row'},
-      h('button', {class: 'btn pri', html: icon('plus', 'sm') + '加入資料夾', onclick: function(){ NAT.call('watchAdd'); }}),
+      h('button', {class: 'btn pri', html: icon('plus', 'sm') + '新增 App', onclick: function(){ pickShareApp('', function(a){ NAT.call('watchAddFor', a.pkg, a.label); }); }}),
       h('button', {class: 'btn', html: icon('reload', 'sm') + '立即檢查', onclick: function(){ NAT.call('watchScan'); toast('檢查中…'); }})));
     paintIcons(body);
   }

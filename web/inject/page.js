@@ -336,7 +336,52 @@
     /* 保險：錄影器沒有回應時，8 秒後照樣結束 */
     setTimeout(finish, 8000);
   }
-  window.__wsRec = {start: start, stop: stop, can: function (src) {
+  /* 手機內建螢幕錄影用：把影片放大到整個畫面（蓋住網頁其他東西），從頭播放到結束後通知 App 停止錄影 */
+  var scr = null;
+  function screen(on) {
+    if (on) {
+      var v = pick('');
+      if (!v) return JSON.stringify({err: 'novideo'});
+      scr = {v: v, style: v.getAttribute('style') || '', controls: v.controls};
+      try { v.pause(); } catch (e) {}
+      v.controls = false;
+      var st = 'position:fixed!important;inset:0!important;left:0!important;top:0!important;width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;z-index:2147483647!important;object-fit:contain!important;background:#000!important;transform:none!important;margin:0!important';
+      v.setAttribute('style', st);
+      var bk = document.getElementById('__ws_recbk') || document.createElement('div');
+      bk.id = '__ws_recbk';
+      bk.setAttribute('style', 'position:fixed;inset:0;background:#000;z-index:2147483646');
+      (document.body || document.documentElement).appendChild(bk);
+      try { if (isFinite(v.duration) && v.duration > 0) v.currentTime = 0; } catch (e) {}
+      return JSON.stringify({w: v.videoWidth || 16, h: v.videoHeight || 9, dur: isFinite(v.duration) ? v.duration : 0});
+    }
+    if (scr) {
+      clearInterval(scr.tm);
+      scr.v.setAttribute('style', scr.style); scr.v.controls = scr.controls;
+      try { scr.v.pause(); } catch (e) {}
+      scr = null;
+    }
+    var b = document.getElementById('__ws_recbk'); if (b) b.remove();
+    return '{}';
+  }
+  function screenPlay() {
+    if (!scr) return 'none';
+    var v = scr.v, maxT = 0, lastT = -1, stall = 0, t0 = Date.now(), done = false;
+    try { v.loop = false; v.muted = false; v.volume = 1; v.playbackRate = 1; } catch (e) {}
+    var p = v.play(); if (p && p.catch) p.catch(function () {});
+    function end() { if (done) return; done = true; clearInterval(scr && scr.tm); try { B.srecEnd(); } catch (e) {} }
+    v.addEventListener('ended', end);
+    scr.tm = setInterval(function () {
+      var d = isFinite(v.duration) ? v.duration : 0, t = v.currentTime || 0;
+      if (Math.abs(t - lastT) < 0.05) stall++; else stall = 0;
+      var looped = d > 0 && maxT >= d * 0.8 && t < maxT - 2;
+      maxT = Math.max(maxT, t); lastT = t;
+      var near = d > 0 && maxT >= d - 1.5;
+      if (!near && v.paused && !v.ended) { var pp = v.play(); if (pp && pp.catch) pp.catch(function () {}); }
+      if (v.ended || looped || (near && (stall >= 2 || v.paused)) || stall > 60 || (d > 0 && (Date.now() - t0) / 1000 > d * 1.6 + 40)) end();
+    }, 1000);
+    return 'ok';
+  }
+  window.__wsRec = {start: start, stop: stop, screen: screen, screenPlay: screenPlay, can: function (src) {
     var v = pick(src);
     if (!v) return 'novideo';
     try { var s = (v.captureStream || v.mozCaptureStream).call(v); s.getTracks().forEach(function (t) { t.stop(); }); return 'ok'; } catch (e) { return 'nocap'; }

@@ -47,8 +47,7 @@ function drawMedia(){
   var cnt = {all: MEDIA.items.length, image: 0, video: 0, audio: 0};
   MEDIA.items.forEach(function(m){ cnt[mKindGroup(m.kind)]++; });
   var rc = recCard(); if(rc) body.appendChild(rc);
-  if(isApp && NAT.has('shareDl')) body.appendChild(h('div', {class: 'btn-row', style: {marginBottom: '10px'}},
-    h('button', {class: 'btn sm ghost', style: {flex: 1}, html: icon('share', 'sm') + '交給 Snaptube／其他下載 App', onclick: function(){ if(MEDIA.sheet) MEDIA.sheet.close(); handOff(MEDIA.page || BR.url); }})));
+  var hob = handOffButtons(MEDIA.page || BR.url, function(){ if(MEDIA.sheet) MEDIA.sheet.close(); }); if(hob){ hob.style.marginBottom = '10px'; body.appendChild(hob); }
   if(!MEDIA.items.length){
     body.appendChild(h('div', {class: 'empty', html: '<div class="big">🎞</div>這個頁面沒有偵測到可下載的圖片或影片<br><span class="sub">影片請先按下播放，App 會從網路請求中找到真正的影片來源（m3u8／mp4），再按一次「媒體」。</span>'}));
     MEDIA.dlBtn.disabled = true; return;
@@ -338,11 +337,16 @@ function recCard(){
   var r = MEDIA.rec;
   if(!r || r === 'novideo' || r === 'noscript' || r === 'err') return null;
   var ok = r === 'ok';
-  return h('div', {class: 'card glass', style: {padding: '12px 14px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '12px'}},
+  var scr = NAT.has('srecAsk') ? h('div', {class: 'card glass', style: {padding: '12px 14px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '12px'}},
+    h('span', {style: {background: 'var(--olive)', width: '40px', height: '40px', borderRadius: '12px', display: 'grid', placeItems: 'center', color: '#fff', flex: 'none'}, html: icon('phone')}),
+    h('div', {class: 'grow', style: {minWidth: 0}}, h('b', {text: '手機螢幕錄影（勿擾模式）'}),
+      h('div', {class: 'sub', style: {fontSize: '12px'}, text: '用手機內建的螢幕錄影：影片放大到整個螢幕、從頭播到結束自動停止。錄影時自動開勿擾、擋通知，結束後恢復'})),
+    h('button', {class: 'btn sm', text: '錄影', onclick: function(){ startScreenRec(); }})) : null;
+  return h('div', null, h('div', {class: 'card glass', style: {padding: '12px 14px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '12px'}},
     h('span', {class: 'oi', style: {background: ok ? 'var(--c-video)' : '#999', width: '40px', height: '40px', borderRadius: '12px', display: 'grid', placeItems: 'center', color: '#fff', flex: 'none'}, html: icon('film')}),
     h('div', {class: 'grow', style: {minWidth: 0}}, h('b', {text: '錄製下載（畫面＋聲音）'}),
       h('div', {class: 'sub', style: {fontSize: '12px'}, text: ok ? '偵測到可以錄製：錄下影片原本的畫面與聲音（最高畫質、只有影片畫面），需要跟影片一樣長的時間' : '這部影片有防錄製保護或來自其他網域，不能錄製，請用下面的一般下載'})),
-    ok ? h('button', {class: 'btn sm pri', text: '錄製', onclick: function(){ startRec(); }}) : null);
+    ok ? h('button', {class: 'btn sm pri', text: '錄製', onclick: function(){ startRec(); }}) : null), scr);
 }
 function startRec(){
   var src = MEDIA.playing && MEDIA.playing.src || '';
@@ -359,3 +363,54 @@ function startRec(){
     ['play', '在目前分頁錄製', function(){ go(true); }, false, '網頁需要先點播放或登入時用這個；錄製期間不要離開這個網頁']
   ]);
 }
+
+/* ---------- 手機內建螢幕錄影：影片放大到整個螢幕 → 系統錄影（含 App 聲音）→ 播完自動停止，期間開勿擾 ---------- */
+var SREC = {on: false};
+function brRun(js){
+  var ev = 'brr' + uid();
+  var p = waitEv(ev, null, 8000).then(function(d){ try{ return JSON.parse(typeof d === 'string' ? JSON.parse(d) : d); }catch(e){ return {}; } });
+  NAT.call('brRun', js, ev);
+  return p;
+}
+async function startScreenRec(){
+  if(MEDIA.sheet) MEDIA.sheet.close();
+  if(SREC.on || NAT.call('srecOn')){ toast('已經在錄影中', true); return; }
+  if(!NAT.call('dndOk')){
+    var go = await new Promise(function(res){
+      dialog('允許勿擾設定', '錄影時要自動開啟勿擾模式、擋掉通知橫幅，需要先允許「網頁擷取」變更勿擾設定（只要設定一次）。<br><br>按「去設定」後，在清單裡打開「網頁擷取」，再回來按一次錄影。',
+        [['去設定', function(){ NAT.call('dndSettings'); res(false); }], ['這次不用勿擾', function(){ res(true); }], ['取消', function(){ res(false); }, '']]);
+    });
+    if(!go) return;
+  }
+  if(!NAT.call('audioOk')){
+    toast('要錄到影片聲音，請允許「錄音」權限（只錄 App 播出的聲音，不會錄麥克風）');
+    NAT.call('audioAsk');
+    await waitEv('perm', null, 30000);
+  }
+  var info = await brRun("(function(){try{return window.__wsRec?__wsRec.screen(true):'{\"err\":\"noscript\"}'}catch(e){return '{\"err\":\"'+e.message+'\"}'}})()");
+  if(!info || info.err){ toast('在網頁裡找不到影片，請先播放影片再試', true); return; }
+  SREC.on = true; SREC.title = (typeof pageVideoName === 'function' ? pageVideoName() : (BR.title || '影片')).replace(/\.[a-z0-9]{2,4}$/i, '');
+  setBrFull(true, true);
+  NAT.call('uiFull', true, info.w > info.h);
+  fabSync();
+  setTimeout(function(){ NAT.call('srecAsk', SREC.title); }, 900);
+}
+function srecCleanup(){
+  if(!SREC.on) return;
+  SREC.on = false;
+  brRun("(function(){return window.__wsRec?__wsRec.screen(false):'{}'})()");
+  setBrFull(false, true);
+  NAT.call('uiFull', false, false);
+  fabSync();
+}
+on('srec', function(d){
+  if(!d) return;
+  if(d.state === 'start'){ setTimeout(function(){ brRun("(function(){return JSON.stringify(window.__wsRec?__wsRec.screenPlay():'none')})()"); }, 400); return; }
+  srecCleanup();
+  if(d.state === 'done'){
+    Lib.refresh(); flashLib();
+    var it = d.item;
+    toast('✓ 螢幕錄影已存入檔案庫', false, it ? ['播放', function(){ Viewer.open(Lib.byId(it.id) || it); }] : null);
+  } else if(d.state === 'err') dialog('螢幕錄影失敗', esc(d.msg || ''), [['好', null]]);
+  else if(d.state === 'cancel') toast('已取消螢幕錄影');
+});

@@ -266,9 +266,60 @@ public class Bridge {
     @JavascriptInterface public void dlMax(int n) { a.prefs.edit().putInt("dlMax", n).apply(); MediaDl.setMax(n); }
     @JavascriptInterface public int dlMaxGet() { return a.prefs.getInt("dlMax", 3); }
     @JavascriptInterface public int dlRunning() { return MediaDl.JOBS.size(); }
+    /* ---------- 手機內建螢幕錄影 ---------- */
+    @JavascriptInterface public boolean dndOk() { return ScreenRec.dndAllowed(a); }
+    @JavascriptInterface public void dndSettings() { ui(new Runnable() { @Override public void run() { ScreenRec.openDndSettings(a); } }); }
+    @JavascriptInterface public boolean audioOk() { return a.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED; }
+    @JavascriptInterface public void audioAsk() { ui(new Runnable() { @Override public void run() { a.requestPermissions(new String[] {android.Manifest.permission.RECORD_AUDIO}, 1010); } }); }
+    @JavascriptInterface public void srecAsk(final String name) { ui(new Runnable() { @Override public void run() { ScreenRec.ask(a, name); } }); }
+    @JavascriptInterface public void srecStop() { ui(new Runnable() { @Override public void run() { ScreenRec.stop(a); } }); }
+    @JavascriptInterface public boolean srecOn() { return ScreenRec.cur != null; }
+    /** 在瀏覽分頁執行一段程式，結果用指定的事件回傳 */
+    @JavascriptInterface public void brRun(final String js, final String ev) {
+        ui(new Runnable() { @Override public void run() {
+            a.br.wv.evaluateJavascript(js, new android.webkit.ValueCallback<String>() {
+                @Override public void onReceiveValue(String v) { if (ev != null && !ev.isEmpty()) MainActivity.emit(ev, v == null ? "null" : v); }
+            });
+        } });
+    }
+
     /* ---------- 外部下載 App 自動匯入 ---------- */
     @JavascriptInterface public String watchDirs() { return Importer.dirs(a).toString(); }
-    @JavascriptInterface public void watchAdd() { ui(new Runnable() { @Override public void run() { a.pickWatch(); } }); }
+    @JavascriptInterface public void watchAdd() { watchAddFor("", ""); }
+    @JavascriptInterface public void watchAddFor(final String pkg, final String label) { ui(new Runnable() { @Override public void run() { a.pickWatch(pkg, label); } }); }
+    @JavascriptInterface public void watchRemoveFor(String uri, String pkg) {
+        try {
+            JSONArray d = Importer.dirs(a), out = new JSONArray();
+            for (int i = 0; i < d.length(); i++) { JSONObject o = d.getJSONObject(i); if (!(o.optString("uri").equals(uri) && o.optString("pkg").equals(pkg))) out.put(o); }
+            a.prefs.edit().putString("watchDirs", out.toString()).apply();
+        } catch (Throwable t) { /* ignore */ }
+        MainActivity.emit("watchDirs", Importer.dirs(a).toString());
+    }
+    /** 可以接收分享網址的 App（下載工具、瀏覽器…）：名稱、套件名、小圖示 */
+    @JavascriptInterface public String shareApps() {
+        JSONArray out = new JSONArray();
+        try {
+            android.content.pm.PackageManager pm = a.getPackageManager();
+            android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain");
+            java.util.HashSet<String> seen = new java.util.HashSet<>();
+            for (android.content.pm.ResolveInfo ri : pm.queryIntentActivities(i, 0)) {
+                String pkg = ri.activityInfo.packageName;
+                if (pkg.equals(a.getPackageName()) || !seen.add(pkg)) continue;
+                String icon = "";
+                try {
+                    android.graphics.drawable.Drawable d = ri.loadIcon(pm);
+                    android.graphics.Bitmap bm = android.graphics.Bitmap.createBitmap(72, 72, android.graphics.Bitmap.Config.ARGB_8888);
+                    android.graphics.Canvas c = new android.graphics.Canvas(bm);
+                    d.setBounds(0, 0, 72, 72); d.draw(c);
+                    java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+                    bm.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, bo);
+                    icon = "data:image/png;base64," + android.util.Base64.encodeToString(bo.toByteArray(), android.util.Base64.NO_WRAP);
+                } catch (Throwable t) { /* ignore */ }
+                out.put(new JSONObject().put("pkg", pkg).put("label", String.valueOf(pm.getApplicationLabel(ri.activityInfo.applicationInfo))).put("icon", icon));
+            }
+        } catch (Throwable t) { /* ignore */ }
+        return out.toString();
+    }
     @JavascriptInterface public void watchRemove(String uri) { Importer.removeDir(a, uri); MainActivity.emit("watchDirs", Importer.dirs(a).toString()); }
     @JavascriptInterface public void watchScan() { Importer.scan(a, true); }
     @JavascriptInterface public void importDel(boolean on) { a.prefs.edit().putBoolean("importDel", on).apply(); }

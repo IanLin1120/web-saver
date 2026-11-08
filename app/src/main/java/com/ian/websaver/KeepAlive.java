@@ -74,6 +74,9 @@ public class KeepAlive extends Service {
         Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, CH_RUN) : new Notification.Builder(this);
         b.setSmallIcon(android.R.drawable.stat_sys_download).setContentTitle("網頁擷取").setContentText(sb.length() == 0 ? "背景執行中" : sb.toString())
             .setContentIntent(pi).setOngoing(true).setOnlyAlertOnce(true);
+        boolean rec;
+        synchronized (TASKS) { rec = TASKS.containsKey("srec"); }
+        if (rec) b.addAction(new Notification.Action.Builder(null, "停止錄影", act("srecStop", 3)).build());
         if (media()) {
             b.setSmallIcon(android.R.drawable.ic_media_play);
             b.addAction(new Notification.Action.Builder(null, "播放／暫停", act("toggle", 1)).build());
@@ -88,13 +91,16 @@ public class KeepAlive extends Service {
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         String a = intent == null ? null : intent.getAction();
+        if ("srecStop".equals(a)) { MainActivity m = MainActivity.cur; if (m != null) ScreenRec.stop(m); a = null; }
         if (a != null) { MainActivity.emit("mediaCmd", a); MainActivity m = MainActivity.cur; if (m != null) m.mediaCmd(a); }
         boolean empty;
         synchronized (TASKS) { empty = TASKS.isEmpty(); }
         Notification n = build();
         try {
             if (Build.VERSION.SDK_INT >= 29) {
-                int type = ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC | (media() ? ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK : 0);
+                boolean proj;
+                synchronized (TASKS) { proj = TASKS.containsKey("srec"); }
+                int type = ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC | (media() ? ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK : 0) | (proj ? ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION : 0);
                 startForeground(7, n, type);
             } else startForeground(7, n);
         } catch (Throwable t) {
