@@ -204,19 +204,22 @@ function openStar(){
 }
 $('bStar').addEventListener('click', openStar);
 
-function openBmList(startFolder){
-  var sel = startFolder || '', q = '';
+async function openBmList(startFolder){
+  if(SEC.cfg.bm && SEC.has() && !(await SEC.need('解鎖我的收藏'))) return;
+  /* 不顯示「全部」：預設打開上次看的收藏夾（搜尋時會找所有收藏夾） */
+  var sel = startFolder || lsGet('ws.bmSel', '') || '', q = '';
+  if(!BM.folder(sel) || !BM.folders.some(function(f){ return f.id === sel; })) sel = (BM.folders.filter(function(f){ return BM.items.some(function(x){ return x.folder === f.id; }); })[0] || BM.folders[0] || {}).id || '';
   var list = h('div');
   var search = h('input', {type: 'search', placeholder: '搜尋收藏…', style: {width: '100%', marginBottom: '10px'}});
   search.oninput = function(){ q = search.value.trim().toLowerCase(); draw(); };
-  var chips = folderChips(sel, function(id){ sel = id; draw(); }, {all: true});
+  var chips = folderChips(sel, function(id){ sel = id; lsSet('ws.bmSel', id); draw(); }, {});
   chips.className = 'folderBar';
   var body = h('div', null, search, chips, list);
   var manage = h('span', {style: {display: 'contents'}}, h('button', {class: 'ib', html: icon('history'), title: '瀏覽記錄', onclick: function(){ s.close(); openHistory(); }}), h('button', {class: 'ib', html: icon('edit'), title: '管理收藏夾', onclick: function(){ manageFolders(function(){ chips.redraw(); draw(); }); }}));
   var s = openSheet({title: '我的收藏', icon: 'books', body: body, tall: true, headExtra: manage});
   function draw(){
     list.textContent = '';
-    var items = BM.items.filter(function(x){ return (!sel || x.folder === sel) && (!q || (x.title + ' ' + x.url).toLowerCase().indexOf(q) >= 0); });
+    var items = BM.items.filter(function(x){ return (q || !sel || x.folder === sel) && (!q || (x.title + ' ' + x.url).toLowerCase().indexOf(q) >= 0); });
     if(!items.length){ list.appendChild(h('div', {class: 'empty', html: '<div class="big">☆</div>' + (BM.items.length ? '這裡沒有符合的收藏' : '還沒有收藏任何網頁<br><span class="sub">瀏覽時按上方的 ☆ 就能收藏，並放進自訂的收藏夾</span>')})); return; }
     items.forEach(function(it){
       var f = BM.folder(it.folder);
@@ -289,7 +292,7 @@ function renderStart(){
 
   /* 收藏與瀏覽記錄（只放入口按鈕，畫面保持清爽） */
   var tiles = h('div', {class: 'tiles'});
-  tiles.appendChild(h('div', {class: 'tile', onclick: function(){ openBmList(''); }}, h('div', {class: 'fav', html: icon('books')}), h('span', {text: '全部收藏'}), h('small', {class: 'sub', text: BM.items.length + ' 個'})));
+  tiles.appendChild(h('div', {class: 'tile', onclick: function(){ openBmList(''); }}, h('div', {class: 'fav', html: icon('books')}), h('span', {text: '我的收藏'}), h('small', {class: 'sub', text: BM.items.length + ' 個'})));
   tiles.appendChild(h('div', {class: 'tile', onclick: function(){ openHistory(); }}, h('div', {class: 'fav', html: icon('history')}), h('span', {text: '瀏覽記錄'}), h('small', {class: 'sub', text: Hist.items.length + ' 筆'})));
   tiles.appendChild(h('div', {class: 'tile', onclick: function(){ ytOpen(); }}, h('div', {class: 'fav', html: icon('ytplay')}), h('span', {text: 'YouTube'}), h('small', {class: 'sub', text: '無廣告播放器'})));
   sects.appendChild(h('div', {class: 'sect-h'}, h('span', {text: '⭐ 收藏'}), h('button', {text: '管理收藏夾', onclick: function(){ manageFolders(renderStart); }})));

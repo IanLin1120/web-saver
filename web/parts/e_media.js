@@ -372,7 +372,7 @@ async function startScreenRec(){
   if(MEDIA.sheet) MEDIA.sheet.close();
   if(SREC.on || NAT.call('srecOn')){ toast('已經在滿版播放／錄影中', true); return; }
   var info = await brRun("(function(){try{return window.__wsRec?__wsRec.screen(true):'{\"err\":\"noscript\"}'}catch(e){return '{\"err\":\"'+e.message+'\"}'}})()");
-  if(!info || info.err){ toast('在網頁裡找不到影片，請先播放影片再試', true); return; }
+  if(!info || info.err){ toast('畫面上沒有看得到的影片（這則可能是圖片），請先讓影片在畫面上播放再試', true); return; }
   SREC.on = true; SREC.rec = false;
   SREC.title = (typeof pageVideoName === 'function' ? pageVideoName() : (BR.title || '影片')).replace(/\.[a-z0-9]{2,4}$/i, '');
   setBrFull(true, true);

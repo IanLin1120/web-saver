@@ -92,4 +92,53 @@ final class Mux {
             for (Src s : srcs) try { s.ex.release(); } catch (Throwable t) { /* ignore */ }
         }
     }
+
+    /** 剪掉影片頭尾（不重新編碼，從 start 前最近的關鍵畫面開始，畫質不變） */
+    static void trim(File in, File out, long startUs, long endUs, int fmt) throws Exception {
+        MediaExtractor ex = new MediaExtractor();
+        ex.setDataSource(in.getPath());
+        MediaMuxer m = new MediaMuxer(out.getPath(), fmt);
+        int n = ex.getTrackCount();
+        int[] map = new int[n];
+        java.util.Arrays.fill(map, -1);
+        int vIdx = -1, maxBuf = 1 << 20;
+        try {
+            for (int i = 0; i < n; i++) {
+                MediaFormat f = ex.getTrackFormat(i);
+                String mime = f.getString(MediaFormat.KEY_MIME);
+                if (mime == null || !(mime.startsWith("video/") || mime.startsWith("audio/"))) continue;
+                ex.selectTrack(i);
+                map[i] = m.addTrack(f);
+                if (mime.startsWith("video/") && vIdx < 0) vIdx = i;
+                if (f.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) maxBuf = Math.max(maxBuf, f.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE));
+            }
+            m.start();
+            ex.seekTo(Math.max(0, startUs), MediaExtractor.SEEK_TO_PREVIOUS_SYNC);
+            ByteBuffer buf = ByteBuffer.allocate(maxBuf);
+            MediaCodec.BufferInfo bi = new MediaCodec.BufferInfo();
+            long t0 = -1;
+            int wrote = 0;
+            while (true) {
+                int ti = ex.getSampleTrackIndex();
+                if (ti < 0) break;
+                long t = ex.getSampleTime();
+                if (t > endUs) break;
+                /* 以第一個影像關鍵畫面的時間當作新的 0 秒；在它之前的聲音丟掉 */
+                if (t0 < 0) { if (vIdx >= 0 && ti != vIdx) { ex.advance(); continue; } t0 = t; }
+                if (t < t0) { ex.advance(); continue; }
+                bi.offset = 0;
+                bi.size = ex.readSampleData(buf, 0);
+                if (bi.size < 0) break;
+                bi.presentationTimeUs = t - t0;
+                bi.flags = (ex.getSampleFlags() & MediaExtractor.SAMPLE_FLAG_SYNC) != 0 ? MediaCodec.BUFFER_FLAG_KEY_FRAME : 0;
+                if (map[ti] >= 0) { m.writeSampleData(map[ti], buf, bi); wrote++; }
+                ex.advance();
+            }
+            if (wrote == 0) throw new Exception("剪輯範圍內沒有畫面");
+            m.stop();
+        } finally {
+            try { m.release(); } catch (Throwable t) { /* ignore */ }
+            ex.release();
+        }
+    }
 }

@@ -72,11 +72,14 @@ final class Lock {
             if (has(c) && !verify(c, oldPin)) return "舊密碼不正確";
             byte[] salt = new byte[16];
             new SecureRandom().nextBytes(salt);
-            p(c).edit().putString("salt", Base64.encodeToString(salt, Base64.NO_WRAP)).putString("hash", hash(pin, salt)).putInt("fails", 0).apply();
+            p(c).edit().putString("salt", Base64.encodeToString(salt, Base64.NO_WRAP)).putString("hash", hash(pin, salt)).putInt("fails", 0).putInt("len", pin.length()).apply();
             session = true;
             return "";
         } catch (Throwable t) { return "設定失敗：" + t.getMessage(); }
     }
+
+    /** 密碼長度：輸入到這個長度就自動確認（0＝不知道，要按確定） */
+    static int len(Context c) { return p(c).getInt("len", 0); }
 
     static boolean clear(Context c, String pin) {
         if (!verify(c, pin)) return false;
@@ -158,6 +161,7 @@ final class Lock {
                 for (Size s : ss) { if (s.getWidth() <= 1920) { best = s; break; } }
             }
             final Integer sensor = ch.get(CameraCharacteristics.SENSOR_ORIENTATION);
+            final CameraCharacteristics fch = ch;
             final HandlerThread ht = new HandlerThread("intruder");
             ht.start();
             final Handler hd = new Handler(ht.getLooper());
@@ -179,7 +183,7 @@ final class Lock {
                         img = r.acquireLatestImage();
                         if (img == null || done[0]) return;
                         /* 等自動曝光穩定（約 1 秒）再存 */
-                        if (System.currentTimeMillis() - t0 < 1100) return;
+                        if (System.currentTimeMillis() - t0 < 1800) return;
                         done[0] = true;
                         ByteBuffer bb = img.getPlanes()[0].getBuffer();
                         byte[] jpg = new byte[bb.remaining()];
@@ -202,6 +206,23 @@ final class Lock {
                                     b.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
                                     b.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
                                     if (sensor != null) b.set(CaptureRequest.JPEG_ORIENTATION, sensor);
+                                    /* 人臉優先曝光：背光時臉才不會整個黑掉 */
+                                    try {
+                                        int[] scenes = fch.get(CameraCharacteristics.CONTROL_AVAILABLE_SCENE_MODES);
+                                        boolean face = false;
+                                        if (scenes != null) for (int sm : scenes) if (sm == CaptureRequest.CONTROL_SCENE_MODE_FACE_PRIORITY) face = true;
+                                        int[] fd = fch.get(CameraCharacteristics.STATISTICS_INFO_AVAILABLE_FACE_DETECT_MODES);
+                                        if (fd != null && fd.length > 1) b.set(CaptureRequest.STATISTICS_FACE_DETECT_MODE, fd[fd.length - 1]);
+                                        if (face) { b.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_USE_SCENE_MODE); b.set(CaptureRequest.CONTROL_SCENE_MODE, CaptureRequest.CONTROL_SCENE_MODE_FACE_PRIORITY); }
+                                        /* 再整體調亮一點（背光補償） */
+                                        android.util.Range<Integer> ev = fch.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
+                                        android.util.Rational step = fch.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP);
+                                        if (ev != null && step != null && step.floatValue() > 0) b.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, Math.min(ev.getUpper(), Math.round(1.0f / step.floatValue())));
+                                        /* 測光放在畫面中上（拿手機的人臉通常在這裡） */
+                                        android.graphics.Rect ar = fch.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+                                        Integer maxAe = fch.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE);
+                                        if (ar != null && maxAe != null && maxAe > 0) b.set(CaptureRequest.CONTROL_AE_REGIONS, new android.hardware.camera2.params.MeteringRectangle[] {new android.hardware.camera2.params.MeteringRectangle(ar.width() / 4, ar.height() / 5, ar.width() / 2, ar.height() / 2, 1000)});
+                                    } catch (Throwable t) { /* 不支援就用一般曝光 */ }
                                     s.setRepeatingRequest(b.build(), null, hd);
                                 } catch (Throwable t) { close.run(); }
                             }

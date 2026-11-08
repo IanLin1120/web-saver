@@ -268,6 +268,42 @@ public class Bridge {
     @JavascriptInterface public int dlRunning() { return MediaDl.JOBS.size(); }
     /* ---------- 上鎖 ---------- */
     @JavascriptInterface public boolean lockHas() { return Lock.has(a); }
+    @JavascriptInterface public int lockLen() { return Lock.len(a); }
+    /** 短震動（按鍵回饋）：ms 毫秒；ms＜0 代表「成功」的兩下震動 */
+    @JavascriptInterface public void buzz(int ms) {
+        try {
+            android.os.Vibrator v = (android.os.Vibrator) a.getSystemService(android.content.Context.VIBRATOR_SERVICE);
+            if (v == null || !v.hasVibrator()) return;
+            if (ms < 0) v.vibrate(android.os.VibrationEffect.createWaveform(new long[] {0, 40, 70, 60}, -1));
+            else v.vibrate(android.os.VibrationEffect.createOneShot(Math.max(5, Math.min(400, ms)), android.os.VibrationEffect.DEFAULT_AMPLITUDE));
+        } catch (Throwable t) { /* ignore */ }
+    }
+    /** 剪輯影片（不重新編碼）：保留 start～end 秒；replace＝覆蓋原檔，否則另存新檔 */
+    @JavascriptInterface public void vidTrim(final String id, final double start, final double end, final boolean replace) {
+        Util.IO.execute(new Runnable() {
+            @Override public void run() {
+                try {
+                    Lib lib = Lib.get(a);
+                    JSONObject src = lib.find(id);
+                    if (src == null) throw new Exception("找不到檔案");
+                    File in = lib.fileOf(src);
+                    String name = src.optString("name"), ext = Util.extOf(name).toLowerCase();
+                    boolean webm = ext.equals("webm");
+                    File out = lib.tmpFile(webm ? "webm" : "mp4");
+                    Mux.trim(in, out, (long) (start * 1e6), end > 0 ? (long) (end * 1e6) : Long.MAX_VALUE, webm ? android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_WEBM : android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+                    String stem = name.replaceAll("\\.[^.]+$", "");
+                    JSONObject it = lib.add(out, replace ? stem + (webm ? ".webm" : ".mp4") : stem + "_剪輯" + (webm ? ".webm" : ".mp4"), webm ? "video/webm" : "video/mp4", src.optString("src"), src.optString("title"), null);
+                    String[] keep = {"folder", "subs"};
+                    for (String k : keep) if (src.has(k)) { lib.touch(it.getString("id"), k, src.get(k)); it.put(k, src.get(k)); }
+                    if (replace) lib.delete(new JSONArray().put(id));
+                    MainActivity.emit("trim", new JSONObject().put("ok", true).put("item", it).put("replaced", replace).put("old", id).toString());
+                    MainActivity.emit("lib", "");
+                } catch (Throwable e) {
+                    try { MainActivity.emit("trim", new JSONObject().put("ok", false).put("err", String.valueOf(e.getMessage())).toString()); } catch (Throwable x) { /* ignore */ }
+                }
+            }
+        });
+    }
     @JavascriptInterface public boolean lockSession() { return Lock.session; }
     @JavascriptInterface public void lockRelock() { Lock.session = false; }
     @JavascriptInterface public String lockSet(String oldPin, String pin) { return Lock.set(a, oldPin, pin); }

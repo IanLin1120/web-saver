@@ -251,8 +251,12 @@
       var cs = getComputedStyle(v);
       if (cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity === 0) return;
       /* 正中央點下去是不是這部影片（或蓋在它上面的控制層） */
-      var cx = Math.max(r.left, 0) + w / 2, cy = Math.max(r.top, 0) + h / 2, top = document.elementFromPoint(cx, cy), onTop = top && (top === v || v.parentElement && v.parentElement.contains(top) || top.contains(v));
-      var sc = area * (onTop ? 3 : 1) * (!v.paused ? 2 : 1) * (v.readyState >= 2 ? 1.5 : 1);
+      var cx = Math.max(r.left, 0) + w / 2, cy = Math.max(r.top, 0) + h / 2, top = document.elementFromPoint(cx, cy);
+      /* 一定要是「真的在最上面看得到」：被其他畫面（例如 IG 限時動態的視窗）蓋住的影片不算 */
+      var box = v; for (var k = 0; k < 4 && box.parentElement && box.parentElement !== document.body && box.parentElement !== document.documentElement; k++) box = box.parentElement;
+      var onTop = top && (top === v || top.contains(v) || box.contains(top));
+      if (!onTop) return;
+      var sc = area * (!v.paused ? 2 : 1) * (v.readyState >= 2 ? 1.5 : 1);
       if (sc > bs) { bs = sc; best = v; }
     });
     return best;
@@ -357,7 +361,7 @@
   var scr = null;
   function screen(on) {
     if (on) {
-      var v = (scr && scr.v) || pickVisible() || pick('');
+      var v = (scr && scr.v) || pickVisible();
       if (!v) return JSON.stringify({err: 'novideo'});
       if (!scr) scr = {v: v, style: v.getAttribute('style'), controls: v.controls, rect: v.getBoundingClientRect()};
       v.controls = false;
@@ -367,12 +371,17 @@
       /* 影片被包在有 transform 的容器裡時，fixed 不會蓋滿整個螢幕：暫時把那些容器的 transform 拿掉 */
       setTimeout(function () {
         var r = v.getBoundingClientRect();
-        if (r.width >= innerWidth - 2 && r.height >= innerHeight - 2) return;
         scr.anc = scr.anc || [];
         for (var el = v.parentElement; el && el !== document.documentElement; el = el.parentElement) {
           var cs = getComputedStyle(el);
+          /* 外層自己有疊放順序（z-index）時，影片再高也蓋不過別的畫面：一起提到最上層 */
+          if (cs.position !== 'static' && cs.zIndex !== 'auto' || +cs.opacity < 1 || cs.isolation === 'isolate') {
+            if (!scr.anc.some(function (x) { return x[0] === el; })) scr.anc.push([el, el.getAttribute('style')]);
+            el.style.setProperty('z-index', '2147483647', 'important');
+            if (+cs.opacity < 1) el.style.setProperty('opacity', '1', 'important');
+          }
           if (cs.transform !== 'none' || cs.filter !== 'none' || cs.perspective !== 'none' || /paint|layout|strict|content/.test(cs.contain || '') || /transform|filter/.test(cs.willChange || '') || cs.backdropFilter && cs.backdropFilter !== 'none') {
-            scr.anc.push([el, el.getAttribute('style')]);
+            if (!scr.anc.some(function (x) { return x[0] === el; })) scr.anc.push([el, el.getAttribute('style')]);
             [['transform', 'none'], ['filter', 'none'], ['perspective', 'none'], ['contain', 'none'], ['will-change', 'auto'], ['backdrop-filter', 'none']].forEach(function (k) { el.style.setProperty(k[0], k[1], 'important'); });
           }
         }

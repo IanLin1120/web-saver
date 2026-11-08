@@ -401,9 +401,43 @@ async function viewVideo(it, body){
       ['fwd', '下一部', function(){ goVid(1); }, false, vi < vids.length - 1 ? vids[vi + 1].name : '沒有下一部'],
       ['phone', '旋轉畫面', function(){ rotI = (rotI + 1) % 2; if(!FS) setFs(true); if(isApp) NAT.call('uiFull', true, rotI === 1); fl(rotI === 1 ? '橫向' : '直向'); }],
       ['search', '縮放還原', function(){ zoom = 1; zx = 0; zy = 0; applyZoom(); fl('縮放：100%'); }, false, '雙指可以放大縮小畫面'],
-      ['sliders', '字幕樣式與同步…', function(){ subSettings(); }]
+      ['sliders', '字幕樣式與同步…', function(){ subSettings(); }],
+      ['scissors', '剪輯影片（裁掉頭尾）', function(){ trimSheet(); }, false, isApp ? '例如裁掉錄影開頭的讀取畫面' : '需 APK 版']
     ]);
   };
+  /* 剪輯：拖動或按「設為開頭／結尾」選範圍，預覽後存檔（不重新編碼，畫質不變） */
+  function trimSheet(){
+    if(!isApp || !NAT.has('vidTrim')){ toast('剪輯需要 APK 版', true); return; }
+    var d = v.duration || 0; if(!d){ toast('影片還沒載入完成', true); return; }
+    var A = 0, Bt = d;
+    var la = h('b'), lb = h('b'), ln = h('span', {class: 'sub'});
+    function lab(){ la.textContent = fmtT(A); lb.textContent = fmtT(Bt); ln.textContent = '剪完長度 ' + fmtT(Math.max(0, Bt - A)); ra.value = A; rb.value = Bt; }
+    var ra = h('input', {type: 'range', min: 0, max: d, step: 0.1, value: 0, style: {width: '100%'}, oninput: function(){ A = Math.min(+this.value, Bt - 0.5); v.currentTime = A; lab(); }});
+    var rb = h('input', {type: 'range', min: 0, max: d, step: 0.1, value: d, style: {width: '100%'}, oninput: function(){ Bt = Math.max(+this.value, A + 0.5); v.currentTime = Bt; lab(); }});
+    var body2 = h('div', null,
+      h('div', {class: 'sub', style: {lineHeight: '1.6', marginBottom: '10px'}, text: '上面的影片可以邊播邊看；拖動滑桿或按「用目前位置」選開頭和結尾。剪輯不會重新壓縮，畫質不變；開頭會對齊到最近的關鍵畫面（誤差約 1～2 秒內）。'}),
+      h('div', {style: {display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}, h('span', null, '開頭 ', la), h('button', {class: 'btn sm', text: '用目前位置', onclick: function(){ A = Math.min(v.currentTime, Bt - 0.5); lab(); }})), ra,
+      h('div', {style: {display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px'}}, h('span', null, '結尾 ', lb), h('button', {class: 'btn sm', text: '用目前位置', onclick: function(){ Bt = Math.max(v.currentTime, A + 0.5); lab(); }})), rb,
+      h('div', {style: {margin: '8px 2px'}}, ln),
+      h('div', {class: 'btn-row'}, h('button', {class: 'btn sm ghost', html: icon('play', 'sm') + '預覽開頭', onclick: function(){ v.currentTime = A; v.play().catch(function(){}); }})));
+    function run(replace){
+      if(Bt - A < 0.5){ toast('範圍太短', true); return; }
+      sh.close(); v.pause();
+      Tasks.set('trim', {title: '剪輯影片中…', sub: it.name, pct: -1, kind: 'trim'});
+      var off = function(r){
+        BUS.trim = (BUS.trim || []).filter(function(f){ return f !== off; });
+        Tasks.del('trim');
+        if(!r || !r.ok){ dialog('剪輯失敗', esc(r && r.err || ''), [['好', null]]); return; }
+        Lib.refresh().then(function(){ toast('✓ ' + (r.replaced ? '已剪輯並覆蓋原檔' : '已另存剪輯後的影片'), false, ['播放', function(){ Viewer.open(Lib.byId(r.item.id) || r.item); }]); if(r.replaced) Viewer.open(Lib.byId(r.item.id) || r.item); });
+      };
+      on('trim', off);
+      NAT.call('vidTrim', it.id, A, Bt >= d - 0.05 ? 0 : Bt, !!replace);
+    }
+    var sh = openSheet({title: '剪輯影片', icon: 'scissors', body: body2, foot: h('div', {style: {display: 'contents'}},
+      h('button', {class: 'btn ghost', text: '覆蓋原檔', onclick: async function(){ if(await confirmDlg('覆蓋原檔？', '原本的影片會被剪輯後的版本取代，無法復原。', '覆蓋', true)) run(true); }}),
+      h('button', {class: 'btn pri', text: '另存新檔', onclick: function(){ run(false); }}))});
+    lab();
+  }
   v.addEventListener('ended', function(){ if(!LOOP && AUTONEXT && vi < vids.length - 1) goVid(1); });
   /* 雙指縮放、平移 */
   var zoom = 1, zx = 0, zy = 0, pts = {}, pz = null;
