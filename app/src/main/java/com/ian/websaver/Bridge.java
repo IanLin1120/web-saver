@@ -266,11 +266,29 @@ public class Bridge {
     @JavascriptInterface public void dlMax(int n) { a.prefs.edit().putInt("dlMax", n).apply(); MediaDl.setMax(n); }
     @JavascriptInterface public int dlMaxGet() { return a.prefs.getInt("dlMax", 3); }
     @JavascriptInterface public int dlRunning() { return MediaDl.JOBS.size(); }
+    /* ---------- 外部下載 App 自動匯入 ---------- */
+    @JavascriptInterface public String watchDirs() { return Importer.dirs(a).toString(); }
+    @JavascriptInterface public void watchAdd() { ui(new Runnable() { @Override public void run() { a.pickWatch(); } }); }
+    @JavascriptInterface public void watchRemove(String uri) { Importer.removeDir(a, uri); MainActivity.emit("watchDirs", Importer.dirs(a).toString()); }
+    @JavascriptInterface public void watchScan() { Importer.scan(a, true); }
+    @JavascriptInterface public void importDel(boolean on) { a.prefs.edit().putBoolean("importDel", on).apply(); }
+    @JavascriptInterface public boolean importDelGet() { return a.prefs.getBoolean("importDel", true); }
+    /** 用系統分享選單交給其他下載 App；之後自動檢查下載資料夾 */
+    @JavascriptInterface public void shareDl(final String text) {
+        ui(new Runnable() { @Override public void run() {
+            try {
+                android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, text);
+                a.startActivity(android.content.Intent.createChooser(i, "交給哪個 App 下載？").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+                Importer.pending(a);
+            } catch (Throwable t) { MainActivity.toast("無法開啟分享選單"); }
+        } });
+    }
     /** 把網址交給指定的 App（例如 Snaptube）；沒裝就回傳 false */
     @JavascriptInterface public boolean sendTo(String pkg, String text) {
         try {
             android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, text).setPackage(pkg).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
             a.startActivity(i);
+            ui(new Runnable() { @Override public void run() { Importer.pending(a); } });
             return true;
         } catch (Throwable t) { return false; }
     }

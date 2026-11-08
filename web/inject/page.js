@@ -304,16 +304,24 @@
     try { v.style.setProperty('position', 'fixed', 'important'); v.style.setProperty('inset', '0', 'important'); v.style.setProperty('width', '100vw', 'important'); v.style.setProperty('height', '100vh', 'important'); v.style.setProperty('z-index', '2147483647', 'important'); v.style.setProperty('object-fit', 'contain', 'important'); v.style.setProperty('background', '#000', 'important'); } catch (e) {}
     var p = v.play(); if (p && p.catch) p.catch(function () {});
     rec.start(2000);
-    var stall = 0, lastT = -1;
+    var stall = 0, lastT = -1, acc = 0, maxT = 0, src0 = v.currentSrc, t0 = Date.now();
     st.tm = setInterval(function () {
-      var d = isFinite(v.duration) ? v.duration : 0, t = v.currentTime || 0;
-      if (v.paused && !v.ended) { var pp = v.play(); if (pp && pp.catch) pp.catch(function () {}); }
-      if (Math.abs(t - lastT) < 0.05) stall++; else stall = 0;
+      var d = isFinite(v.duration) ? v.duration : 0, t = v.currentTime || 0, dt = t - lastT;
+      if (lastT >= 0 && dt > 0 && dt < 4) acc += dt;
+      if (Math.abs(dt) < 0.05) stall++; else stall = 0;
+      maxT = Math.max(maxT, t);
+      var nearEnd = d > 0 && (maxT >= d - 1.5 || acc >= d - 1);
+      /* 結束的判斷：播完、播放器自己從頭重播（循環）、停在最後、換成下一部影片、錄的時間已經超過影片長度 */
+      var looped = d > 0 && maxT >= d * 0.8 && t < maxT - 2 && lastT >= 0;
+      var swapped = src0 && v.currentSrc && v.currentSrc !== src0;
+      var overtime = d > 0 && (Date.now() - t0) / 1000 > d * 1.6 + 40;
       lastT = t;
-      B.grabProg(d > 0 ? Math.min(0.99, t / d) : 0, (v.videoWidth || w) + '×' + (v.videoHeight || h) + ' 錄製中 ' + fmt(t) + (d > 0 ? ' / ' + fmt(d) : ''));
-      if (v.ended || (d > 0 && t >= d - 0.25) || stall > 90) stop();
+      if (!nearEnd && v.paused && !v.ended) { var pp = v.play(); if (pp && pp.catch) pp.catch(function () {}); }
+      B.grabProg(d > 0 ? Math.min(0.99, Math.max(acc, t) / d) : 0, (v.videoWidth || w) + '×' + (v.videoHeight || h) + ' 錄製中 ' + fmt(Math.max(acc, t)) + (d > 0 ? ' / ' + fmt(d) : ''));
+      if (v.ended || looped || swapped || overtime || (nearEnd && (stall >= 2 || v.paused)) || (d > 0 && t >= d - 0.3) || stall > 60 || !v.isConnected) stop();
     }, 1000);
     v.addEventListener('ended', stop);
+    v.addEventListener('emptied', stop);
     return 'ok';
   }
   function fmt(t) { t = Math.floor(t || 0); var m = Math.floor(t / 60), s = t % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
@@ -322,7 +330,11 @@
     st.stopping = true;
     clearInterval(st.tm);
     try { st.v.pause(); } catch (e) {}
-    try { st.rec.stop(); } catch (e) { B.grabDone(''); }
+    var s = st, fin = false, finish = function () { if (fin) return; fin = true; s.q.then(function () { try { if (s.ac) s.ac.close(); } catch (e) {} B.grabDone(''); }); };
+    s.rec.onstop = finish;
+    try { if (s.rec.state === 'inactive') finish(); else s.rec.stop(); } catch (e) { finish(); }
+    /* 保險：錄影器沒有回應時，8 秒後照樣結束 */
+    setTimeout(finish, 8000);
   }
   window.__wsRec = {start: start, stop: stop, can: function (src) {
     var v = pick(src);

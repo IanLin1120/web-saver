@@ -102,11 +102,12 @@ function renderSettings(){
 
   /* 儲存與匯出 */
   P.appendChild(card('storage', '儲存與匯出', [
+    isApp && NAT.has('watchDirs') ? h('div', {class: 'setRow', onclick: function(){ openWatchSettings(); }}, h('span', {class: 'ic', html: icon('download')}), h('div', {class: 'grow'}, h('b', {text: '其他 App 下載自動搬回'}), h('div', {class: 'sub', text: 'Snaptube、Quetta 等下載完自動搬進檔案庫、刪除原檔'})), h('span', {class: 'chev', text: '›'})) : null,
     isApp && NAT.has('dlMax') ? (function(){
       var cur = NAT.call('dlMaxGet') || 3;
       var sel = h('select', {onchange: function(){ NAT.call('dlMax', +this.value); toast('同時下載數：' + this.value + ' 個'); }});
       [1, 2, 3, 4, 5, 6].forEach(function(n){ var o = h('option', {value: n}, n + ' 個' + (n === 3 ? '（建議）' : '')); if(n === cur) o.selected = true; sel.appendChild(o); });
-      return h('div', {class: 'setRow'}, h('span', {class: 'ic', html: icon('download')}), h('div', {class: 'grow'}, h('b', {text: '同時下載數量'}), h('div', {class: 'sub', text: 'YouTube、一般影片、音樂下載可以同時進行、互不干擾；超過的會自動排隊。背景錄製因為只有一個播放器，會依序進行'})), sel);
+      return h('div', {class: 'setRow wrap'}, h('span', {class: 'ic', html: icon('download')}), h('div', {class: 'grow'}, h('b', {text: '同時下載數量'}), h('div', {class: 'sub', text: 'YouTube、一般影片、音樂可以同時下載、互不干擾；超過的自動排隊（背景錄製會依序進行）'})), sel);
     })() : null,
     isApp ? swRow('同時存一份到手機「下載/網頁擷取」', '每次擷取或下載完成，自動複製一份到手機公開的下載資料夾', 'autoExport') : null,
     isApp ? h('div', {class: 'setRow', onclick: openWifi}, h('span', {class: 'ic', html: icon('wifi')}), h('div', {class: 'grow'}, h('b', {text: 'Wi-Fi 傳到電腦'}), h('div', {class: 'sub', text: '電腦用瀏覽器直接下載檔案庫的原始檔案'})), h('span', {class: 'chev', text: '›'})) : null,

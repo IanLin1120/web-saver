@@ -47,6 +47,8 @@ function drawMedia(){
   var cnt = {all: MEDIA.items.length, image: 0, video: 0, audio: 0};
   MEDIA.items.forEach(function(m){ cnt[mKindGroup(m.kind)]++; });
   var rc = recCard(); if(rc) body.appendChild(rc);
+  if(isApp && NAT.has('shareDl')) body.appendChild(h('div', {class: 'btn-row', style: {marginBottom: '10px'}},
+    h('button', {class: 'btn sm ghost', style: {flex: 1}, html: icon('share', 'sm') + '交給 Snaptube／其他下載 App', onclick: function(){ if(MEDIA.sheet) MEDIA.sheet.close(); handOff(MEDIA.page || BR.url); }})));
   if(!MEDIA.items.length){
     body.appendChild(h('div', {class: 'empty', html: '<div class="big">🎞</div>這個頁面沒有偵測到可下載的圖片或影片<br><span class="sub">影片請先按下播放，App 會從網路請求中找到真正的影片來源（m3u8／mp4），再按一次「媒體」。</span>'}));
     MEDIA.dlBtn.disabled = true; return;

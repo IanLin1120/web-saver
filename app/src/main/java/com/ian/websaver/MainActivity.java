@@ -26,7 +26,7 @@ import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     static MainActivity cur;
-    static final int REQ_FILE = 1001, REQ_TREE = 1002, REQ_NOTIF = 1003;
+    static final int REQ_FILE = 1001, REQ_TREE = 1002, REQ_NOTIF = 1003, REQ_WATCH = 1004;
 
     FrameLayout root;
     WebView ui;
@@ -342,6 +342,14 @@ public class MainActivity extends Activity {
         } catch (Throwable t) { toast("無法開啟資料夾選擇器"); }
     }
 
+    void pickWatch() {
+        try {
+            Intent it = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            it.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            startActivityForResult(it, REQ_WATCH);
+        } catch (Throwable t) { toast("無法開啟資料夾選擇器"); }
+    }
+
     void hideKeyboard() {
         InputMethodManager im = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
         if (im != null && ui != null) im.hideSoftInputFromWindow(ui.getWindowToken(), 0);
@@ -379,6 +387,14 @@ public class MainActivity extends Activity {
                 fileCb.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(res, data));
                 fileCb = null;
             }
+        } else if (req == REQ_WATCH) {
+            if (res == RESULT_OK && data != null && data.getData() != null) {
+                Uri tree = data.getData();
+                try { getContentResolver().takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION); } catch (Throwable t) { /* ignore */ }
+                Importer.addDir(this, tree);
+                Importer.scan(this, true);
+            }
+            emit("watchDirs", Importer.dirs(this).toString());
         } else if (req == REQ_TREE) {
             if (res == RESULT_OK && data != null && data.getData() != null) {
                 Uri tree = data.getData();
@@ -400,6 +416,9 @@ public class MainActivity extends Activity {
         if (br != null) br.onResume();
         if (yt != null) yt.onResume();
         emit("resume", "");
+        /* 從 Snaptube 等外部下載 App 回來：檢查有沒有下載完的檔案可以匯入 */
+        Importer.scan(this, false);
+        Util.MAIN.postDelayed(new Runnable() { @Override public void run() { Importer.scan(MainActivity.this, false); } }, 8000);
     }
 
     @Override protected void onPause() {

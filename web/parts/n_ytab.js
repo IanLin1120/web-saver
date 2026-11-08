@@ -117,7 +117,7 @@ function fabSync(){
   var on = false, label = '';
   if(CFG.fab){
     if(curView === 'yt') on = !!ytCurId() && !YTB.fs;
-    else if(curView === 'browse'){ on = !BR.home && BR.loaded && !!BR.url && !/^(about|data):/.test(BR.url); label = on && BR.mediaN ? String(BR.mediaN > 99 ? '99+' : BR.mediaN) : ''; }
+    else if(curView === 'browse'){ on = (!BR.home && BR.loaded && !!BR.url && !/^(about|data):/.test(BR.url)) || document.body.classList.contains('brFull'); label = on && BR.mediaN ? String(BR.mediaN > 99 ? '99+' : BR.mediaN) : ''; }
   }
   NAT.call('fab', on, label);
 }
@@ -127,6 +127,7 @@ on('fab', function(where){
   var busy = Tasks.list().length;
   if(where === 'yt' || curView === 'yt'){ var id = ytCurId(); if(id && !busy){ openYt(id); return; } if(busy){ openFabMenu(id); return; } }
   if(curView !== 'browse'){ if(busy){ openFabMenu(); return; } showView('browse'); }
+  if(document.body.classList.contains('brFull')){ openFabMenu(); return; }
   if(YT.idOf(BR.url)){ openYt(YT.idOf(BR.url)); return; }
   openFabMenu();
 });
@@ -154,6 +155,7 @@ function openFabMenu(ytId){
       h('span', {class: 'oi', style: {background: color}, html: icon(ic)}), h('div', {class: 'grow'}, h('b', {text: title}), h('div', {class: 'sub', text: sub}))));
   }
   var page = curView === 'browse' && !BR.home && BR.loaded;
+  if(document.body.classList.contains('brFull')) big('shrink', 'var(--ink-2, #6b5a48)', '離開滿版瀏覽', '回到一般版面（顯示網址列與下方分頁）', function(){ setBrFull(false); });
   if(ytId) big('download', 'var(--c-video)', '下載這部 YouTube 影片', '影片、音樂、字幕', function(){ openYt(ytId); });
   if(curView === 'browse'){
     big('film', 'var(--c-video)', '下載這個網頁的影片', BR.mediaN ? '偵測到 ' + BR.mediaN + ' 個媒體・正在播放的影片會排在最前面' : '先播放網頁裡的影片，比較容易抓到', function(){ openMedia(); }, !page);
@@ -162,4 +164,53 @@ function openFabMenu(ytId){
   }
   body.appendChild(h('div', {class: 'sub', style: {fontSize: '12px', margin: '6px 2px 0'}, text: '同時下載數：' + (isApp && NAT.has('dlMaxGet') ? NAT.call('dlMaxGet') : 3) + ' 個（在「設定 → 下載」調整）'}));
   var s = openSheet({title: Tasks.list().length && curView !== 'browse' ? '進行中的工作' : '下載與擷取', icon: 'download', body: body, onClose: function(){ if(off) off(); }});
+}
+
+/* ---------- 交給外部下載 App（Snaptube、Quetta、影片下載工具…），下載完自動搬回檔案庫並刪掉原檔 ---------- */
+function watchDirs(){ try{ return isApp && NAT.has('watchDirs') ? JSON.parse(NAT.call('watchDirs') || '[]') : []; }catch(e){ return []; } }
+function handOff(url, pkg){
+  if(!isApp || !NAT.has('shareDl')){ toast('需要 APK 版', true); return; }
+  function go(){
+    if(pkg){ if(!NAT.call('sendTo', pkg, url)) toast('這支手機沒有安裝這個 App', true); }
+    else NAT.call('shareDl', url);
+  }
+  if(!watchDirs().length){
+    dialog('先設定「自動搬回」', '要讓其他 App 下載完的影片自動回到這裡，需要先選一次那個 App 的下載資料夾（只要設定一次）。<br><br>' +
+      '・Snaptube：內部儲存空間 → <b>snaptube</b> → <b>download</b><br>・其他 App：到它的設定裡看「下載位置」<br><br>選好後，App 回到前景時會自動把下載完的影片、音樂、字幕搬進檔案庫，並刪掉原檔。',
+      [['選擇資料夾', function(){ NAT.call('watchAdd'); setTimeout(go, 600); }], ['先不要，直接分享', go], ['取消', null, '']]);
+    return;
+  }
+  go();
+}
+on('imported', function(d){
+  var items = (d && d.items) || [];
+  Lib.refresh(); flashLib();
+  if(items.length){
+    var vids = items.filter(function(x){ return !/\.(srt|vtt|ass)$/i.test(x.name); });
+    toast('✓ 已從其他 App 搬回 ' + vids.length + ' 個檔案' + (items.length > vids.length ? '（含字幕 ' + (items.length - vids.length) + ' 個）' : ''), false,
+      ['查看', function(){ if(vids.length === 1) Viewer.open(Lib.byId(vids[0].id) || vids[0]); else showView('lib'); }]);
+  }
+  if(d && d.err) toast('匯入時有問題：' + d.err.split('\n')[0], true);
+});
+function openWatchSettings(){
+  var body = h('div');
+  var s = openSheet({title: '其他 App 下載自動搬回', icon: 'download', body: body});
+  function draw(){
+    body.textContent = '';
+    body.appendChild(h('div', {class: 'sub', style: {lineHeight: '1.7', marginBottom: '10px'}, text: '用 Snaptube、Quetta 等 App 下載的影片，下載完會自動搬進檔案庫（字幕也一起，會接在影片上），搬完刪掉原檔。App 回到前景時會檢查，交給其他 App 下載後的 3 小時內也會每 15 秒檢查一次。'}));
+    var ds = watchDirs();
+    if(!ds.length) body.appendChild(h('div', {class: 'empty', html: '還沒有設定資料夾'}));
+    ds.forEach(function(d){
+      body.appendChild(h('div', {class: 'setRow'}, h('span', {class: 'ic', html: icon('folder')}), h('div', {class: 'grow'}, h('b', {text: d.name})),
+        h('button', {class: 'btn sm ghost', text: '移除', onclick: function(){ NAT.call('watchRemove', d.uri); }})));
+    });
+    var del = h('input', {type: 'checkbox', checked: NAT.call('importDelGet'), onchange: function(){ NAT.call('importDel', this.checked); }});
+    body.appendChild(h('label', {class: 'opt'}, del, h('div', {class: 'grow'}, h('b', {text: '搬回後刪除原檔'}), h('div', {class: 'sub', text: '避免手機裡存兩份'}))));
+    body.appendChild(h('div', {class: 'btn-row'},
+      h('button', {class: 'btn pri', html: icon('plus', 'sm') + '加入資料夾', onclick: function(){ NAT.call('watchAdd'); }}),
+      h('button', {class: 'btn', html: icon('reload', 'sm') + '立即檢查', onclick: function(){ NAT.call('watchScan'); toast('檢查中…'); }})));
+    paintIcons(body);
+  }
+  draw();
+  on('watchDirs', function(){ if(!s.closed) draw(); });
 }

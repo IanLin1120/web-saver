@@ -509,6 +509,7 @@ function openToolsMenu(){
   b('books', '收藏清單', function(){ $('bBm').click(); });
   b('history', '瀏覽記錄', function(){ openHistory(); });
   b('incog', INCOG.on ? '關閉無痕' : '無痕模式', function(){ setIncog(!INCOG.on); }, {on: INCOG.on});
+  b('expand', '滿版瀏覽', function(){ setBrFull(true); }, {dis: !page});
   b('scissors', '手動清理', function(){ $('bZap').click(); }, {dis: !page, on: BR.zap});
   b(CFG.mode === 'desktop' ? 'monitor' : CFG.mode === 'reader' ? 'book' : 'phone', CFG.mode === 'desktop' ? '電腦版' : CFG.mode === 'reader' ? '閱讀模式' : '手機版', function(){ $('bMode').click(); }, {on: CFG.mode !== 'mobile'});
   b('sliders', '瀏覽設定', function(){ $('bQuick').click(); });
@@ -519,3 +520,14 @@ function openToolsMenu(){
   var s = openSheet({title: '功能', icon: 'grid', body: grid});
 }
 $('bMore').addEventListener('click', openToolsMenu);
+
+/* ---------- 滿版瀏覽：整個螢幕只顯示網頁（隱藏網址列、底部分頁、狀態列）；用懸浮按鈕或返回鍵切回來 ---------- */
+function setBrFull(on){
+  document.body.classList.toggle('brFull', !!on);
+  if(isApp) NAT.call('uiFull', !!on, false);
+  lsSet('ws.brFull', !!on);
+  syncLayout(); setTimeout(syncLayout, 250); setTimeout(syncLayout, 700);
+  fabSync();
+  if(on) toast('滿版瀏覽：點懸浮按鈕或按返回鍵切回一般版面');
+}
+on('view', function(e){ if(e.v !== 'browse' && document.body.classList.contains('brFull')) setBrFull(false); });
