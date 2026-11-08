@@ -24,10 +24,12 @@ final class RecCtl {
     LinearLayout box;
     WindowManager.LayoutParams lp;
     boolean shown = false, rec = false;
+    /** 錄影中的狀態：hot＝看不見的觸控點（畫面上什麼都沒有，錄不到）；panel＝已暫停，顯示控制面板 */
+    String st = "ready";
     TextView tm, pp;
     final Runnable tick = new Runnable() {
         @Override public void run() {
-            if (!shown || !rec || tm == null) return;
+            if (!shown || !"panel".equals(st) || tm == null) return;
             long s = ScreenRec.elapsed() / 1000;
             tm.setText(String.format(java.util.Locale.US, "%d:%02d", s / 60, s % 60));
             tm.postDelayed(this, 500);
@@ -53,6 +55,7 @@ final class RecCtl {
         Util.MAIN.post(new Runnable() {
             @Override public void run() {
                 rec = recMode;
+                st = recMode ? "hot" : "ready";
                 try {
                     if (box == null) {
                         box = new LinearLayout(a);
@@ -75,15 +78,33 @@ final class RecCtl {
                     }
                     build();
                     if (!shown) { a.getWindowManager().addView(box, lp); shown = true; }
-                    if (rec) tm.post(tick);
                 } catch (Throwable t) { shown = false; }
             }
         });
     }
 
+    void state(final String ns) {
+        Util.MAIN.post(new Runnable() { @Override public void run() { st = ns; if (box != null) { build(); if ("panel".equals(st) && tm != null) tm.post(tick); } } });
+    }
+
     private void build() {
         box.removeAllViews();
-        if (!rec) {
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(Util.dp(a, 26));
+        if ("hot".equals(st)) {
+            /* 錄影中：完全透明（錄影畫面裡看不到任何東西）；點這裡會先暫停錄影，再顯示控制面板 */
+            bg.setColor(Color.TRANSPARENT);
+            box.setBackground(bg);
+            View hot = new View(a);
+            hot.setLayoutParams(new LinearLayout.LayoutParams(Util.dp(a, 56), Util.dp(a, 120)));
+            hot.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { ScreenRec.pause(a, true); } });
+            box.addView(hot);
+            tm = null; pp = null;
+            return;
+        }
+        bg.setColor(Color.BLACK);
+        box.setBackground(bg);
+        if ("ready".equals(st)) {
             TextView r = btn("●", 20, "#e53935");
             r.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { MainActivity.emit("recCtl", "rec"); } });
             TextView p = btn("▶❚❚", 11, "#d8d8d8");
@@ -95,15 +116,22 @@ final class RecCtl {
             box.addView(r); box.addView(lb); box.addView(p); box.addView(x);
             tm = null; pp = null;
         } else {
-            TextView dot = btn("●", 12, "#e53935");
-            dot.setMinHeight(Util.dp(a, 20));
+            /* 已暫停：顯示面板（錄影已暫停，所以面板不會被錄到） */
+            TextView lb = btn("已暫停", 9, "#e53935");
+            lb.setMinHeight(Util.dp(a, 18));
             tm = btn("0:00", 11, "#d8d8d8");
             tm.setMinHeight(Util.dp(a, 22));
-            pp = btn("❚❚", 15, "#d8d8d8");
-            pp.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { ScreenRec.pause(a, ScreenRec.cur != null && !ScreenRec.cur.paused); } });
-            TextView st = btn("■", 17, "#ff6b5f");
-            st.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { ScreenRec.stop(a); } });
-            box.addView(dot); box.addView(tm); box.addView(pp); box.addView(st);
+            pp = btn("▶", 17, "#d8d8d8");
+            pp.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    /* 先把面板變透明，等畫面更新後才繼續錄影，面板就不會出現在影片裡 */
+                    state("hot");
+                    Util.MAIN.postDelayed(new Runnable() { @Override public void run() { ScreenRec.pause(a, false); } }, 400);
+                }
+            });
+            TextView stp = btn("■", 17, "#ff6b5f");
+            stp.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { state("hot"); ScreenRec.stop(a); } });
+            box.addView(lb); box.addView(tm); box.addView(pp); box.addView(stp);
         }
     }
 
@@ -123,7 +151,8 @@ final class RecCtl {
     }
 
     void update(final boolean paused) {
-        Util.MAIN.post(new Runnable() { @Override public void run() { if (pp != null) pp.setText(paused ? "▶" : "❚❚"); } });
+        if (paused) state("panel");
+        else if (!"hot".equals(st)) state("hot");
     }
 
     void hide() {

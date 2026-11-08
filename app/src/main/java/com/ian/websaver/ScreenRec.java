@@ -102,6 +102,8 @@ final class ScreenRec {
 
     static void onResult(final MainActivity a, final int res, final Intent data) {
         if (res != android.app.Activity.RESULT_OK || data == null) { emit("cancel", "已取消螢幕錄影"); return; }
+        /* 錄影開始前先把懸浮鈕變成透明（錄影畫面裡不會出現） */
+        RecCtl.get(a).state("hot");
         /* Android 14 起要先啟動「螢幕錄影」類型的前景服務，才能開始錄 */
         KeepAlive.set(a, "srec", "螢幕錄影中");
         Util.MAIN.postDelayed(new Runnable() {

@@ -347,6 +347,7 @@
       /* 跟原本「在目前分頁錄製」一樣：只改影片本身的樣式（不加遮罩，之前加黑色遮罩會在某些網站蓋住影片變成全黑） */
       [['position', 'fixed'], ['inset', '0'], ['left', '0'], ['top', '0'], ['width', '100vw'], ['height', '100vh'], ['max-width', 'none'], ['max-height', 'none'],
        ['z-index', '2147483647'], ['object-fit', 'contain'], ['background', '#000'], ['margin', '0'], ['transform', 'none']].forEach(function (p) { v.style.setProperty(p[0], p[1], 'important'); });
+      ensureSound(v);
       var pp = v.play(); if (pp && pp.catch) pp.catch(function () {});
       return JSON.stringify({w: v.videoWidth || 16, h: v.videoHeight || 9, dur: isFinite(v.duration) ? v.duration : 0});
     }
@@ -359,18 +360,51 @@
     window.__wsRecPaused = 0;
     return '{}';
   }
-  function screenToggle() { if (!scr) return 'none'; var v = scr.v; if (v.paused) { var p = v.play(); if (p && p.catch) p.catch(function () {}); return 'play'; } v.pause(); return 'pause'; }
+  /* 確保影片有聲音：直接取消靜音；如果網站又把它關掉，才去按網站上「目前是靜音」的那顆按鈕（只按標示為靜音中的，不會把聲音反而關掉） */
+  var MUTED_RE = /(unmute|turn on (the )?sound|sound (is )?off|audio (is )?(muted|off)|muted|取消靜音|開啟聲音|開啟音訊|打開聲音|音訊已關閉|聲音已關閉|已靜音|靜音中)/i;
+  var UNMUTED_RE = /(^mute$|^mute\b(?! *on)|turn off (the )?sound|sound (is )?on|audio is on|關閉聲音|關閉音訊|^靜音$)/i;
+  function soundBtn(v) {
+    var root = v.closest('article, [role=dialog], section, main, div') || document;
+    for (var up = 0, el = v.parentElement; el && up < 6; up++, el = el.parentElement) {
+      var bs = el.querySelectorAll('button, [role=button], [aria-label], [title]');
+      for (var i = 0; i < bs.length; i++) {
+        var b = bs[i], lab = ((b.getAttribute('aria-label') || '') + ' ' + (b.getAttribute('title') || '') + ' ' + (b.getAttribute('data-tooltip-content') || '')).trim();
+        if (!lab) { var sv = b.querySelector('svg[aria-label], title'); if (sv) lab = sv.getAttribute ? (sv.getAttribute('aria-label') || sv.textContent || '') : ''; }
+        if (lab && MUTED_RE.test(lab) && !UNMUTED_RE.test(lab)) return b;
+      }
+    }
+    return null;
+  }
+  function ensureSound(v) {
+    try {
+      if (v.muted) v.muted = false;
+      if (v.volume < 0.95) v.volume = 1;
+      setTimeout(function () {
+        if (!v.muted && v.volume > 0) return;
+        var b = soundBtn(v);
+        if (b) { try { b.click(); } catch (e) {} }
+        setTimeout(function () { if (v.muted) v.muted = false; if (v.volume < 0.95) v.volume = 1; }, 250);
+      }, 350);
+    } catch (e) {}
+  }
+  function screenToggle() { if (!scr) return 'none'; var v = scr.v; if (v.paused) { ensureSound(v); var p = v.play(); if (p && p.catch) p.catch(function () {}); return 'play'; } v.pause(); return 'pause'; }
   function screenRewind() { if (!scr) return 'none'; try { scr.v.pause(); if (isFinite(scr.v.duration) && scr.v.duration > 0) scr.v.currentTime = 0; } catch (e) {} return 'ok'; }
   function screenPlay() {
     if (!scr) return 'none';
     var v = scr.v, maxT = 0, lastT = -1, stall = 0, t0 = Date.now(), done = false;
     clearInterval(scr.tm);
-    try { v.loop = false; v.muted = false; v.volume = 1; v.playbackRate = 1; } catch (e) {}
+    try { v.loop = false; v.playbackRate = 1; } catch (e) {}
+    ensureSound(v);
+    /* 一定從頭開始：先跳到 0 秒再播放，1.5 秒後再檢查一次（有些網站的播放器會把位置改回去） */
+    var toStart = function () { try { if (isFinite(v.duration) && v.duration > 0 && v.currentTime > 0.5) v.currentTime = 0; } catch (e) {} };
+    toStart();
     var p = v.play(); if (p && p.catch) p.catch(function () {});
+    setTimeout(function () { if (v.currentTime > 4 && Date.now() - t0 < 3000) { toStart(); } ensureSound(v); }, 1500);
     function end() { if (done) return; done = true; clearInterval(scr && scr.tm); try { B.srecEnd(); } catch (e) {} }
     v.addEventListener('ended', end);
     scr.tm = setInterval(function () {
       if (window.__wsRecPaused) { stall = 0; return; }
+      if (v.muted || v.volume === 0) ensureSound(v);
       var d = isFinite(v.duration) ? v.duration : 0, t = v.currentTime || 0;
       if (Math.abs(t - lastT) < 0.05) stall++; else stall = 0;
       var looped = d > 0 && maxT >= d * 0.8 && t < maxT - 2;

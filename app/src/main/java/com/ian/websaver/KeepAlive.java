@@ -76,7 +76,10 @@ public class KeepAlive extends Service {
             .setContentIntent(pi).setOngoing(true).setOnlyAlertOnce(true);
         boolean rec;
         synchronized (TASKS) { rec = TASKS.containsKey("srec"); }
-        if (rec) b.addAction(new Notification.Action.Builder(null, "停止錄影", act("srecStop", 3)).build());
+        if (rec) {
+            b.addAction(new Notification.Action.Builder(null, "暫停／繼續錄影", act("srecPause", 4)).build());
+            b.addAction(new Notification.Action.Builder(null, "停止錄影", act("srecStop", 3)).build());
+        }
         if (media()) {
             b.setSmallIcon(android.R.drawable.ic_media_play);
             b.addAction(new Notification.Action.Builder(null, "播放／暫停", act("toggle", 1)).build());
@@ -92,6 +95,7 @@ public class KeepAlive extends Service {
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         String a = intent == null ? null : intent.getAction();
         if ("srecStop".equals(a)) { MainActivity m = MainActivity.cur; if (m != null) ScreenRec.stop(m); a = null; }
+        if ("srecPause".equals(a)) { MainActivity m = MainActivity.cur; if (m != null && ScreenRec.cur != null) ScreenRec.pause(m, !ScreenRec.cur.paused); a = null; }
         if (a != null) { MainActivity.emit("mediaCmd", a); MainActivity m = MainActivity.cur; if (m != null) m.mediaCmd(a); }
         boolean empty;
         synchronized (TASKS) { empty = TASKS.isEmpty(); }
