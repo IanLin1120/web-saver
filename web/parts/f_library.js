@@ -370,6 +370,15 @@ on('view', function(e){ if(e.v === 'lib'){ Lib.refresh(); } });
 $('libQ').addEventListener('input', function(){ LV.q = this.value.trim(); renderLibList(); });
 $('bView').addEventListener('click', function(){ setCfg('lib.view', CFG.lib.view === 'grid' ? 'list' : 'grid'); this.innerHTML = icon(CFG.lib.view === 'grid' ? 'list' : 'grid'); renderLibList(); });
 $('bSel').addEventListener('click', function(){ LV.selMode = true; renderLib(); });
+/* 重新整理：跟「其他 App 下載自動搬回」的「立即檢查」一樣，順便重讀檔案庫 */
+$('bLibRefresh').addEventListener('click', async function(){
+  var b = this; if(b.classList.contains('spinning')) return;
+  b.classList.add('spinning');
+  if(isApp && NAT.has('watchScan')) NAT.call('watchScan');
+  toast('檢查中…');
+  try{ await sleep(1500); await Lib.refresh(); renderLib(); if(typeof renderStor === 'function') renderStor(); }catch(e){}
+  setTimeout(function(){ b.classList.remove('spinning'); }, 300);
+});
 $('bSort').addEventListener('click', function(){
   var c = CFG.lib;
   var mk = function(k, label){ return ['sort', label + (c.sort === k ? '　✓' : ''), function(){ setCfg('lib.sort', k); renderLibList(); }]; };

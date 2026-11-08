@@ -53,7 +53,7 @@ public class Bridge {
     @JavascriptInterface public void brShow(final boolean on) { ui(new Runnable() { @Override public void run() { a.br.show(on); } }); }
 
     @JavascriptInterface public void cover(final boolean on) {
-        ui(new Runnable() { @Override public void run() { a.br.cover(on); a.yt.cover(on); a.vw.cover(on); a.fab.cover(on); } });
+        ui(new Runnable() { @Override public void run() { a.br.cover(on); a.yt.cover(on); a.vw.cover(on); a.fab.cover(on); AiPlayer.cover(on); } });
     }
 
     /* ---------- YouTube 分頁 ---------- */
@@ -631,4 +631,23 @@ public class Bridge {
             return new JSONObject().put("ok", true).put("path", "下載/" + Exporter.FOLDER + "/" + o.optString("name")).toString();
         } catch (Throwable t) { return err(t); }
     }
+
+    /* ---------- AI 摘要：Claude 訂閱引擎（背景 claude.ai 工作頁）＋小播放器 ---------- */
+    @JavascriptInterface public void cengStart(String url) { ClaudeEngine.start(a, url); }
+    @JavascriptInterface public void cengStop() { ClaudeEngine.stop(a); }
+    @JavascriptInterface public String cengState() { return ClaudeEngine.state(); }
+    @JavascriptInterface public void cengReq(String id, String json) { ClaudeEngine.request(id, json); }
+    @JavascriptInterface public void openClaude(final String url) {
+        ui(new Runnable() { @Override public void run() {
+            android.content.Intent i = new android.content.Intent(a, ClaudeActivity.class);
+            i.putExtra("url", url);
+            a.startActivity(i);
+        } });
+    }
+    @JavascriptInterface public void aipLoad(final String id, final int start, final boolean autoplay) { ui(new Runnable() { @Override public void run() { AiPlayer.load(a, id, start, autoplay); } }); }
+    @JavascriptInterface public void aipRect(final float top, final float left, final float w, final float hh) { ui(new Runnable() { @Override public void run() { AiPlayer.rect(a, top, left, w, hh); } }); }
+    @JavascriptInterface public void aipShow(final boolean on) { ui(new Runnable() { @Override public void run() { AiPlayer.show(on); } }); }
+    @JavascriptInterface public void aipSeek(final double sec, final boolean play) { ui(new Runnable() { @Override public void run() { AiPlayer.seek(sec, play); } }); }
+    @JavascriptInterface public void aipToggle() { ui(new Runnable() { @Override public void run() { AiPlayer.toggle(); } }); }
+    @JavascriptInterface public String aipState() { return AiPlayer.state(); }
 }

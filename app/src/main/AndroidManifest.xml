@@ -69,6 +69,11 @@
             android:foregroundServiceType="dataSync|mediaPlayback|mediaProjection" />
 
         <!-- 分享選單的第二個選項：直接開啟下載面板（像 Snaptube） -->
+        <activity
+            android:name=".ClaudeActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden|keyboard|smallestScreenSize|screenLayout|uiMode|density"
+            android:windowSoftInputMode="adjustResize" />
         <activity-alias
             android:name=".DownloadAlias"
             android:targetActivity=".MainActivity"

@@ -128,6 +128,7 @@ var IC = {
   ytplay: '<rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="M10 9.2v5.6l4.8-2.8z" fill="currentColor"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
   history: '<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4.5h4.5M12 7.5V12l3 2"/>',
+  send: '<path d="M4 12l16-8-6 16-2.5-6.5z"/><path d="M11.5 13.5L20 4"/>',
   sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>'
 };
 function icon(name, cls){ return '<svg class="i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24">' + (IC[name] || IC.other) + '</svg>'; }
@@ -351,7 +352,7 @@ function ring(pct){
 function uiZoom(){ var z = parseFloat(document.documentElement.style.zoom); return z > 0 ? z : 1; }
 
 /* ---------- 頁面切換 ---------- */
-var VIEWS = ['browse', 'yt', 'lib', 'set'];
+var VIEWS = ['browse', 'yt', 'ai', 'lib', 'set'];
 var curView = 'browse';
 function showView(v){
   if(VIEWS.indexOf(v) < 0) v = 'browse';

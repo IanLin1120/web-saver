@@ -80,6 +80,7 @@ $('ytMore').addEventListener('click', function(){
   var id = ytCurId();
   menu('YouTube', [
     ['download', '下載這部影片', function(){ if(id) openYt(id); else toast('先打開一部影片', true); }, false, id ? '' : '目前不在影片頁'],
+    ['sparkle', 'AI 摘要這部影片', function(){ if(id){ NAT.call('ytNav', 'pause'); aiOpenVideo(id); } else showView('ai'); }, false, id ? '摘要、章節、針對影片提問' : '目前不在影片頁'],
     ['gear', 'YouTube 播放器設定', function(){ openYtSettings(); }, false, '去廣告、背景播放、手勢、SponsorBlock、畫質…'],
     ['search', '貼上 YouTube 網址', async function(){
       var t = '';

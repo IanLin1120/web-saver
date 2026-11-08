@@ -1,0 +1,164 @@
+package com.ian.websaver;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.graphics.Color;
+import android.net.Uri;
+import android.os.Bundle;
+import android.util.Base64;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.webkit.CookieManager;
+import android.webkit.DownloadListener;
+import android.webkit.JavascriptInterface;
+import android.webkit.URLUtil;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
+/** AI 摘要用：在 App 內開啟 claude.ai（登入、按「允許」）；AI 摘要消耗的是你的 Claude 月訂閱額度。 */
+public class ClaudeActivity extends Activity {
+    private WebView web;
+    private android.widget.FrameLayout holder;
+    private final java.util.ArrayList<WebView> popups = new java.util.ArrayList<WebView>();
+    private ValueCallback<Uri[]> fileCb;
+    private static final int REQ_FILE = 2001;
+
+    @Override protected void onCreate(Bundle b) {
+        super.onCreate(b);
+        getWindow().setStatusBarColor(Color.parseColor("#efe5d3"));
+        getWindow().setNavigationBarColor(Color.parseColor("#efe5d3"));
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.parseColor("#efe5d3"));
+
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setBackgroundColor(Color.parseColor("#e4d6bb"));
+        bar.addView(barBtn("✕ 返回", new View.OnClickListener() { @Override public void onClick(View v) { finish(); } }));
+        TextView title = new TextView(this);
+        title.setText("登入 Claude");
+        title.setTextColor(Color.parseColor("#3a2e22"));
+        title.setTextSize(15);
+        title.setGravity(Gravity.CENTER);
+        bar.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        bar.addView(barBtn("⟳ 重新整理", new View.OnClickListener() { @Override public void onClick(View v) { if (web != null) web.reload(); } }));
+        root.addView(bar, new LinearLayout.LayoutParams(-1, Util.dp(this, 46)));
+
+        web = new WebView(this);
+        holder = new android.widget.FrameLayout(this);
+        holder.addView(web, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        root.addView(holder, new LinearLayout.LayoutParams(-1, 0, 1f));
+        setContentView(root);
+
+        setup(web);
+
+        web.setWebViewClient(client());
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onCreateWindow(WebView v, boolean dialog, boolean userGesture, android.os.Message msg) {
+                final WebView p = new WebView(ClaudeActivity.this);
+                setup(p);
+                p.setWebViewClient(client());
+                p.setWebChromeClient(new WebChromeClient() {
+                    @Override public void onCloseWindow(WebView w) { closePopup(w); }
+                });
+                holder.addView(p, new android.widget.FrameLayout.LayoutParams(-1, -1));
+                popups.add(p);
+                WebView.WebViewTransport t = (WebView.WebViewTransport) msg.obj;
+                t.setWebView(p);
+                msg.sendToTarget();
+                return true;
+            }
+            @Override public void onCloseWindow(WebView w) { if (w != web) closePopup(w); }
+            @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
+                if (fileCb != null) fileCb.onReceiveValue(null);
+                fileCb = cb;
+                try { startActivityForResult(p.createIntent(), REQ_FILE); } catch (Throwable t) { fileCb = null; return false; }
+                return true;
+            }
+        });
+        String url = getIntent().getStringExtra("url");
+        web.loadUrl(url == null || url.isEmpty() ? "https://claude.ai/" : url);
+    }
+
+    /** 共用設定：主視窗與「彈出式視窗」（Google 登入）都用同一組。 */
+    private void setup(WebView w) {
+        WebSettings s = w.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setDatabaseEnabled(true);
+        s.setAllowFileAccess(false);
+        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setSupportMultipleWindows(true);
+        s.setJavaScriptCanOpenWindowsAutomatically(true);
+        // 讓網站把它當成一般的手機版 Chrome（拿掉 WebView 標記）
+        s.setUserAgentString(s.getUserAgentString().replace("; wv", "").replace(" Version/4.0", ""));
+        CookieManager cm = CookieManager.getInstance();
+        cm.setAcceptCookie(true);
+        cm.setAcceptThirdPartyCookies(w, true);
+    }
+
+    private WebViewClient client() {
+        return new WebViewClient() {
+            @Override public boolean shouldOverrideUrlLoading(WebView v, android.webkit.WebResourceRequest r) {
+                String sch = r.getUrl().getScheme();
+                if ("http".equals(sch) || "https".equals(sch) || "blob".equals(sch) || "data".equals(sch) || "about".equals(sch)) return false;
+                try { startActivity(new Intent(Intent.ACTION_VIEW, r.getUrl())); } catch (Throwable t) { /* ignore */ }
+                return true;
+            }
+        };
+    }
+
+    private void closePopup(WebView p) {
+        popups.remove(p);
+        try { holder.removeView(p); } catch (Throwable t) { /* ignore */ }
+        try { p.destroy(); } catch (Throwable t) { /* ignore */ }
+        CookieManager.getInstance().flush();
+    }
+
+    private TextView barBtn(String t, View.OnClickListener l) {
+        TextView v = new TextView(this);
+        v.setText(t);
+        v.setTextColor(Color.parseColor("#a2613a"));
+        v.setTextSize(14);
+        v.setGravity(Gravity.CENTER);
+        v.setPadding(Util.dp(this, 14), 0, Util.dp(this, 14), 0);
+        v.setOnClickListener(l);
+        v.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, -1));
+        return v;
+    }
+
+    @Override protected void onActivityResult(int req, int res, Intent data) {
+        super.onActivityResult(req, res, data);
+        if (req == REQ_FILE && fileCb != null) {
+            fileCb.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(res, data));
+            fileCb = null;
+        }
+    }
+
+    @Override public void onBackPressed() {
+        if (!popups.isEmpty()) { closePopup(popups.get(popups.size() - 1)); return; }
+        if (web != null && web.canGoBack()) web.goBack(); else finish();
+    }
+
+    @Override protected void onPause() {
+        super.onPause();
+        CookieManager.getInstance().flush();
+    }
+
+    @Override protected void onDestroy() {
+        if (web != null) { web.destroy(); web = null; }
+        CookieManager.getInstance().flush();
+        MainActivity.emit("claudeClosed", "{}");
+        super.onDestroy();
+    }
+}

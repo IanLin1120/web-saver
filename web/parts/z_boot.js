@@ -19,6 +19,12 @@ window.onNativeBack = function(){
     if(YTB.url && !/^https:\/\/m\.youtube\.com\/?(\?|#|$)/.test(YTB.url)){ ytEnsure(YT_HOME); return true; }
     return false;
   }
+  /* AI 摘要：放大時先縮回，影片頁回到列表；不會切到其他分頁 */
+  if(curView === 'ai'){
+    if(AI.exp){ AI.exp = false; aiRender(); return true; }
+    if(AI.id){ aiClose(); return true; }
+    return false;
+  }
   /* 檔案庫：在子資料夾裡就回上一層；其他情況不切換分頁（要切換只能按下方的四個按鈕） */
   if(curView === 'lib'){
     var cat = CFG.lib.cat, cf = LV.open && LV.folder[cat];

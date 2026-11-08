@@ -52,6 +52,9 @@
   </div>
 </section>
 
+<!-- ============ AI 摘要（YouTube 影片洞察） ============ -->
+<section class="view" id="v-ai"></section>
+
 <!-- ============ 2. 檔案庫 ============ -->
 <section class="view" id="v-lib">
   <div class="scroll" id="libScroll"><div class="page">
@@ -60,6 +63,7 @@
     <div class="catBar" id="catBar"></div>
     <div id="selBar" class="selBar glass hide"></div>
     <div class="libTools" id="libTools">
+      <button class="ib" id="bLibRefresh" title="重新整理（立即檢查其他 App 的下載）" data-ic="reload"></button>
       <div class="srch"><span data-ic="search" data-sm="1"></span><input id="libQ" type="search" placeholder="搜尋檔名、網址…"></div>
       <button class="ib" id="bSort" title="排序" data-ic="sort"></button>
       <button class="ib" id="bView" title="切換檢視" data-ic="list"></button>
@@ -91,6 +95,7 @@
   <nav id="nav" class="glass">
     <button data-v="browse" class="on"><span data-ic="globe"></span>瀏覽</button>
     <button data-v="yt"><span data-ic="ytplay"></span>YouTube</button>
+    <button data-v="ai"><span data-ic="sparkle"></span>AI 摘要</button>
     <button data-v="lib"><span data-ic="folder"></span>檔案庫<span class="dot hide" id="libDot"></span></button>
     <button data-v="set"><span data-ic="gear"></span>設定</button>
   </nav>
