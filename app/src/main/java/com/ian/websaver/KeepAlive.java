@@ -156,4 +156,10 @@ public class KeepAlive extends Service {
             ((NotificationManager) ac.getSystemService(NOTIFICATION_SERVICE)).notify((int) (System.currentTimeMillis() % 100000) + 100, b.build());
         } catch (Throwable t) { /* 沒有通知權限 */ }
     }
+
+    /** 從「最近使用」把 App 劃掉：服務還在跑也要把檔案庫／收藏重新鎖上 */
+    @Override public void onTaskRemoved(android.content.Intent rootIntent) {
+        Lock.session = false;
+        super.onTaskRemoved(rootIntent);
+    }
 }

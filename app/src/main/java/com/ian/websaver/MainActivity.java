@@ -43,6 +43,9 @@ public class MainActivity extends Activity {
     @Override protected void onCreate(Bundle b) {
         if (Build.VERSION.SDK_INT >= 21) WebView.enableSlowWholeDocumentDraw();
         super.onCreate(b);
+        /* App 每次重新開啟（包含從最近使用劃掉後再開）都要重新解鎖；
+           背景還有下載／匯入／AI 等前景服務時，程式本身不會被系統結束，所以要在這裡主動上鎖 */
+        Lock.session = false;
         cur = this;
         prefs = getSharedPreferences("ws", MODE_PRIVATE);
         Window w = getWindow();
@@ -507,6 +510,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         if (cur == this) cur = null;
+        if (!isChangingConfigurations()) Lock.session = false;
         WifiServer.stop();
         super.onDestroy();
     }

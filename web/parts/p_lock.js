@@ -39,7 +39,9 @@ SEC.verify = function(title){
   if(!SEC.has()) return new Promise(function(res){
     dialog('先設定密碼', '要保護帳號密碼，請先設定一組 6 位數密碼（之後每次查看、複製、修改都要輸入密碼或指紋）。', [['設定密碼', function(){ setPinFlow(); res(false); }], ['取消', function(){ res(false); }, '']]);
   });
-  return new Promise(function(res){ pinPad({title: title || '驗證身分', bio: true, onOk: function(){ res(true); }, onCancel: function(){ res(false); }}); });
+  /* 只驗證這一次：不能因為看了一組密碼，就把檔案庫和收藏的鎖一起解開 */
+  var wasOpen = SEC.open();
+  return new Promise(function(res){ pinPad({title: title || '驗證身分', bio: true, onOk: function(){ if(!wasOpen){ if(isApp && NAT.has('lockRelock')) NAT.call('lockRelock'); else SEC.webOk = false; } res(true); }, onCancel: function(){ res(false); }}); });
 };
 
 /* 數字鍵盤（像手機鎖屏） */
