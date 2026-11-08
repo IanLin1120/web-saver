@@ -342,7 +342,7 @@
     if (on) {
       var v = (scr && scr.v) || pick('');
       if (!v) return JSON.stringify({err: 'novideo'});
-      if (!scr) scr = {v: v, style: v.getAttribute('style'), controls: v.controls};
+      if (!scr) scr = {v: v, style: v.getAttribute('style'), controls: v.controls, rect: v.getBoundingClientRect()};
       v.controls = false;
       /* 跟原本「在目前分頁錄製」一樣：只改影片本身的樣式（不加遮罩，之前加黑色遮罩會在某些網站蓋住影片變成全黑） */
       [['position', 'fixed'], ['inset', '0'], ['left', '0'], ['top', '0'], ['width', '100vw'], ['height', '100vh'], ['max-width', 'none'], ['max-height', 'none'],
@@ -360,31 +360,48 @@
     window.__wsRecPaused = 0;
     return '{}';
   }
-  /* 確保影片有聲音：直接取消靜音；如果網站又把它關掉，才去按網站上「目前是靜音」的那顆按鈕（只按標示為靜音中的，不會把聲音反而關掉） */
-  var MUTED_RE = /(unmute|turn on (the )?sound|sound (is )?off|audio (is )?(muted|off)|muted|取消靜音|開啟聲音|開啟音訊|打開聲音|音訊已關閉|聲音已關閉|已靜音|靜音中)/i;
-  var UNMUTED_RE = /(^mute$|^mute\b(?! *on)|turn off (the )?sound|sound (is )?on|audio is on|關閉聲音|關閉音訊|^靜音$)/i;
-  function soundBtn(v) {
-    var root = v.closest('article, [role=dialog], section, main, div') || document;
-    for (var up = 0, el = v.parentElement; el && up < 6; up++, el = el.parentElement) {
-      var bs = el.querySelectorAll('button, [role=button], [aria-label], [title]');
-      for (var i = 0; i < bs.length; i++) {
-        var b = bs[i], lab = ((b.getAttribute('aria-label') || '') + ' ' + (b.getAttribute('title') || '') + ' ' + (b.getAttribute('data-tooltip-content') || '')).trim();
-        if (!lab) { var sv = b.querySelector('svg[aria-label], title'); if (sv) lab = sv.getAttribute ? (sv.getAttribute('aria-label') || sv.textContent || '') : ''; }
-        if (lab && MUTED_RE.test(lab) && !UNMUTED_RE.test(lab)) return b;
-      }
-    }
-    return null;
+  /* 確保影片有聲音（不調整音量）：
+     1. 找網頁上標示「目前是靜音」的聲音按鈕（例如 IG 右上角的喇叭），找到就按它，讓網站自己把聲音打開
+        —— 只按標示為「靜音中」的，標示為「關閉聲音」的一律不按，所以不會把聲音反而關掉
+     2. 影片元素本身如果還是靜音，直接取消靜音 */
+  var MUTED_RE = /(unmute|turn on (the )?(sound|audio)|play (with )?sound|sound (is )?(off|muted)|audio (is )?(muted|off)|video (is )?muted|is muted|取消靜音|開啟聲音|開啟音訊|打開聲音|開啟音效|音訊已關閉|音訊已靜音|聲音已關閉|已靜音|靜音中|已關閉聲音)/i;
+  var UNMUTED_RE = /(audio is (playing|on)|sound (is )?on|turn off (the )?(sound|audio)|^mute( audio| sound| video)?$|關閉聲音|關閉音訊|^靜音$|音訊播放中|聲音已開啟)/i;
+  function labelOf(el) {
+    var t = (el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '') + ' ' + (el.getAttribute('data-tooltip-content') || '') + ' ' + (el.getAttribute('alt') || '');
+    if (el.tagName && el.tagName.toLowerCase() === 'svg') { var ti = el.querySelector('title'); if (ti) t += ' ' + ti.textContent; }
+    return t.trim();
   }
+  function visible(el) { var r = el.getBoundingClientRect(); return r.width > 2 && r.height > 2 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth; }
+  function soundBtn(v) {
+    var docs = [document];
+    [].slice.call(document.querySelectorAll('iframe')).forEach(function (f) { try { if (f.contentDocument) docs.push(f.contentDocument); } catch (e) {} });
+    var vr = (scr && scr.rect) || v.getBoundingClientRect(), cx = vr.left + vr.width / 2, cy = vr.top + vr.height / 2, best = null, bd = 1e9;
+    docs.forEach(function (d) {
+      [].slice.call(d.querySelectorAll('[aria-label], [title], svg, [data-tooltip-content]')).forEach(function (el) {
+        if (el === v) return;
+        var lab = labelOf(el);
+        if (!lab || !MUTED_RE.test(lab) || UNMUTED_RE.test(lab)) return;
+        var target = el.closest('button, [role=button], a') || el;
+        if (target === v || !visible(target)) return;
+        var r = target.getBoundingClientRect(), dd = Math.hypot(r.left + r.width / 2 - cx, r.top + r.height / 2 - cy);
+        if (dd < bd) { bd = dd; best = target; }
+      });
+    });
+    return best;
+  }
+  function press(el) {
+    var r = el.getBoundingClientRect(), o = {bubbles: true, cancelable: true, view: window, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 0};
+    try {
+      ['pointerdown', 'mousedown', 'pointerup', 'mouseup'].forEach(function (t) { el.dispatchEvent(t.indexOf('pointer') === 0 ? new PointerEvent(t, Object.assign({pointerId: 1, isPrimary: true, pointerType: 'touch'}, o)) : new MouseEvent(t, o)); });
+      el.dispatchEvent(new MouseEvent('click', o));
+    } catch (e) { try { el.click(); } catch (x) {} }
+  }
+  var lastPress = 0;
   function ensureSound(v) {
     try {
-      if (v.muted) v.muted = false;
-      if (v.volume < 0.95) v.volume = 1;
-      setTimeout(function () {
-        if (!v.muted && v.volume > 0) return;
-        var b = soundBtn(v);
-        if (b) { try { b.click(); } catch (e) {} }
-        setTimeout(function () { if (v.muted) v.muted = false; if (v.volume < 0.95) v.volume = 1; }, 250);
-      }, 350);
+      var b = soundBtn(v);
+      if (b && Date.now() - lastPress > 1500) { lastPress = Date.now(); press(b); }
+      setTimeout(function () { if (v.muted) v.muted = false; }, b ? 400 : 0);
     } catch (e) {}
   }
   function screenToggle() { if (!scr) return 'none'; var v = scr.v; if (v.paused) { ensureSound(v); var p = v.play(); if (p && p.catch) p.catch(function () {}); return 'play'; } v.pause(); return 'pause'; }
@@ -404,7 +421,7 @@
     v.addEventListener('ended', end);
     scr.tm = setInterval(function () {
       if (window.__wsRecPaused) { stall = 0; return; }
-      if (v.muted || v.volume === 0) ensureSound(v);
+      if (v.muted || soundBtn(v)) ensureSound(v);
       var d = isFinite(v.duration) ? v.duration : 0, t = v.currentTime || 0;
       if (Math.abs(t - lastT) < 0.05) stall++; else stall = 0;
       var looped = d > 0 && maxT >= d * 0.8 && t < maxT - 2;

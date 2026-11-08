@@ -14,7 +14,7 @@ import android.widget.TextView;
 /**
  * 滿版播放／錄影時的懸浮控制鈕。
  * 準備模式：● 開始錄影、▶／❚❚ 播放暫停、✕ 離開滿版；錄影模式：錄影時間、❚❚ 暫停錄影、■ 停止。
- * 視窗設成「安全內容」並做成黑色：螢幕錄影時錄不到這個按鈕。
+ * 錄影中只留一個完全透明的觸控點（不設「安全內容」，否則系統會把那一塊塗成黑色）；只有暫停時才顯示面板，所以錄不到。
  */
 final class RecCtl {
     private static RecCtl inst;
@@ -68,7 +68,7 @@ final class RecCtl {
                         box.setPadding(Util.dp(a, 4), Util.dp(a, 8), Util.dp(a, 4), Util.dp(a, 8));
                         lp = new WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
                             WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG,
-                            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_SECURE | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                             PixelFormat.TRANSLUCENT);
                         lp.token = a.getWindow().getDecorView().getWindowToken();
                         lp.gravity = Gravity.TOP | Gravity.START;
