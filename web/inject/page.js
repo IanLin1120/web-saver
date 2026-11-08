@@ -252,11 +252,10 @@
       if (cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity === 0) return;
       /* 正中央點下去是不是這部影片（或蓋在它上面的控制層） */
       var cx = Math.max(r.left, 0) + w / 2, cy = Math.max(r.top, 0) + h / 2, top = document.elementFromPoint(cx, cy);
-      /* 一定要是「真的在最上面看得到」：被其他畫面（例如 IG 限時動態的視窗）蓋住的影片不算 */
+      /* 「真的在最上面看得到」的影片優先（被其他視窗蓋住的分數比較低，但不排除） */
       var box = v; for (var k = 0; k < 4 && box.parentElement && box.parentElement !== document.body && box.parentElement !== document.documentElement; k++) box = box.parentElement;
       var onTop = top && (top === v || top.contains(v) || box.contains(top));
-      if (!onTop) return;
-      var sc = area * (!v.paused ? 2 : 1) * (v.readyState >= 2 ? 1.5 : 1);
+      var sc = area * (onTop ? 3 : 1) * (!v.paused ? 2 : 1) * (v.readyState >= 2 ? 1.5 : 1);
       if (sc > bs) { bs = sc; best = v; }
     });
     return best;
@@ -361,7 +360,7 @@
   var scr = null;
   function screen(on) {
     if (on) {
-      var v = (scr && scr.v) || pickVisible();
+      var v = (scr && scr.v) || pickVisible() || pick('');
       if (!v) return JSON.stringify({err: 'novideo'});
       if (!scr) scr = {v: v, style: v.getAttribute('style'), controls: v.controls, rect: v.getBoundingClientRect()};
       v.controls = false;

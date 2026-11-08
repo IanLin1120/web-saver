@@ -95,6 +95,10 @@ var IC = {
   image: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5.5-5.5L5 20"/>',
   video: '<rect x="2.5" y="5" width="14" height="14" rx="2.5"/><path d="M16.5 10l5-3v10l-5-3"/>',
   audio: '<path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+  sub: '<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M10.5 10.2a2.2 2.2 0 1 0 0 3.6M17 10.2a2.2 2.2 0 1 0 0 3.6"/>',
+  word: '<path d="M6 2.5h8l5 5V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20V4a1.5 1.5 0 0 1 1-1.5z"/><path d="M14 2.5V8h5"/><path d="M8 12l1.3 5 1.7-4 1.7 4 1.3-5"/>',
+  excel: '<path d="M6 2.5h8l5 5V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20V4a1.5 1.5 0 0 1 1-1.5z"/><path d="M14 2.5V8h5"/><path d="M8.5 12l5 5M13.5 12l-5 5"/>',
+  txt: '<path d="M6 2.5h8l5 5V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20V4a1.5 1.5 0 0 1 1-1.5z"/><path d="M14 2.5V8h5"/><path d="M8.5 12h7M8.5 15h7M8.5 18h4"/>',
   zip: '<path d="M6 2.5h8l5 5V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20V4a1.5 1.5 0 0 1 1-1.5z"/><path d="M11 3v2M11 7v2M11 11v2M10 15h2v3h-2z"/>',
   other: '<path d="M6 2.5h8l5 5V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20V4a1.5 1.5 0 0 1 1-1.5z"/><path d="M14 2.5V8h5"/>',
   play: '<path d="M7 4.5v15l12-7.5z"/>',
@@ -138,6 +142,10 @@ var CAT = {
   image: {name: '圖片', ic: 'image', c: 'var(--c-image)'},
   video: {name: '影片', ic: 'video', c: 'var(--c-video)'},
   audio: {name: '音樂', ic: 'audio', c: 'var(--c-audio)'},
+  sub: {name: '字幕', ic: 'sub', c: '#4f8a8b'},
+  word: {name: 'Word', ic: 'word', c: '#2f5fa8'},
+  excel: {name: 'Excel', ic: 'excel', c: '#1f7a45'},
+  txt: {name: '文字檔', ic: 'txt', c: '#7a6a55'},
   zip: {name: '壓縮檔', ic: 'zip', c: 'var(--c-zip)'},
   other: {name: '其他', ic: 'other', c: 'var(--c-other)'}
 };

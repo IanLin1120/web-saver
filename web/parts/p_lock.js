@@ -20,7 +20,7 @@ var SEC = {
   /* 這個檔案目前要不要藏起來（有鎖而且還沒解鎖） */
   hidden: function(it){
     if(!it || this.open()) return false;
-    if(this.catLocked(it.cat)) return true;
+    if(this.catLocked(typeof areaOf === 'function' ? areaOf(it) : it.cat)) return true;
     var f = LF.folderOf(it.id) || it.folder;
     return !!(f && this.folderLocked(f));
   }

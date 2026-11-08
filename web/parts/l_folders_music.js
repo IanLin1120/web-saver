@@ -84,10 +84,7 @@ function folderMenu(f, redraw){
     ['folder', '移到其他資料夾下', function(){ folderPicker(f.cat, '把「' + f.name + '」移到…', function(pid){ if(LF.move(f.id, pid)){ toast('已移動'); redraw(); } }, {exclude: f.id, cur: f.parent}); }, false, '可以變成某個資料夾的子資料夾'],
     ['back', '往前排', function(){ LF.shift(f.id, -1); setCfg('lib.fsort', 'manual'); redraw(); }],
     ['fwd', '往後排', function(){ LF.shift(f.id, 1); setCfg('lib.fsort', 'manual'); redraw(); }],
-    ['palette', '換圖示', function(){
-      var grid = h('div', {class: 'chips'}); var s3 = openSheet({title: '選擇圖示', body: grid});
-      FOLDER_ICONS.forEach(function(ic){ grid.appendChild(h('button', {class: 'fchip' + (ic === f.icon ? ' on' : ''), text: ic, style: {fontSize: '20px'}, onclick: function(){ f.icon = ic; LF.save(); s3.close(); redraw(); }})); });
-    }],
+    ['palette', '換圖示', function(){ iconPicker('「' + f.name + '」的圖示', f.icon, function(ic){ f.icon = ic; LF.save(); redraw(); }); }],
     ['trash', '刪除資料夾', async function(){
       var n = LF.count(f.id);
       if(await confirmDlg('刪除「' + esc(f.name) + '」？', n ? '裡面的 ' + n + ' 個檔案與子資料夾會移到上一層，<b>檔案不會被刪除</b>。' : '這個資料夾是空的。', '刪除資料夾', true)){ if(LV.folder[f.cat] === f.id) LV.folder[f.cat] = f.parent; LF.remove(f.id); redraw(); }
@@ -163,7 +160,7 @@ Music.el.addEventListener('timeupdate', function(){
   var ml = $('miniLyr'); if(ml){ var cl = currentLyric(); var cur = Music.cur(); ml.textContent = cl || (cur && cur.artist) || '音樂庫'; }
 });
 function songTitle(it){ return (it.title && it.title !== it.name ? it.title : it.name.replace(/\.[^.]+$/, '')); }
-function musicItems(){ return Lib.items.filter(function(it){ return it.cat === 'audio' && !SEC.hidden(it); }).sort(function(a, b){ return b.time - a.time; }); }
+function musicItems(){ return Lib.items.filter(function(it){ return it.cat === 'audio' && areaOf(it) === 'audio' && !SEC.hidden(it); }).sort(function(a, b){ return b.time - a.time; }); }
 Music.mini = function(){
   var it = this.cur(); if(!it){ Dock.remove('music'); return; }
   var th = Lib.thumb(it), playing = !this.el.paused;

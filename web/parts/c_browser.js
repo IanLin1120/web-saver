@@ -164,7 +164,8 @@ function favEl(it, sm){
 async function newFolderDlg(){
   var name = await promptDlg('新增收藏夾', '', '例如：食譜、工作、旅遊');
   if(!name) return null;
-  var f = {id: 'f' + uid(), name: name.slice(0, 30), icon: FOLDER_ICONS[(BM.folders.length + 1) % FOLDER_ICONS.length]};
+  var emo = await new Promise(function(res){ iconPicker('「' + name + '」的圖示', '', res, function(){ res(''); }); });
+  var f = {id: 'f' + uid(), name: name.slice(0, 30), icon: emo || FOLDER_ICONS[(BM.folders.length + 1) % FOLDER_ICONS.length]};
   BM.folders.push(f); BM.save(); return f;
 }
 function folderChips(sel, onPick, opts){
@@ -174,7 +175,7 @@ function folderChips(sel, onPick, opts){
     box.textContent = '';
     if(opts.all) box.appendChild(h('button', {class: 'fchip' + (sel === '' ? ' on' : ''), onclick: function(){ sel = ''; draw(); onPick(''); }}, '全部 ', h('span', {class: 'c', text: BM.items.length})));
     BM.folders.forEach(function(f){
-      box.appendChild(h('button', {class: 'fchip' + (sel === f.id ? ' on' : ''), onclick: function(){ sel = f.id; draw(); onPick(f.id); }}, f.icon + ' ' + f.name + ' ', h('span', {class: 'c', text: BM.count(f.id)})));
+      box.appendChild(h('button', {class: 'fchip' + (sel === f.id ? ' on' : ''), onclick: function(){ sel = opts.toggle && sel === f.id ? '' : f.id; draw(); onPick(sel); }}, f.icon + ' ' + f.name + ' ', h('span', {class: 'c', text: BM.count(f.id)})));
     });
     if(opts.add !== false) box.appendChild(h('button', {class: 'fchip add', html: icon('plus', 'sm') + '新增收藏夾', onclick: async function(){ var f = await newFolderDlg(); if(f){ sel = f.id; draw(); onPick(f.id); } }}));
   }
@@ -206,20 +207,20 @@ $('bStar').addEventListener('click', openStar);
 
 async function openBmList(startFolder){
   if(SEC.cfg.bm && SEC.has() && !(await SEC.need('解鎖我的收藏'))) return;
-  /* 不顯示「全部」：預設打開上次看的收藏夾（搜尋時會找所有收藏夾） */
-  var sel = startFolder || lsGet('ws.bmSel', '') || '', q = '';
-  if(!BM.folder(sel) || !BM.folders.some(function(f){ return f.id === sel; })) sel = (BM.folders.filter(function(f){ return BM.items.some(function(x){ return x.folder === f.id; }); })[0] || BM.folders[0] || {}).id || '';
+  /* 跟檔案庫一樣：先不打開任何收藏夾，點上方的收藏夾才顯示，再點一次收起來（搜尋時會找全部） */
+  var sel = startFolder || '', q = '';
   var list = h('div');
   var search = h('input', {type: 'search', placeholder: '搜尋收藏…', style: {width: '100%', marginBottom: '10px'}});
   search.oninput = function(){ q = search.value.trim().toLowerCase(); draw(); };
-  var chips = folderChips(sel, function(id){ sel = id; lsSet('ws.bmSel', id); draw(); }, {});
+  var chips = folderChips(sel, function(id){ sel = id; draw(); }, {toggle: true});
   chips.className = 'folderBar';
   var body = h('div', null, search, chips, list);
   var manage = h('span', {style: {display: 'contents'}}, h('button', {class: 'ib', html: icon('history'), title: '瀏覽記錄', onclick: function(){ s.close(); openHistory(); }}), h('button', {class: 'ib', html: icon('edit'), title: '管理收藏夾', onclick: function(){ manageFolders(function(){ chips.redraw(); draw(); }); }}));
   var s = openSheet({title: '我的收藏', icon: 'books', body: body, tall: true, headExtra: manage});
   function draw(){
     list.textContent = '';
-    var items = BM.items.filter(function(x){ return (q || !sel || x.folder === sel) && (!q || (x.title + ' ' + x.url).toLowerCase().indexOf(q) >= 0); });
+    if(!sel && !q){ list.appendChild(h('div', {class: 'libClosed', html: icon('books', 'lg') + '<b>點上方的收藏夾顯示內容</b><span class="sub">再點一次可以收起來；也可以直接搜尋全部收藏</span>'})); paintIcons(list); return; }
+    var items = BM.items.filter(function(x){ return (q || x.folder === sel) && (!q || (x.title + ' ' + x.url).toLowerCase().indexOf(q) >= 0); });
     if(!items.length){ list.appendChild(h('div', {class: 'empty', html: '<div class="big">☆</div>' + (BM.items.length ? '這裡沒有符合的收藏' : '還沒有收藏任何網頁<br><span class="sub">瀏覽時按上方的 ☆ 就能收藏，並放進自訂的收藏夾</span>')})); return; }
     items.forEach(function(it){
       var f = BM.folder(it.folder);
@@ -250,14 +251,11 @@ function manageFolders(after){
     list.textContent = '';
     BM.folders.forEach(function(f, i){
       list.appendChild(h('div', {class: 'bmItem'},
-        h('div', {class: 'fav sm', text: f.icon, style: {fontSize: '20px'}, onclick: function(){
-          var grid = h('div', {class: 'chips'});
-          var s3 = openSheet({title: '選擇圖示', body: grid});
-          FOLDER_ICONS.forEach(function(ic){ grid.appendChild(h('button', {class: 'fchip' + (ic === f.icon ? ' on' : ''), text: ic, style: {fontSize: '20px'}, onclick: function(){ f.icon = ic; BM.save(); s3.close(); draw(); }})); });
-        }}),
+        h('div', {class: 'fav sm', text: f.icon, style: {fontSize: '20px'}, onclick: function(){ iconPicker('「' + f.name + '」的圖示', f.icon, function(ic){ f.icon = ic; BM.save(); draw(); }); }}),
         h('div', {class: 't'}, h('b', {text: f.name}), h('div', {class: 'sub', text: BM.count(f.id) + ' 個網頁'})),
         i > 0 ? h('button', {class: 'ib', html: icon('back'), style: {transform: 'rotate(90deg)'}, title: '往上移', onclick: function(){ BM.folders.splice(i, 1); BM.folders.splice(i - 1, 0, f); BM.save(); draw(); }}) : null,
-        h('button', {class: 'ib', html: icon('edit'), onclick: async function(){ var n = await promptDlg('重新命名收藏夾', f.name); if(n){ f.name = n.slice(0, 30); BM.save(); draw(); } }}),
+        h('button', {class: 'ib', html: icon('palette'), title: '換圖示', onclick: function(){ iconPicker('「' + f.name + '」的圖示', f.icon, function(ic){ f.icon = ic; BM.save(); draw(); }); }}),
+        h('button', {class: 'ib', html: icon('edit'), title: '重新命名', onclick: async function(){ var n = await promptDlg('重新命名收藏夾', f.name); if(n){ f.name = n.slice(0, 30); BM.save(); draw(); } }}),
         BM.folders.length > 1 ? h('button', {class: 'ib', html: icon('trash'), style: {color: 'var(--danger)'}, onclick: async function(){
           var n = BM.count(f.id);
           if(!(await confirmDlg('刪除「' + esc(f.name) + '」？', n ? '裡面的 ' + n + ' 個收藏會移到「' + esc(BM.folders.filter(function(x){ return x !== f; })[0].name) + '」。' : '這個收藏夾是空的。', '刪除', true))) return;
