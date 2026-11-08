@@ -182,24 +182,47 @@ final class ScreenRec {
         emit("start", r.need == 2 ? "錄影中（含聲音）" : "錄影中（沒有錄音權限，只錄畫面）");
     }
 
+    /* 錄影片播出的聲音：
+       之前編碼器忙碌時會把讀到的聲音直接丟掉，聲音軌就比影片短（前面對得上、後面沒聲音）。
+       現在讀到的每一段都一定送進編碼器（等它有空），時間戳也會跟實際經過的時間對齊。 */
     private static void audioLoop(Rec r) {
         byte[] buf = new byte[8192];
         long frames = 0;
+        final long base = System.nanoTime();
         try {
             while (true) {
                 int n = r.stop ? -1 : r.ar.read(buf, 0, buf.length);
-                if (r.paused && n >= 0) continue;
-                int ix = r.aenc.dequeueInputBuffer(10000);
-                if (ix >= 0) {
-                    ByteBuffer ib = r.aenc.getInputBuffer(ix);
-                    long pts = frames * 1_000_000L / 44100;
-                    if (n < 0 || r.stop) { r.aenc.queueInputBuffer(ix, 0, 0, pts, MediaCodec.BUFFER_FLAG_END_OF_STREAM); drain(r, r.aenc, false, false); break; }
-                    ib.clear();
-                    int len = Math.min(n, ib.remaining());
-                    ib.put(buf, 0, len);
-                    r.aenc.queueInputBuffer(ix, 0, len, pts, 0);
-                    frames += len / 4;
+                if (n == 0) continue;
+                if (n > 0 && r.paused) continue;
+                if (n < 0 || r.stop) {
+                    while (true) {
+                        int ix = r.aenc.dequeueInputBuffer(10000);
+                        if (ix >= 0) { r.aenc.queueInputBuffer(ix, 0, 0, frames * 1_000_000L / 44100, MediaCodec.BUFFER_FLAG_END_OF_STREAM); break; }
+                        drainOnce(r, r.aenc, false);
+                    }
+                    drain(r, r.aenc, false, false);
+                    break;
                 }
+                /* 對齊實際時間：系統少給了聲音資料時，往後跳，避免越錄越短 */
+                long pausedNow = r.pausedUs;
+                long wallUs = (System.nanoTime() - base) / 1000 - pausedNow - (n / 4) * 1_000_000L / 44100;
+                long ptsUs = frames * 1_000_000L / 44100;
+                if (wallUs - ptsUs > 150_000) frames = wallUs * 44100 / 1_000_000L;
+                int off = 0;
+                while (off < n) {
+                    int ix = r.aenc.dequeueInputBuffer(5000);
+                    if (ix < 0) { drainOnce(r, r.aenc, false); continue; }
+                    ByteBuffer ib = r.aenc.getInputBuffer(ix);
+                    ib.clear();
+                    int len = Math.min(n - off, ib.remaining());
+                    len -= len % 4;
+                    if (len <= 0) { r.aenc.queueInputBuffer(ix, 0, 0, frames * 1_000_000L / 44100, 0); break; }
+                    ib.put(buf, off, len);
+                    r.aenc.queueInputBuffer(ix, 0, len, frames * 1_000_000L / 44100, 0);
+                    frames += len / 4;
+                    off += len;
+                }
+                drainOnce(r, r.aenc, false);
                 drainOnce(r, r.aenc, false);
             }
         } catch (Throwable t) { /* ignore */ }
