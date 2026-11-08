@@ -702,3 +702,9 @@ body.brFull #brArea{left:0!important;right:0!important;top:0!important;bottom:0!
 .aiStat{margin:10px 0 0;font-weight:700;font-size:13.5px}
 .aiStat.ok{color:#3c9a5f}.aiStat.bad{color:var(--danger)}
 .aiAsk textarea{min-height:0;height:38px;border-radius:0;box-shadow:none}
+.aiPlayer video{position:absolute;inset:0;width:100%;height:100%;background:#000;object-fit:contain}
+.aiPlayer .spin{border-color:rgba(255,255,255,.3);border-top-color:#fff}
+.aiPErr{position:absolute;inset:0;background:rgba(0,0,0,.66);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:14px;text-align:center;font-size:13.5px}
+.aiPErr .btn{color:var(--text)}
+.aiSegW{flex-wrap:wrap;border-radius:18px}.aiSegW button{flex:1 0 auto}
+.aiPErr .btn{background:#fff!important;color:#3a2e22!important;border:0}

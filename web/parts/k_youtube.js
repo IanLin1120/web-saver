@@ -678,8 +678,11 @@ on('dl', function(d){
 
 /* 字幕：抓 YouTube 的字幕（WebVTT）轉成 SRT */
 async function ytFetchSrt(c, tr){
-  var u = c.url + (c.url.indexOf('?') < 0 ? '?' : '&') + 'fmt=vtt' + (tr ? '&tlang=' + tr : '');
-  var r = await natHttp('GET', u, {'Referer': 'https://m.youtube.com/'});
+  /* 有些用戶端（例如 YouTube VR 版）給的字幕網址是相對路徑「/api/timedtext?…」，要補上網域 */
+  var base = /^\/\//.test(c.url) ? 'https:' + c.url : /^\//.test(c.url) ? 'https://www.youtube.com' + c.url : c.url;
+  var u = base.replace(/([?&])fmt=[^&]*&?/, '$1').replace(/[?&]$/, '') + (base.indexOf('?') < 0 ? '?' : '&') + 'fmt=vtt' + (tr ? '&tlang=' + tr : '');
+  var hd = {'Referer': 'https://m.youtube.com/'}; if(c.ua) hd['User-Agent'] = c.ua;
+  var r = await natHttp('GET', u, hd);
   var vtt = String(r.body || '');
   if(r.status >= 400 || vtt.indexOf('-->') < 0) throw new Error('YouTube 沒有回傳字幕內容（HTTP ' + r.status + '）');
   var n = 0, last = '';
