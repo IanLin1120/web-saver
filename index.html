@@ -4,7 +4,7 @@
 <script>/* 線上更新開機程式：手機上若已下載比 APK 內建更新的介面版本，就改用新版（存在 IndexedDB）。
    新版連續兩次沒有正常開啟 → 自動退回 APK 內建版本。網址加上 #builtin 也會強制使用內建版本。 */
 (function () {
-  var B = '1.8.1'; if (!window.__OTA) window.APP_BUILTIN = B;
+  var B = '1.8.2'; if (!window.__OTA) window.APP_BUILTIN = B;
   if (window.__OTA || location.hash.indexOf('builtin') >= 0) return;
   var v = null; try { v = JSON.parse(localStorage.getItem('ws.ota') || 'null'); } catch (e) {}
   function gt(a, b) { a = String(a).split('.').map(Number); b = String(b).split('.').map(Number); for (var i = 0; i < Math.max(a.length, b.length); i++) { var p = a[i] || 0, q = b[i] || 0; if (p !== q) return p > q; } return false; }
@@ -1959,7 +1959,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 /* ============================================================
    核心：工具函式、圖示、主題、面板（sheet）、提示、原生橋接、頁面切換
    ============================================================ */
-const APP_VERSION = '1.8.1';
+const APP_VERSION = '1.8.2';
 var GH = {user: 'IanLin1120', repo: 'web-saver',
   get pages(){ return 'https://' + this.user.toLowerCase() + '.github.io/' + this.repo + '/'; },
   get web(){ return 'https://github.com/' + this.user + '/' + this.repo; }};
@@ -7438,7 +7438,9 @@ SEC.verify = function(title){
   if(!SEC.has()) return new Promise(function(res){
     dialog('先設定密碼', '要保護帳號密碼，請先設定一組 6 位數密碼（之後每次查看、複製、修改都要輸入密碼或指紋）。', [['設定密碼', function(){ setPinFlow(); res(false); }], ['取消', function(){ res(false); }, '']]);
   });
-  return new Promise(function(res){ pinPad({title: title || '驗證身分', bio: true, onOk: function(){ res(true); }, onCancel: function(){ res(false); }}); });
+  /* 只驗證這一次：不能因為看了一組密碼，就把檔案庫和收藏的鎖一起解開 */
+  var wasOpen = SEC.open();
+  return new Promise(function(res){ pinPad({title: title || '驗證身分', bio: true, onOk: function(){ if(!wasOpen){ if(isApp && NAT.has('lockRelock')) NAT.call('lockRelock'); else SEC.webOk = false; } res(true); }, onCancel: function(){ res(false); }}); });
 };
 
 /* 數字鍵盤（像手機鎖屏） */
