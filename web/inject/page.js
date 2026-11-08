@@ -357,6 +357,7 @@
     }
     if (scr) {
       clearInterval(scr.tm); clearInterval(scr.fw);
+      unmuteOthers();
       if (scr.style == null) scr.v.removeAttribute('style'); else scr.v.setAttribute('style', scr.style);
       scr.v.controls = scr.controls;
       scr = null;
@@ -364,9 +365,20 @@
     window.__wsRecPaused = 0;
     return '{}';
   }
+  /* 只留滿版這一部的聲音：其他影片（背景還在播的、預先載入的）一律靜音，不暫停、不影響畫面；離開滿版時恢復 */
+  function muteOthers(v) {
+    vids().forEach(function (o) {
+      if (o === v || o.muted) return;
+      try { o.__wsMutedByUs = true; o.muted = true; } catch (e) {}
+    });
+  }
+  function unmuteOthers() {
+    vids().forEach(function (o) { if (o.__wsMutedByUs) { try { o.muted = false; } catch (e) {} delete o.__wsMutedByUs; } });
+  }
   function follow() {
     if (!scr || scr.rec) return;
     var cur = scr.v;
+    muteOthers(cur);
     /* 目前這個還在而且在播：不用換 */
     var shown = cur.isConnected && cur.getClientRects().length > 0;
     if (shown && !cur.paused && !cur.ended) return;
@@ -382,7 +394,9 @@
     scr.v = best; scr.style = best.getAttribute('style'); scr.controls = best.controls;
     best.controls = false;
     FULL.forEach(function (p) { best.style.setProperty(p[0], p[1], 'important'); });
+    delete best.__wsMutedByUs;
     ensureSound(best);
+    muteOthers(best);
   }
   /* 確保影片有聲音（不調整音量）：
      1. 找網頁上標示「目前是靜音」的聲音按鈕（例如 IG 右上角的喇叭），找到就按它，讓網站自己把聲音打開
@@ -436,6 +450,8 @@
     var v = scr.v, maxT = 0, lastT = -1, stall = 0, t0 = Date.now(), done = false;
     clearInterval(scr.tm);
     try { v.loop = false; v.playbackRate = 1; } catch (e) {}
+    delete v.__wsMutedByUs;
+    muteOthers(v);
     ensureSound(v);
     /* 一定從頭開始：先跳到 0 秒再播放，1.5 秒後再檢查一次（有些網站的播放器會把位置改回去） */
     var toStart = function () { try { if (isFinite(v.duration) && v.duration > 0 && v.currentTime > 0.5) v.currentTime = 0; } catch (e) {} };
@@ -446,6 +462,7 @@
     v.addEventListener('ended', end);
     scr.tm = setInterval(function () {
       if (window.__wsRecPaused) { stall = 0; return; }
+      muteOthers(v);
       if (v.muted || soundBtn(v)) ensureSound(v);
       var d = isFinite(v.duration) ? v.duration : 0, t = v.currentTime || 0;
       if (Math.abs(t - lastT) < 0.05) stall++; else stall = 0;
