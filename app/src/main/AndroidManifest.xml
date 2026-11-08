@@ -85,6 +85,17 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity-alias>
+        <activity-alias
+            android:name=".AiAlias"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:label="AI 摘要（網頁擷取）">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
 
         <provider
             android:name=".LibProvider"

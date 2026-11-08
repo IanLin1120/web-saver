@@ -330,8 +330,9 @@ public class MainActivity extends Activity {
         } else if (Intent.ACTION_VIEW.equals(i.getAction()) && i.getData() != null) u = i.getDataString();
         if (u != null) {
             final String url = u;
-            final boolean dl = i.getComponent() != null && i.getComponent().getClassName().endsWith("DownloadAlias");
-            Util.MAIN.postDelayed(new Runnable() { @Override public void run() { emit(dl ? "shareDl" : "openUrl", url); } }, 900);
+            final String cn = i.getComponent() != null ? i.getComponent().getClassName() : "";
+            final String ev = cn.endsWith("DownloadAlias") ? "shareDl" : cn.endsWith("AiAlias") ? "shareAi" : "openUrl";
+            Util.MAIN.postDelayed(new Runnable() { @Override public void run() { emit(ev, url); } }, 900);
         }
     }
 
@@ -460,8 +461,11 @@ public class MainActivity extends Activity {
         emit("perm", "");
     }
 
+    static volatile boolean visible = false;
+
     @Override protected void onResume() {
         super.onResume();
+        visible = true;
         if (br != null) br.onResume();
         if (yt != null) yt.onResume();
         emit("resume", "");
@@ -472,6 +476,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onPause() {
         super.onPause();
+        visible = false;
         try { CookieManager.getInstance().flush(); } catch (Throwable t) { /* ignore */ }
         /* 進入子母畫面時也會觸發 onPause：這時不能暫停網頁，否則影片會停 */
         boolean pip = Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode();

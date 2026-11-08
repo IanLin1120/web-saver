@@ -650,4 +650,10 @@ public class Bridge {
     @JavascriptInterface public void aipSeek(final double sec, final boolean play) { ui(new Runnable() { @Override public void run() { AiPlayer.seek(sec, play); } }); }
     @JavascriptInterface public void aipToggle() { ui(new Runnable() { @Override public void run() { AiPlayer.toggle(); } }); }
     @JavascriptInterface public String aipState() { return AiPlayer.state(); }
+    @JavascriptInterface public void aiPost(String id, String url, String headers, String body, int retries) { AiHttp.post(a, id, url, headers, body, retries); }
+    @JavascriptInterface public String aiTake(String id) { return AiHttp.take(id); }
+    @JavascriptInterface public void aiCancel(String id) { AiHttp.cancel(id); }
+    @JavascriptInterface public void aiLabel(String s) { AiHttp.setLabel(a, s); }
+    @JavascriptInterface public void aiNotice(String head, String text) { KeepAlive.notice(a, head, text); }
+    @JavascriptInterface public boolean appVisible() { return MainActivity.visible; }
 }

@@ -708,3 +708,17 @@ body.brFull #brArea{left:0!important;right:0!important;top:0!important;bottom:0!
 .aiPErr .btn{color:var(--text)}
 .aiSegW{flex-wrap:wrap;border-radius:18px}.aiSegW button{flex:1 0 auto}
 .aiPErr .btn{background:#fff!important;color:#3a2e22!important;border:0}
+.aiPick{width:100%;display:flex;align-items:center;gap:10px;text-align:left;border:1.5px solid var(--border-soft);background:var(--surface-2);border-radius:14px;padding:10px 12px;font:inherit;color:var(--text);cursor:pointer}
+.aiPick b{display:block;font-size:15px}.aiPick small{display:block;color:var(--text-muted);font-size:12px;margin-top:2px}
+.aiFRow{display:flex;align-items:center;gap:12px;padding:8px;border-radius:16px;cursor:pointer}
+.aiFRow:active{background:var(--surface-2)}
+.aiFRow b{font-size:14.5px}.aiFRow small{display:block;color:var(--text-muted);font-size:11.5px;margin-top:2px}
+.aiFIc{position:relative;flex:none}
+.aiFIc>span{position:absolute;left:-4px;bottom:-4px;width:26px;height:26px;border-radius:9px;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;box-shadow:0 2px 6px var(--sh)}
+.aiFIc2{width:46px;height:46px;border-radius:14px;background:color-mix(in srgb,var(--accent) 16%,var(--surface-2));color:var(--accent);display:grid;place-items:center;flex:none}
+.aiChev{color:var(--text-muted)}
+.aiFHead{display:flex;align-items:center;gap:8px;margin:2px 0 10px}
+.aiFHead small{display:block;font-size:11.5px;color:var(--text-muted)}
+.aiFHead b{display:block;font-size:17px}
+.aiFHead .chip{font-size:12px;padding:6px 10px;background:var(--surface-3);color:var(--text);white-space:nowrap}
+.aiHRow .spin.sm{width:18px;height:18px}

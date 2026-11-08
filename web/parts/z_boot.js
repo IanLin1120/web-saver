@@ -23,6 +23,8 @@ window.onNativeBack = function(){
   if(curView === 'ai'){
     if(AI.exp){ AI.exp = false; aiRender(); return true; }
     if(AI.id){ aiClose(); return true; }
+    if(AIV.sub){ AIV.sub = ''; aiRender(); return true; }
+    if(AIV.ch){ AIV.ch = ''; aiRender(); return true; }
     return false;
   }
   /* 檔案庫：在子資料夾裡就回上一層；其他情況不切換分頁（要切換只能按下方的四個按鈕） */

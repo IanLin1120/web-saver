@@ -135,7 +135,9 @@ public class KeepAlive extends Service {
     @Override public IBinder onBind(Intent i) { return null; }
 
     /** 下載／擷取完成：震動並發通知 */
-    static void done(Context c, String title) {
+    static void done(Context c, String title) { notice(c, "下載完成", title); }
+
+    static void notice(Context c, String head, String title) {
         if (c == null) return;
         Context ac = c.getApplicationContext();
         try {
@@ -150,7 +152,7 @@ public class KeepAlive extends Service {
             Intent open = new Intent(ac, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
             PendingIntent pi = PendingIntent.getActivity(ac, 3, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(ac, CH_DONE) : new Notification.Builder(ac);
-            b.setSmallIcon(android.R.drawable.stat_sys_download_done).setContentTitle("下載完成").setContentText(title == null ? "" : title).setAutoCancel(true).setContentIntent(pi);
+            b.setSmallIcon(android.R.drawable.stat_sys_download_done).setContentTitle(head).setContentText(title == null ? "" : title).setAutoCancel(true).setContentIntent(pi);
             ((NotificationManager) ac.getSystemService(NOTIFICATION_SERVICE)).notify((int) (System.currentTimeMillis() % 100000) + 100, b.build());
         } catch (Throwable t) { /* 沒有通知權限 */ }
     }
