@@ -4,7 +4,7 @@
 <script>/* 線上更新開機程式：手機上若已下載比 APK 內建更新的介面版本，就改用新版（存在 IndexedDB）。
    新版連續兩次沒有正常開啟 → 自動退回 APK 內建版本。網址加上 #builtin 也會強制使用內建版本。 */
 (function () {
-  var B = '1.7.6'; if (!window.__OTA) window.APP_BUILTIN = B;
+  var B = '1.7.7'; if (!window.__OTA) window.APP_BUILTIN = B;
   if (window.__OTA || location.hash.indexOf('builtin') >= 0) return;
   var v = null; try { v = JSON.parse(localStorage.getItem('ws.ota') || 'null'); } catch (e) {}
   function gt(a, b) { a = String(a).split('.').map(Number); b = String(b).split('.').map(Number); for (var i = 0; i < Math.max(a.length, b.length); i++) { var p = a[i] || 0, q = b[i] || 0; if (p !== q) return p > q; } return false; }
@@ -1825,7 +1825,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 /* ============================================================
    核心：工具函式、圖示、主題、面板（sheet）、提示、原生橋接、頁面切換
    ============================================================ */
-const APP_VERSION = '1.7.6';
+const APP_VERSION = '1.7.7';
 var GH = {user: 'IanLin1120', repo: 'web-saver',
   get pages(){ return 'https://' + this.user.toLowerCase() + '.github.io/' + this.repo + '/'; },
   get web(){ return 'https://github.com/' + this.user + '/' + this.repo; }};
@@ -2500,6 +2500,8 @@ BM.remove = function(it){ BM.items = BM.items.filter(function(x){ return x !== i
 BM.norm = function(u){ return String(u || '').replace(/#.*$/, '').replace(/\/$/, ''); };
 BM.find = function(u){ var n = BM.norm(u); return BM.items.filter(function(x){ return BM.norm(x.url) === n; })[0]; };
 BM.folder = function(id){ return BM.folders.filter(function(f){ return f.id === id; })[0] || BM.folders[0]; };
+/* 單一收藏夾上鎖：沒解鎖時看不到內容，也不會出現在搜尋結果 */
+BM.locked = function(fid){ var f = BM.folders.filter(function(x){ return x.id === fid; })[0]; return !!(f && f.lock && SEC.has() && !SEC.open()); };
 BM.count = function(fid){ return BM.items.filter(function(x){ return x.folder === fid; }).length; };
 var FOLDER_ICONS = ['📁', '⭐', '📖', '📰', '🛒', '🍳', '🎬', '🎵', '💼', '📚', '✈️', '💡', '🧪', '🏠', '❤️', '🎮', '🏃', '💰', '🧾', '🔧'];
 function favEl(it, sm){
@@ -2520,7 +2522,11 @@ function folderChips(sel, onPick, opts){
     box.textContent = '';
     if(opts.all) box.appendChild(h('button', {class: 'fchip' + (sel === '' ? ' on' : ''), onclick: function(){ sel = ''; draw(); onPick(''); }}, '全部 ', h('span', {class: 'c', text: BM.items.length})));
     BM.folders.forEach(function(f){
-      box.appendChild(h('button', {class: 'fchip' + (sel === f.id ? ' on' : ''), onclick: function(){ sel = opts.toggle && sel === f.id ? '' : f.id; draw(); onPick(sel); }}, f.icon + ' ' + f.name + ' ', h('span', {class: 'c', text: BM.count(f.id)})));
+      var lk = BM.locked(f.id);
+      box.appendChild(h('button', {class: 'fchip' + (sel === f.id ? ' on' : ''), onclick: async function(){
+        if(!(opts.toggle && sel === f.id) && lk && !(await SEC.need('解鎖收藏夾「' + f.name + '」'))) return;
+        sel = opts.toggle && sel === f.id ? '' : f.id; draw(); onPick(sel);
+      }}, (lk ? '🔒' : f.icon) + ' ' + f.name + ' ', h('span', {class: 'c', text: lk ? '' : BM.count(f.id)})));
     });
     if(opts.add !== false) box.appendChild(h('button', {class: 'fchip add', html: icon('plus', 'sm') + '新增收藏夾', onclick: async function(){ var f = await newFolderDlg(); if(f){ sel = f.id; draw(); onPick(f.id); } }}));
   }
@@ -2565,7 +2571,7 @@ async function openBmList(startFolder){
   function draw(){
     list.textContent = '';
     if(!sel && !q){ list.appendChild(h('div', {class: 'libClosed', html: icon('books', 'lg') + '<b>點上方的收藏夾顯示內容</b><span class="sub">再點一次可以收起來；也可以直接搜尋全部收藏</span>'})); paintIcons(list); return; }
-    var items = BM.items.filter(function(x){ return (q || x.folder === sel) && (!q || (x.title + ' ' + x.url).toLowerCase().indexOf(q) >= 0); });
+    var items = BM.items.filter(function(x){ return !BM.locked(x.folder) && (q || x.folder === sel) && (!q || (x.title + ' ' + x.url).toLowerCase().indexOf(q) >= 0); });
     if(!items.length){ list.appendChild(h('div', {class: 'empty', html: '<div class="big">☆</div>' + (BM.items.length ? '這裡沒有符合的收藏' : '還沒有收藏任何網頁<br><span class="sub">瀏覽時按上方的 ☆ 就能收藏，並放進自訂的收藏夾</span>')})); return; }
     items.forEach(function(it){
       var f = BM.folder(it.folder);
@@ -2599,6 +2605,11 @@ function manageFolders(after){
         h('div', {class: 'fav sm', text: f.icon, style: {fontSize: '20px'}, onclick: function(){ iconPicker('「' + f.name + '」的圖示', f.icon, function(ic){ f.icon = ic; BM.save(); draw(); }); }}),
         h('div', {class: 't'}, h('b', {text: f.name}), h('div', {class: 'sub', text: BM.count(f.id) + ' 個網頁'})),
         i > 0 ? h('button', {class: 'ib', html: icon('back'), style: {transform: 'rotate(90deg)'}, title: '往上移', onclick: function(){ BM.folders.splice(i, 1); BM.folders.splice(i - 1, 0, f); BM.save(); draw(); }}) : null,
+        h('button', {class: 'ib', html: icon(f.lock ? 'lock' : 'key'), title: f.lock ? '解除上鎖' : '上鎖', style: f.lock ? {color: 'var(--accent)'} : null, onclick: async function(){
+          if(!SEC.has()){ dialog('還沒有設定密碼', '要先設定一組密碼，才能把收藏夾鎖起來。', [['設定密碼', function(){ setPinFlow(); }], ['取消', null, '']]); return; }
+          if(!(await SEC.need(f.lock ? '解除上鎖' : '上鎖「' + f.name + '」'))) return;
+          f.lock = !f.lock; BM.save(); toast(f.lock ? '🔒 已上鎖「' + f.name + '」' : '已解除上鎖'); draw();
+        }}),
         h('button', {class: 'ib', html: icon('palette'), title: '換圖示', onclick: function(){ iconPicker('「' + f.name + '」的圖示', f.icon, function(ic){ f.icon = ic; BM.save(); draw(); }); }}),
         h('button', {class: 'ib', html: icon('edit'), title: '重新命名', onclick: async function(){ var n = await promptDlg('重新命名收藏夾', f.name); if(n){ f.name = n.slice(0, 30); BM.save(); draw(); } }}),
         BM.folders.length > 1 ? h('button', {class: 'ib', html: icon('trash'), style: {color: 'var(--danger)'}, onclick: async function(){
@@ -3823,6 +3834,8 @@ function renderCats(){
     bar.appendChild(h('button', {class: 'fchip' + (LV.open && CFG.lib.cat === c[0] ? ' on' : ''), html: (lk ? icon('lock', 'sm') : areaIcon(c[0], 'sm')) + areaName(c[0]) + ' <span class="c">' + (lk ? '🔒' : (cnt[c[0]] || 0)) + '</span>', onclick: async function(){
       if(LV.open && CFG.lib.cat === c[0]){ LV.open = false; renderLibList(); renderCats(); return; }
       if(lk && !(await SEC.need('解鎖「' + (c[0] === 'audio' ? '音樂庫' : c[1]) + '」'))) return;
+      /* 切換分類時一律從最上層（第一層資料夾）開始，不會停在上次看到的子資料夾裡 */
+      LV.folder[c[0]] = '';
       LV.open = true; setCfg('lib.cat', c[0]); renderLibList(); renderCats();
     }}));
   });
@@ -7038,16 +7051,25 @@ function openWatchSettings(){
   var s = openSheet({title: '其他 App 下載自動搬回', icon: 'download', body: body, tall: true});
   function draw(){
     body.textContent = '';
-    body.appendChild(h('div', {class: 'sub', style: {lineHeight: '1.7', marginBottom: '10px'}, text: '每個下載 App 各設定一個下載資料夾。用它們下載完的影片、音樂、字幕會自動搬進檔案庫（字幕接在影片上），搬完刪掉原檔。App 回到前景時會檢查，交給其他 App 下載後的 3 小時內也會每 15 秒檢查一次。'}));
+    body.appendChild(h('div', {class: 'sub', style: {lineHeight: '1.7', marginBottom: '10px'}, text: '每個下載 App 可以設定一個或好幾個下載資料夾（例如影片、音樂分開的資料夾都加進來）。用它們下載完的影片、音樂、字幕會自動搬進檔案庫（字幕接在影片上），搬完刪掉原檔。App 回到前景時會檢查，交給其他 App 下載後的 3 小時內也會每 15 秒檢查一次。'}));
     var apps = shareApps(), ds = watchDirs();
     if(!ds.length) body.appendChild(h('div', {class: 'empty', html: '還沒有設定任何 App'}));
-    ds.forEach(function(d){
-      var a = apps.filter(function(x){ return x.pkg === d.pkg; })[0];
-      body.appendChild(h('div', {class: 'setRow'},
-        a && a.icon ? h('img', {src: a.icon, style: {width: '36px', height: '36px', borderRadius: '9px', flex: 'none'}}) : h('span', {class: 'ic', html: icon('folder')}),
-        h('div', {class: 'grow', style: {minWidth: 0}}, h('b', {text: d.label || (a && a.label) || '（不指定 App）'}), h('div', {class: 'sub ell', text: '資料夾：' + d.name})),
-        d.pkg ? h('button', {class: 'btn sm ghost', text: '更換', onclick: function(){ NAT.call('watchAddFor', d.pkg, d.label || ''); }}) : null,
-        h('button', {class: 'btn sm ghost', text: '移除', onclick: function(){ NAT.call('watchRemoveFor', d.uri, d.pkg || ''); }})));
+    /* 依 App 分組：同一個 App 可以設定好幾個資料夾（例如 Snaptube 的影片、音樂分開存） */
+    var groups = [], byPkg = {};
+    ds.forEach(function(d){ var k = d.pkg || ''; if(!byPkg[k]){ byPkg[k] = {pkg: k, label: d.label, dirs: []}; groups.push(byPkg[k]); } byPkg[k].dirs.push(d); });
+    groups.forEach(function(g){
+      var a = apps.filter(function(x){ return x.pkg === g.pkg; })[0];
+      var card = h('div', {class: 'card glass', style: {padding: '10px 12px', marginBottom: '10px'}});
+      card.appendChild(h('div', {style: {display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px'}},
+        a && a.icon ? h('img', {src: a.icon, style: {width: '34px', height: '34px', borderRadius: '9px', flex: 'none'}}) : h('span', {class: 'ic', html: icon('folder')}),
+        h('b', {class: 'grow', text: g.label || (a && a.label) || '（不指定 App）'}),
+        h('button', {class: 'btn sm', html: icon('plus', 'sm') + '加資料夾', onclick: function(){ NAT.call('watchAddFor', g.pkg, g.label || (a && a.label) || ''); }})));
+      g.dirs.forEach(function(d){
+        card.appendChild(h('div', {style: {display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderTop: '1px solid var(--line)'}},
+          h('span', {html: icon('folder', 'sm')}), h('div', {class: 'grow sub ell', style: {minWidth: 0}, text: d.name}),
+          h('button', {class: 'btn sm ghost', text: '移除', onclick: function(){ NAT.call('watchRemoveFor', d.uri, d.pkg || ''); }})));
+      });
+      body.appendChild(card);
     });
     var del = h('input', {type: 'checkbox', checked: NAT.call('importDelGet'), onchange: function(){ NAT.call('importDel', this.checked); }});
     body.appendChild(h('label', {class: 'opt'}, del, h('div', {class: 'grow'}, h('b', {text: '搬回後刪除原檔'}), h('div', {class: 'sub', text: '避免手機裡存兩份'}))));
@@ -7326,7 +7348,7 @@ function openSecurity(){
     body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.trash, onchange: function(){ SEC.cfg.trash = this.checked; SEC.save(); }}),
       h('div', {class: 'grow'}, h('b', {text: '垃圾桶'}), h('div', {class: 'sub', text: '打開檔案庫或收藏的垃圾桶（還原、永久刪除）前要解鎖'}))));
     body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.bm, onchange: function(){ SEC.cfg.bm = this.checked; SEC.save(); }}),
-      h('div', {class: 'grow'}, h('b', {text: '我的收藏'}), h('div', {class: 'sub', text: '打開收藏清單前要解鎖'}))));
+      h('div', {class: 'grow'}, h('b', {text: '整個我的收藏'}), h('div', {class: 'sub', text: '打開收藏清單前要解鎖。只想鎖某個收藏夾（例如「社交」）：在「我的收藏 → 右上角鉛筆（管理收藏夾）」按那個收藏夾的鎖頭'}))));
     Object.keys(CAT).forEach(function(k){
       body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.cats[k], onchange: function(){ if(this.checked) SEC.cfg.cats[k] = true; else delete SEC.cfg.cats[k]; SEC.save(); fire('secChanged'); }}),
         h('div', {class: 'grow'}, h('b', {text: '檔案庫：' + (k === 'audio' ? '音樂庫' : CAT[k].name)}), h('div', {class: 'sub', text: '整個分類（包含裡面的資料夾）'}))));
