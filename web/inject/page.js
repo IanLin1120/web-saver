@@ -240,6 +240,23 @@
     [].slice.call(document.querySelectorAll('iframe')).forEach(function (f) { try { out = out.concat([].slice.call(f.contentDocument.querySelectorAll('video'))); } catch (e) {} });
     return out;
   }
+  /* 畫面上看得到的那一部（IG 等網站會同時放好幾個 video：預先載入的下一則、隱藏的…） */
+  function pickVisible() {
+    var best = null, bs = -1;
+    vids().forEach(function (v) {
+      var r = v.getBoundingClientRect();
+      var w = Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0)), h = Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
+      var area = w * h;
+      if (area < 400) return;
+      var cs = getComputedStyle(v);
+      if (cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity === 0) return;
+      /* 正中央點下去是不是這部影片（或蓋在它上面的控制層） */
+      var cx = Math.max(r.left, 0) + w / 2, cy = Math.max(r.top, 0) + h / 2, top = document.elementFromPoint(cx, cy), onTop = top && (top === v || v.parentElement && v.parentElement.contains(top) || top.contains(v));
+      var sc = area * (onTop ? 3 : 1) * (!v.paused ? 2 : 1) * (v.readyState >= 2 ? 1.5 : 1);
+      if (sc > bs) { bs = sc; best = v; }
+    });
+    return best;
+  }
   function pick(src) {
     var vs = vids(), best = null;
     if (src) vs.forEach(function (v) { if (!best && (v.currentSrc === src || v.src === src)) best = v; });
@@ -340,20 +357,37 @@
   var scr = null;
   function screen(on) {
     if (on) {
-      var v = (scr && scr.v) || pick('');
+      var v = (scr && scr.v) || pickVisible() || pick('');
       if (!v) return JSON.stringify({err: 'novideo'});
       if (!scr) scr = {v: v, style: v.getAttribute('style'), controls: v.controls, rect: v.getBoundingClientRect()};
       v.controls = false;
       /* 跟原本「在目前分頁錄製」一樣：只改影片本身的樣式（不加遮罩，之前加黑色遮罩會在某些網站蓋住影片變成全黑） */
       [['position', 'fixed'], ['inset', '0'], ['left', '0'], ['top', '0'], ['width', '100vw'], ['height', '100vh'], ['max-width', 'none'], ['max-height', 'none'],
        ['z-index', '2147483647'], ['object-fit', 'contain'], ['background', '#000'], ['margin', '0'], ['transform', 'none']].forEach(function (p) { v.style.setProperty(p[0], p[1], 'important'); });
+      /* 影片被包在有 transform 的容器裡時，fixed 不會蓋滿整個螢幕：暫時把那些容器的 transform 拿掉 */
+      setTimeout(function () {
+        var r = v.getBoundingClientRect();
+        if (r.width >= innerWidth - 2 && r.height >= innerHeight - 2) return;
+        scr.anc = scr.anc || [];
+        for (var el = v.parentElement; el && el !== document.documentElement; el = el.parentElement) {
+          var cs = getComputedStyle(el);
+          if (cs.transform !== 'none' || cs.filter !== 'none' || cs.perspective !== 'none' || /paint|layout|strict|content/.test(cs.contain || '') || /transform|filter/.test(cs.willChange || '') || cs.backdropFilter && cs.backdropFilter !== 'none') {
+            scr.anc.push([el, el.getAttribute('style')]);
+            [['transform', 'none'], ['filter', 'none'], ['perspective', 'none'], ['contain', 'none'], ['will-change', 'auto'], ['backdrop-filter', 'none']].forEach(function (k) { el.style.setProperty(k[0], k[1], 'important'); });
+          }
+        }
+      }, 60);
+      /* 其他影片全部暫停、靜音，避免錄到兩個聲音 */
+      vids().forEach(function (o) { if (o !== v) { try { o.pause(); o.__wsWasMuted = o.muted; o.muted = true; } catch (e) {} } });
       ensureSound(v);
       var pp = v.play(); if (pp && pp.catch) pp.catch(function () {});
-      return JSON.stringify({w: v.videoWidth || 16, h: v.videoHeight || 9, dur: isFinite(v.duration) ? v.duration : 0});
+      return JSON.stringify({w: v.videoWidth || 0, h: v.videoHeight || 0, dur: isFinite(v.duration) ? v.duration : 0});
     }
     if (scr) {
       clearInterval(scr.tm);
       if (scr.style == null) scr.v.removeAttribute('style'); else scr.v.setAttribute('style', scr.style);
+      (scr.anc || []).forEach(function (x) { if (x[1] == null) x[0].removeAttribute('style'); else x[0].setAttribute('style', x[1]); });
+      vids().forEach(function (o) { if (o !== scr.v && o.__wsWasMuted != null) { try { o.muted = o.__wsWasMuted; } catch (e) {} delete o.__wsWasMuted; } });
       scr.v.controls = scr.controls;
       scr = null;
     }
@@ -421,6 +455,8 @@
     v.addEventListener('ended', end);
     scr.tm = setInterval(function () {
       if (window.__wsRecPaused) { stall = 0; return; }
+      if (!v.isConnected) { end(); return; }
+      vids().forEach(function (o) { if (o !== v && !o.paused) { try { o.pause(); o.muted = true; } catch (e) {} } });
       if (v.muted || soundBtn(v)) ensureSound(v);
       var d = isFinite(v.duration) ? v.duration : 0, t = v.currentTime || 0;
       if (Math.abs(t - lastT) < 0.05) stall++; else stall = 0;

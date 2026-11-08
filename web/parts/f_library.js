@@ -127,7 +127,7 @@ var LV = {sel: new Set(), selMode: false, q: '', folder: lsGet('ws.lvFolder', {}
 on('view', function(e){ if(e.v === 'lib' && e.prev !== 'lib'){ LV.open = false; if(typeof renderCats === 'function'){ renderCats(); renderLibList(); } } });
 function libVisible(){
   var c = CFG.lib, q = LV.q.toLowerCase();
-  var L = Lib.items.filter(function(it){ return (c.cat === 'all' || it.cat === c.cat) && (!q || (it.name + ' ' + (it.title || '') + ' ' + (it.src || '')).toLowerCase().indexOf(q) >= 0); });
+  var L = Lib.items.filter(function(it){ return !SEC.hidden(it) && (c.cat === 'all' || it.cat === c.cat) && (!q || (it.name + ' ' + (it.title || '') + ' ' + (it.src || '')).toLowerCase().indexOf(q) >= 0); });
   var k = c.sort, d = c.dir === 'asc' ? 1 : -1;
   L.sort(function(a, b){
     if(k === 'name') return d * String(a.name).localeCompare(String(b.name), 'zh-Hant', {numeric: true});
@@ -177,7 +177,12 @@ function renderCats(){
   Lib.items.forEach(function(it){ cnt[it.cat] = (cnt[it.cat] || 0) + 1; });
   [['all', '全部', 'layers']].concat(Object.keys(CAT).map(function(k){ return [k, CAT[k].name, CAT[k].ic]; })).forEach(function(c){
     if(c[0] !== 'all' && !cnt[c[0]]) return;
-    bar.appendChild(h('button', {class: 'fchip' + (LV.open && CFG.lib.cat === c[0] ? ' on' : ''), html: icon(c[2], 'sm') + (c[0] === 'audio' ? '音樂庫' : c[1]) + ' <span class="c">' + (cnt[c[0]] || 0) + '</span>', onclick: function(){ if(LV.open && CFG.lib.cat === c[0]) LV.open = false; else { LV.open = true; setCfg('lib.cat', c[0]); } renderLibList(); renderCats(); }}));
+    var lk = c[0] !== 'all' && SEC.has() && SEC.catLocked(c[0]) && !SEC.open();
+    bar.appendChild(h('button', {class: 'fchip' + (LV.open && CFG.lib.cat === c[0] ? ' on' : ''), html: icon(lk ? 'lock' : c[2], 'sm') + (c[0] === 'audio' ? '音樂庫' : c[1]) + ' <span class="c">' + (lk ? '🔒' : (cnt[c[0]] || 0)) + '</span>', onclick: async function(){
+      if(LV.open && CFG.lib.cat === c[0]){ LV.open = false; renderLibList(); renderCats(); return; }
+      if(lk && !(await SEC.need('解鎖「' + (c[0] === 'audio' ? '音樂庫' : c[1]) + '」'))) return;
+      LV.open = true; setCfg('lib.cat', c[0]); renderLibList(); renderCats();
+    }}));
   });
   if(CFG.lib.cat !== 'all' && !cnt[CFG.lib.cat]){ CFG.lib.cat = 'all'; saveCfg(); }
 }
@@ -222,12 +227,15 @@ function renderLibList(){
       var fg = h('div', {class: 'fgrid'});
       subs.forEach(function(f){
         var n = LF.count(f.id), press = 0;
-        var el = h('div', {class: 'ftile'}, h('span', {class: 'fi', text: f.icon || '📁'}), h('div', {class: 't'}, h('b', {text: f.name}), h('div', {class: 'sub', text: n + ' 個檔案' + (LF.children(cat, f.id).length ? '・' + LF.children(cat, f.id).length + ' 個資料夾' : '')})),
+        var flk = SEC.has() && SEC.folderLocked(f.id) && !SEC.open();
+        var el = h('div', {class: 'ftile'}, h('span', {class: 'fi', text: flk ? '🔒' : (f.icon || '📁')}), h('div', {class: 't'}, h('b', {text: f.name}), h('div', {class: 'sub', text: flk ? '已上鎖・點一下解鎖' : n + ' 個檔案' + (LF.children(cat, f.id).length ? '・' + LF.children(cat, f.id).length + ' 個資料夾' : '')})),
           h('button', {class: 'ib', html: icon('more'), onclick: function(e){ e.stopPropagation(); folderMenu(f, redraw); }}));
         el.addEventListener('pointerdown', function(){ press = setTimeout(function(){ press = -1; folderMenu(f, redraw); }, 500); });
         el.addEventListener('pointerup', function(){ if(press === -1){ press = 0; return; } clearTimeout(press); press = 0; });
         el.addEventListener('pointercancel', function(){ clearTimeout(press); press = 0; });
-        el.addEventListener('click', function(){ if(LV.selMode && LV.sel.size){ var ids = Array.from(LV.sel); LF.setItems(ids, f.id); LV.sel.clear(); LV.selMode = false; toast('已移到「' + f.name + '」'); renderLib(); return; } LV.folder[cat] = f.id; redraw(); });
+        el.addEventListener('click', async function(){
+          if(flk){ if(!(await SEC.need('解鎖「' + f.name + '」'))) return; LV.folder[cat] = f.id; redraw(); return; }
+          if(LV.selMode && LV.sel.size){ var ids = Array.from(LV.sel); LF.setItems(ids, f.id); LV.sel.clear(); LV.selMode = false; toast('已移到「' + f.name + '」'); renderLib(); return; } LV.folder[cat] = f.id; redraw(); });
         fg.appendChild(el);
       });
       box.appendChild(fg);

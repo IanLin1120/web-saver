@@ -376,7 +376,7 @@ async function viewVideo(it, body){
   }
   /* 其他功能（像 MX Player／VLC）：鎖定畫面、循環、旋轉、上一部／下一部、播完自動下一部、雙指縮放 */
   var moreB = h('button', {class: 'vpI', html: icon('more')});
-  var vids = (Viewer.list && Viewer.list.length > 1 ? Viewer.list : Lib.items).filter(function(x){ return x.cat === 'video'; });
+  var vids = (Viewer.list && Viewer.list.length > 1 ? Viewer.list : Lib.items).filter(function(x){ return x.cat === 'video' && !SEC.hidden(x); });
   var vi = vids.findIndex(function(x){ return x.id === it.id; });
   function goVid(d){ var n = vids[vi + d]; if(n){ Viewer.open(n, Viewer.list); } else fl(d > 0 ? '已經是最後一部' : '已經是第一部'); }
   var LOOP = lsGet('ws.vpLoop', false), AUTONEXT = lsGet('ws.vpNext', false);

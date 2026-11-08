@@ -266,6 +266,23 @@ public class Bridge {
     @JavascriptInterface public void dlMax(int n) { a.prefs.edit().putInt("dlMax", n).apply(); MediaDl.setMax(n); }
     @JavascriptInterface public int dlMaxGet() { return a.prefs.getInt("dlMax", 3); }
     @JavascriptInterface public int dlRunning() { return MediaDl.JOBS.size(); }
+    /* ---------- 上鎖 ---------- */
+    @JavascriptInterface public boolean lockHas() { return Lock.has(a); }
+    @JavascriptInterface public boolean lockSession() { return Lock.session; }
+    @JavascriptInterface public void lockRelock() { Lock.session = false; }
+    @JavascriptInterface public String lockSet(String oldPin, String pin) { return Lock.set(a, oldPin, pin); }
+    @JavascriptInterface public boolean lockClear(String pin) { return Lock.clear(a, pin); }
+    @JavascriptInterface public String lockCheck(String pin) { return Lock.check(a, pin).toString(); }
+    @JavascriptInterface public boolean lockBioOk() { return Lock.bioAvailable(a); }
+    @JavascriptInterface public void lockBio(final String title) { ui(new Runnable() { @Override public void run() { Lock.bio(a, title); } }); }
+    @JavascriptInterface public int intruderPending() { return Lock.pending(a); }
+    @JavascriptInterface public void intruderSeen() { Lock.seen(a); }
+    @JavascriptInterface public void intruderNotify() { Lock.notifyPending(a); }
+    @JavascriptInterface public void intruderCam(boolean on) { a.prefs.edit().putBoolean("intruderCam", on).apply(); }
+    @JavascriptInterface public boolean intruderCamGet() { return a.prefs.getBoolean("intruderCam", true); }
+    @JavascriptInterface public boolean camOk() { return a.checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED; }
+    @JavascriptInterface public void camAsk() { ui(new Runnable() { @Override public void run() { a.requestPermissions(new String[] {android.Manifest.permission.CAMERA}, 1011); } }); }
+
     /* ---------- 多分頁 ---------- */
     @JavascriptInterface public String tabsList() {
         JSONArray out = new JSONArray();

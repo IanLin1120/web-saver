@@ -80,6 +80,8 @@ var IC = {
   incog: '<path d="M3 11h18"/><path d="M6 11l1.5-5h9L18 11"/><circle cx="7.5" cy="16" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/><path d="M10 16h4"/>',
   expand: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   shrink: '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
+  fingerprint: '<path d="M12 11v3.5a6 6 0 0 1-1.2 3.6"/><path d="M8.5 11a3.5 3.5 0 0 1 7 0v2.5c0 2.2-.6 4.3-1.7 6"/><path d="M5.5 15.5c.3-1 .5-2.1.5-3.2V11a6 6 0 0 1 10.7-3.7"/><path d="M18 11v2a16 16 0 0 1-.6 4.4"/><path d="M3.7 8A9.5 9.5 0 0 1 20 6.2"/>',
+  lock: '<rect x="5" y="10.5" width="14" height="10" rx="2.2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
   grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
   check: '<path d="M4.5 12.5l5 5 10-11"/>',
   checks: '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 12.5l3 3 5-6"/>',

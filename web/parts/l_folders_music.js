@@ -70,7 +70,16 @@ function folderPicker(cat, title, cb, opts){
   draw();
 }
 function folderMenu(f, redraw){
-  menu(f.icon + ' ' + f.name, [
+  if(f.sys){
+    menu(f.icon + ' ' + f.name, [['key', '這是系統資料夾', function(){}, false, '固定上鎖、不能刪除；裡面的照片可以個別刪除']]);
+    return;
+  }
+  var lockItem = ['key', f.lock ? '解除上鎖' : '上鎖', async function(){
+    if(!SEC.has()){ dialog('還沒有設定密碼', '要先設定一組密碼，才能把資料夾鎖起來。', [['設定密碼', function(){ setPinFlow(); }], ['取消', null, '']]); return; }
+    if(!(await SEC.need(f.lock ? '解除上鎖' : '上鎖「' + f.name + '」'))) return;
+    f.lock = !f.lock; LF.save(); toast(f.lock ? '🔒 已上鎖「' + f.name + '」（離開 App 後要密碼才能打開）' : '已解除上鎖'); redraw();
+  }, false, f.lock ? '' : '裡面的檔案和子資料夾都要密碼才能看'];
+  menu(f.icon + ' ' + f.name, [lockItem,
     ['edit', '重新命名', async function(){ var n = await promptDlg('重新命名資料夾', f.name); if(n){ f.name = n.slice(0, 40); LF.save(); redraw(); } }],
     ['folder', '移到其他資料夾下', function(){ folderPicker(f.cat, '把「' + f.name + '」移到…', function(pid){ if(LF.move(f.id, pid)){ toast('已移動'); redraw(); } }, {exclude: f.id, cur: f.parent}); }, false, '可以變成某個資料夾的子資料夾'],
     ['back', '往前排', function(){ LF.shift(f.id, -1); setCfg('lib.fsort', 'manual'); redraw(); }],
@@ -154,7 +163,7 @@ Music.el.addEventListener('timeupdate', function(){
   var ml = $('miniLyr'); if(ml){ var cl = currentLyric(); var cur = Music.cur(); ml.textContent = cl || (cur && cur.artist) || '音樂庫'; }
 });
 function songTitle(it){ return (it.title && it.title !== it.name ? it.title : it.name.replace(/\.[^.]+$/, '')); }
-function musicItems(){ return Lib.items.filter(function(it){ return it.cat === 'audio'; }).sort(function(a, b){ return b.time - a.time; }); }
+function musicItems(){ return Lib.items.filter(function(it){ return it.cat === 'audio' && !SEC.hidden(it); }).sort(function(a, b){ return b.time - a.time; }); }
 Music.mini = function(){
   var it = this.cur(); if(!it){ Dock.remove('music'); return; }
   var th = Lib.thumb(it), playing = !this.el.paused;

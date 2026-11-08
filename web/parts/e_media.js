@@ -376,7 +376,8 @@ async function startScreenRec(){
   SREC.on = true; SREC.rec = false;
   SREC.title = (typeof pageVideoName === 'function' ? pageVideoName() : (BR.title || '影片')).replace(/\.[a-z0-9]{2,4}$/i, '');
   setBrFull(true, true);
-  NAT.call('uiFull', true, info.w > info.h);
+  /* 依影片本身的方向：橫的才轉橫向，直的維持直向 */
+  NAT.call('uiFull', true, info.w > 0 && info.w > info.h * 1.05);
   fabSync();
   NAT.call('recCtl', 'ready');
 }

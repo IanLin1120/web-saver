@@ -44,6 +44,9 @@ function renderSettings(){
 
   /* 帳號密碼 */
   var credN = isApp ? ((NAT.json('credList') || {list: []}).list || []).length : 0;
+  P.appendChild(card('lock', '隱私與安全', [
+    h('div', {class: 'setRow', onclick: function(){ openSecurity(); }}, h('span', {class: 'ic', html: icon('lock')}), h('div', {class: 'grow'}, h('b', {text: '密碼鎖與指紋'}), h('div', {class: 'sub', text: SEC.has() ? '已設定・鎖住帳號密碼、檔案庫分類或資料夾' : '設定密碼，把帳號密碼、檔案庫的分類或資料夾鎖起來'})), h('span', {class: 'chev', text: '›'}))
+  ]));
   P.appendChild(card('key', '帳號密碼', [
     swRow('登入時詢問是否儲存密碼', '密碼用手機 Android Keystore 的金鑰加密，只存在這支手機', 'pw'),
     h('div', {class: 'setRow', onclick: openCreds}, h('span', {class: 'ic', html: icon('key')}), h('div', {class: 'grow'}, h('b', {text: '管理已儲存的帳號'}), h('div', {class: 'sub', text: isApp ? credN + ' 組帳號・可查看、複製、刪除、手動新增' : '需 APK 版'})), h('span', {class: 'chev', text: '›'}))

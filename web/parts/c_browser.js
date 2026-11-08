@@ -324,7 +324,8 @@ function openQuick(){
 $('bQuick').addEventListener('click', openQuick);
 
 /* ---------- 帳號密碼管理 ---------- */
-function openCreds(){
+async function openCreds(){
+  if(SEC.cfg.vault && SEC.has() && !(await SEC.need('解鎖帳號密碼'))) return;
   var body = h('div');
   var s = openSheet({title: '帳號密碼', icon: 'key', body: body, tall: true});
   function draw(){
