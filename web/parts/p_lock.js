@@ -34,6 +34,14 @@ SEC.need = function(title){
   return new Promise(function(res){ pinPad({title: title || '輸入密碼解鎖', bio: true, onOk: function(){ res(true); fire('secChanged'); }, onCancel: function(){ res(false); }}); });
 };
 
+/* 每次都要驗證（帳號密碼專用）：就算這次已經解鎖過，也要再輸入密碼或指紋 */
+SEC.verify = function(title){
+  if(!SEC.has()) return new Promise(function(res){
+    dialog('先設定密碼', '要保護帳號密碼，請先設定一組 6 位數密碼（之後每次查看、複製、修改都要輸入密碼或指紋）。', [['設定密碼', function(){ setPinFlow(); res(false); }], ['取消', function(){ res(false); }, '']]);
+  });
+  return new Promise(function(res){ pinPad({title: title || '驗證身分', bio: true, onOk: function(){ res(true); }, onCancel: function(){ res(false); }}); });
+};
+
 /* 數字鍵盤（像手機鎖屏） */
 function pinPad(o){
   var pin = '', done = false;
@@ -127,8 +135,8 @@ function openSecurity(){
     if(isApp) body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: SEC.cfg.bio !== false, disabled: !bioOk(), onchange: function(){ SEC.cfg.bio = this.checked; SEC.save(); }}),
       h('div', {class: 'grow'}, h('b', {text: '可以用指紋／臉部解鎖'}), h('div', {class: 'sub', text: bioOk() ? '解鎖時自動跳出指紋，也可以改用密碼' : '這支手機沒有設定指紋或臉部辨識'}))));
     body.appendChild(h('div', {class: 'ydSect', text: '要上鎖的地方'}));
-    body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.vault, onchange: function(){ SEC.cfg.vault = this.checked; SEC.save(); }}),
-      h('div', {class: 'grow'}, h('b', {text: '帳號密碼'}), h('div', {class: 'sub', text: '查看、複製、修改已儲存的帳號密碼前要解鎖'}))));
+    body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: true, disabled: true}),
+      h('div', {class: 'grow'}, h('b', {text: '帳號密碼（每一組都要單獨驗證）'}), h('div', {class: 'sub', text: '固定開啟：每次查看、複製、修改任何一組密碼，都要重新輸入密碼或指紋；離開畫面就馬上鎖回去'}))));
     body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.trash, onchange: function(){ SEC.cfg.trash = this.checked; SEC.save(); }}),
       h('div', {class: 'grow'}, h('b', {text: '垃圾桶'}), h('div', {class: 'sub', text: '打開檔案庫或收藏的垃圾桶（還原、永久刪除）前要解鎖'}))));
     body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.bm, onchange: function(){ SEC.cfg.bm = this.checked; SEC.save(); }}),

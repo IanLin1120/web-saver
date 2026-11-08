@@ -19,7 +19,13 @@ window.onNativeBack = function(){
     if(YTB.url && !/^https:\/\/m\.youtube\.com\/?(\?|#|$)/.test(YTB.url)){ ytEnsure(YT_HOME); return true; }
     return false;
   }
-  if(curView !== 'browse'){ showView('browse'); return true; }
+  /* 檔案庫：在子資料夾裡就回上一層；其他情況不切換分頁（要切換只能按下方的四個按鈕） */
+  if(curView === 'lib'){
+    var cat = CFG.lib.cat, cf = LV.open && LV.folder[cat];
+    if(cf){ var pf = LF.get(cf); LV.folder[cat] = pf && pf.parent || ''; renderLib(); return true; }
+    return false;
+  }
+  if(curView !== 'browse') return false;
   if(BR.home && BR.loaded){ leaveHome(); return true; }
   if(!BR.home && !BR.back && BR.loaded){ goHome(); return true; }
   return false;      /* 交給原生：瀏覽器上一頁，或把 App 退到背景 */

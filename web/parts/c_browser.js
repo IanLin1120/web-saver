@@ -339,24 +339,40 @@ function openQuick(){
 $('bQuick').addEventListener('click', openQuick);
 
 /* ---------- 帳號密碼管理 ---------- */
+/* 帳號密碼：每一組密碼的「查看／複製／修改」都要單獨驗證（密碼或指紋），就算其他地方已經解鎖過；
+   顯示的密碼 30 秒後、或離開這個畫面就馬上遮起來 */
 async function openCreds(){
-  if(SEC.cfg.vault && SEC.has() && !(await SEC.need('解鎖帳號密碼'))) return;
-  var body = h('div');
-  var s = openSheet({title: '帳號密碼', icon: 'key', body: body, tall: true});
+  var body = h('div'), timers = [];
+  /* App 切到背景（回主畫面、切到別的 App）時，顯示中的密碼馬上遮起來 */
+  var onHide = function(){ if(document.hidden) draw(); };
+  document.addEventListener('visibilitychange', onHide);
+  var s = openSheet({title: '帳號密碼', icon: 'key', body: body, tall: true, onClose: function(){ timers.forEach(clearTimeout); document.removeEventListener('visibilitychange', onHide); body.textContent = ''; }});
   function draw(){
     body.textContent = '';
     if(!isApp){ body.appendChild(h('div', {class: 'note', html: '網頁版無法登入其他網站，也無法替其他網站填入密碼。請使用 APK 版：登入時會詢問是否儲存，下次可一鍵填入。'})); return; }
     var d = NAT.json('credList') || {list: [], never: []};
+    if(!SEC.has()) body.appendChild(h('div', {class: 'note', style: {marginBottom: '10px'}, html: '⚠️ 還沒有設定密碼：建議先到「設定 → 隱私與安全」設定密碼，之後查看任何一組密碼都要先驗證。'}));
     var box = h('div', {class: 'card glass'});
     if(!d.list.length) box.appendChild(h('div', {class: 'empty', html: '<div class="big">🔑</div>還沒有儲存任何帳號<br><span class="sub">在網站登入時，下方會跳出「要儲存密碼嗎？」</span>'}));
     d.list.forEach(function(c){
-      var pw = h('span', {class: 'sub', text: '••••••••'});
+      var pw = h('span', {class: 'sub', text: '••••••••'}), shown = false, tm = 0;
+      function hide(){ shown = false; pw.textContent = '••••••••'; eye.innerHTML = icon('eye'); clearTimeout(tm); }
+      var eye = h('button', {class: 'ib', html: icon('eye'), title: '查看（要驗證）', onclick: async function(){
+        if(shown){ hide(); return; }
+        if(!(await SEC.verify('查看「' + c.host + '」的密碼'))) return;
+        shown = true; pw.textContent = NAT.call('credReveal', c.host, c.user); eye.innerHTML = icon('eyeOff');
+        tm = setTimeout(hide, 30000); timers.push(tm);
+      }});
       box.appendChild(h('div', {class: 'credRow'},
         h('div', {class: 'fav sm', text: (c.host.replace(/^www\./, '')[0] || '?').toUpperCase()}),
         h('div', {class: 't'}, h('b', {text: c.user || '（未填帳號）'}), h('div', {class: 'sub ell', text: c.host}), pw),
-        h('button', {class: 'ib', html: icon('eye'), onclick: function(){ pw.textContent = pw.textContent.indexOf('•') === 0 ? NAT.call('credReveal', c.host, c.user) : '••••••••'; }}),
-        h('button', {class: 'ib', html: icon('copy'), onclick: function(){ copyText(NAT.call('credReveal', c.host, c.user)); }}),
-        h('button', {class: 'ib', html: icon('trash'), style: {color: 'var(--danger)'}, onclick: async function(){ if(await confirmDlg('刪除這組帳號？', esc(c.user) + '<br>' + esc(c.host), '刪除', true)){ NAT.call('credDel', c.host, c.user); draw(); } }})));
+        eye,
+        h('button', {class: 'ib', html: icon('copy'), title: '複製密碼（要驗證）', onclick: async function(){ if(await SEC.verify('複製「' + c.host + '」的密碼')) copyText(NAT.call('credReveal', c.host, c.user)); }}),
+        h('button', {class: 'ib', html: icon('edit'), title: '修改（要驗證）', onclick: async function(){ if(await SEC.verify('修改「' + c.host + '」的帳號密碼')) editCred(c, draw); }}),
+        h('button', {class: 'ib', html: icon('trash'), style: {color: 'var(--danger)'}, onclick: async function(){
+          if(!(await SEC.verify('刪除「' + c.host + '」的帳號密碼'))) return;
+          if(await confirmDlg('刪除這組帳號？', esc(c.user) + '<br>' + esc(c.host), '刪除', true)){ NAT.call('credDel', c.host, c.user); draw(); }
+        }})));
     });
     body.appendChild(box);
     /* 手動新增 */
@@ -378,6 +394,23 @@ async function openCreds(){
     paintIcons(body);
   }
   draw();
+}
+/* 修改一組帳號密碼（已經驗證過才會進來）；關掉就清空，不留在畫面上 */
+function editCred(c, after){
+  var uIn = h('input', {type: 'text', value: c.user || '', autocomplete: 'off'});
+  var pIn = h('input', {type: 'password', value: NAT.call('credReveal', c.host, c.user) || '', autocomplete: 'new-password'});
+  var showB = h('button', {class: 'btn sm ghost', text: '顯示', onclick: function(){ pIn.type = pIn.type === 'password' ? 'text' : 'password'; showB.textContent = pIn.type === 'password' ? '顯示' : '隱藏'; }});
+  var s = openSheet({title: '修改帳號密碼', icon: 'edit', onClose: function(){ pIn.value = ''; },
+    body: h('div', null, h('div', {class: 'sub', style: {marginBottom: '10px'}, text: c.host}),
+      h('div', {class: 'field'}, h('div', {class: 'lbl'}, '帳號／Email'), uIn),
+      h('div', {class: 'field'}, h('div', {class: 'lbl'}, '密碼'), h('div', {style: {display: 'flex', gap: '8px'}}, pIn, showB))),
+    foot: h('button', {class: 'btn pri', text: '儲存修改', onclick: function(){
+      if(!pIn.value){ toast('密碼不能空白', true); return; }
+      var nu = uIn.value.trim();
+      if(nu !== (c.user || '')) NAT.call('credDel', c.host, c.user);
+      NAT.call('credSave', c.host, nu, pIn.value);
+      s.close(); toast('✓ 已修改'); if(after) after();
+    }})});
 }
 on('credAsk', function(d){
   /* 用面板顯示（面板永遠在網頁上面），不會再被網頁蓋住；也不會改變網頁大小 */
