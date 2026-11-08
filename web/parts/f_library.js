@@ -218,6 +218,8 @@ function renderCats(){
     bar.appendChild(h('button', {class: 'fchip' + (LV.open && CFG.lib.cat === c[0] ? ' on' : ''), html: (lk ? icon('lock', 'sm') : areaIcon(c[0], 'sm')) + areaName(c[0]) + ' <span class="c">' + (lk ? '🔒' : (cnt[c[0]] || 0)) + '</span>', onclick: async function(){
       if(LV.open && CFG.lib.cat === c[0]){ LV.open = false; renderLibList(); renderCats(); return; }
       if(lk && !(await SEC.need('解鎖「' + (c[0] === 'audio' ? '音樂庫' : c[1]) + '」'))) return;
+      /* 切換分類時一律從最上層（第一層資料夾）開始，不會停在上次看到的子資料夾裡 */
+      LV.folder[c[0]] = '';
       LV.open = true; setCfg('lib.cat', c[0]); renderLibList(); renderCats();
     }}));
   });

@@ -158,6 +158,8 @@ BM.remove = function(it){ BM.items = BM.items.filter(function(x){ return x !== i
 BM.norm = function(u){ return String(u || '').replace(/#.*$/, '').replace(/\/$/, ''); };
 BM.find = function(u){ var n = BM.norm(u); return BM.items.filter(function(x){ return BM.norm(x.url) === n; })[0]; };
 BM.folder = function(id){ return BM.folders.filter(function(f){ return f.id === id; })[0] || BM.folders[0]; };
+/* 單一收藏夾上鎖：沒解鎖時看不到內容，也不會出現在搜尋結果 */
+BM.locked = function(fid){ var f = BM.folders.filter(function(x){ return x.id === fid; })[0]; return !!(f && f.lock && SEC.has() && !SEC.open()); };
 BM.count = function(fid){ return BM.items.filter(function(x){ return x.folder === fid; }).length; };
 var FOLDER_ICONS = ['📁', '⭐', '📖', '📰', '🛒', '🍳', '🎬', '🎵', '💼', '📚', '✈️', '💡', '🧪', '🏠', '❤️', '🎮', '🏃', '💰', '🧾', '🔧'];
 function favEl(it, sm){
@@ -178,7 +180,11 @@ function folderChips(sel, onPick, opts){
     box.textContent = '';
     if(opts.all) box.appendChild(h('button', {class: 'fchip' + (sel === '' ? ' on' : ''), onclick: function(){ sel = ''; draw(); onPick(''); }}, '全部 ', h('span', {class: 'c', text: BM.items.length})));
     BM.folders.forEach(function(f){
-      box.appendChild(h('button', {class: 'fchip' + (sel === f.id ? ' on' : ''), onclick: function(){ sel = opts.toggle && sel === f.id ? '' : f.id; draw(); onPick(sel); }}, f.icon + ' ' + f.name + ' ', h('span', {class: 'c', text: BM.count(f.id)})));
+      var lk = BM.locked(f.id);
+      box.appendChild(h('button', {class: 'fchip' + (sel === f.id ? ' on' : ''), onclick: async function(){
+        if(!(opts.toggle && sel === f.id) && lk && !(await SEC.need('解鎖收藏夾「' + f.name + '」'))) return;
+        sel = opts.toggle && sel === f.id ? '' : f.id; draw(); onPick(sel);
+      }}, (lk ? '🔒' : f.icon) + ' ' + f.name + ' ', h('span', {class: 'c', text: lk ? '' : BM.count(f.id)})));
     });
     if(opts.add !== false) box.appendChild(h('button', {class: 'fchip add', html: icon('plus', 'sm') + '新增收藏夾', onclick: async function(){ var f = await newFolderDlg(); if(f){ sel = f.id; draw(); onPick(f.id); } }}));
   }
@@ -223,7 +229,7 @@ async function openBmList(startFolder){
   function draw(){
     list.textContent = '';
     if(!sel && !q){ list.appendChild(h('div', {class: 'libClosed', html: icon('books', 'lg') + '<b>點上方的收藏夾顯示內容</b><span class="sub">再點一次可以收起來；也可以直接搜尋全部收藏</span>'})); paintIcons(list); return; }
-    var items = BM.items.filter(function(x){ return (q || x.folder === sel) && (!q || (x.title + ' ' + x.url).toLowerCase().indexOf(q) >= 0); });
+    var items = BM.items.filter(function(x){ return !BM.locked(x.folder) && (q || x.folder === sel) && (!q || (x.title + ' ' + x.url).toLowerCase().indexOf(q) >= 0); });
     if(!items.length){ list.appendChild(h('div', {class: 'empty', html: '<div class="big">☆</div>' + (BM.items.length ? '這裡沒有符合的收藏' : '還沒有收藏任何網頁<br><span class="sub">瀏覽時按上方的 ☆ 就能收藏，並放進自訂的收藏夾</span>')})); return; }
     items.forEach(function(it){
       var f = BM.folder(it.folder);
@@ -257,6 +263,11 @@ function manageFolders(after){
         h('div', {class: 'fav sm', text: f.icon, style: {fontSize: '20px'}, onclick: function(){ iconPicker('「' + f.name + '」的圖示', f.icon, function(ic){ f.icon = ic; BM.save(); draw(); }); }}),
         h('div', {class: 't'}, h('b', {text: f.name}), h('div', {class: 'sub', text: BM.count(f.id) + ' 個網頁'})),
         i > 0 ? h('button', {class: 'ib', html: icon('back'), style: {transform: 'rotate(90deg)'}, title: '往上移', onclick: function(){ BM.folders.splice(i, 1); BM.folders.splice(i - 1, 0, f); BM.save(); draw(); }}) : null,
+        h('button', {class: 'ib', html: icon(f.lock ? 'lock' : 'key'), title: f.lock ? '解除上鎖' : '上鎖', style: f.lock ? {color: 'var(--accent)'} : null, onclick: async function(){
+          if(!SEC.has()){ dialog('還沒有設定密碼', '要先設定一組密碼，才能把收藏夾鎖起來。', [['設定密碼', function(){ setPinFlow(); }], ['取消', null, '']]); return; }
+          if(!(await SEC.need(f.lock ? '解除上鎖' : '上鎖「' + f.name + '」'))) return;
+          f.lock = !f.lock; BM.save(); toast(f.lock ? '🔒 已上鎖「' + f.name + '」' : '已解除上鎖'); draw();
+        }}),
         h('button', {class: 'ib', html: icon('palette'), title: '換圖示', onclick: function(){ iconPicker('「' + f.name + '」的圖示', f.icon, function(ic){ f.icon = ic; BM.save(); draw(); }); }}),
         h('button', {class: 'ib', html: icon('edit'), title: '重新命名', onclick: async function(){ var n = await promptDlg('重新命名收藏夾', f.name); if(n){ f.name = n.slice(0, 30); BM.save(); draw(); } }}),
         BM.folders.length > 1 ? h('button', {class: 'ib', html: icon('trash'), style: {color: 'var(--danger)'}, onclick: async function(){

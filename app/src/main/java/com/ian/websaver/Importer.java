@@ -39,7 +39,6 @@ final class Importer {
             for (int i = 0; i < d.length(); i++) {
                 JSONObject o = d.getJSONObject(i);
                 if (o.optString("uri").equals(tree.toString()) && o.optString("pkg").equals(pkg == null ? "" : pkg)) continue;
-                if (pkg != null && !pkg.isEmpty() && pkg.equals(o.optString("pkg"))) continue;   // 每個 App 一個資料夾：換新的
                 out.put(o);
             }
             String name = Uri.decode(tree.getLastPathSegment() == null ? "" : tree.getLastPathSegment()).replaceFirst("^[^:]*:", "");

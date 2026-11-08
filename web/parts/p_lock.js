@@ -132,7 +132,7 @@ function openSecurity(){
     body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.trash, onchange: function(){ SEC.cfg.trash = this.checked; SEC.save(); }}),
       h('div', {class: 'grow'}, h('b', {text: '垃圾桶'}), h('div', {class: 'sub', text: '打開檔案庫或收藏的垃圾桶（還原、永久刪除）前要解鎖'}))));
     body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.bm, onchange: function(){ SEC.cfg.bm = this.checked; SEC.save(); }}),
-      h('div', {class: 'grow'}, h('b', {text: '我的收藏'}), h('div', {class: 'sub', text: '打開收藏清單前要解鎖'}))));
+      h('div', {class: 'grow'}, h('b', {text: '整個我的收藏'}), h('div', {class: 'sub', text: '打開收藏清單前要解鎖。只想鎖某個收藏夾（例如「社交」）：在「我的收藏 → 右上角鉛筆（管理收藏夾）」按那個收藏夾的鎖頭'}))));
     Object.keys(CAT).forEach(function(k){
       body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.cats[k], onchange: function(){ if(this.checked) SEC.cfg.cats[k] = true; else delete SEC.cfg.cats[k]; SEC.save(); fire('secChanged'); }}),
         h('div', {class: 'grow'}, h('b', {text: '檔案庫：' + (k === 'audio' ? '音樂庫' : CAT[k].name)}), h('div', {class: 'sub', text: '整個分類（包含裡面的資料夾）'}))));

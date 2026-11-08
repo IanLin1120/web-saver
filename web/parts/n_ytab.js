@@ -231,16 +231,25 @@ function openWatchSettings(){
   var s = openSheet({title: '其他 App 下載自動搬回', icon: 'download', body: body, tall: true});
   function draw(){
     body.textContent = '';
-    body.appendChild(h('div', {class: 'sub', style: {lineHeight: '1.7', marginBottom: '10px'}, text: '每個下載 App 各設定一個下載資料夾。用它們下載完的影片、音樂、字幕會自動搬進檔案庫（字幕接在影片上），搬完刪掉原檔。App 回到前景時會檢查，交給其他 App 下載後的 3 小時內也會每 15 秒檢查一次。'}));
+    body.appendChild(h('div', {class: 'sub', style: {lineHeight: '1.7', marginBottom: '10px'}, text: '每個下載 App 可以設定一個或好幾個下載資料夾（例如影片、音樂分開的資料夾都加進來）。用它們下載完的影片、音樂、字幕會自動搬進檔案庫（字幕接在影片上），搬完刪掉原檔。App 回到前景時會檢查，交給其他 App 下載後的 3 小時內也會每 15 秒檢查一次。'}));
     var apps = shareApps(), ds = watchDirs();
     if(!ds.length) body.appendChild(h('div', {class: 'empty', html: '還沒有設定任何 App'}));
-    ds.forEach(function(d){
-      var a = apps.filter(function(x){ return x.pkg === d.pkg; })[0];
-      body.appendChild(h('div', {class: 'setRow'},
-        a && a.icon ? h('img', {src: a.icon, style: {width: '36px', height: '36px', borderRadius: '9px', flex: 'none'}}) : h('span', {class: 'ic', html: icon('folder')}),
-        h('div', {class: 'grow', style: {minWidth: 0}}, h('b', {text: d.label || (a && a.label) || '（不指定 App）'}), h('div', {class: 'sub ell', text: '資料夾：' + d.name})),
-        d.pkg ? h('button', {class: 'btn sm ghost', text: '更換', onclick: function(){ NAT.call('watchAddFor', d.pkg, d.label || ''); }}) : null,
-        h('button', {class: 'btn sm ghost', text: '移除', onclick: function(){ NAT.call('watchRemoveFor', d.uri, d.pkg || ''); }})));
+    /* 依 App 分組：同一個 App 可以設定好幾個資料夾（例如 Snaptube 的影片、音樂分開存） */
+    var groups = [], byPkg = {};
+    ds.forEach(function(d){ var k = d.pkg || ''; if(!byPkg[k]){ byPkg[k] = {pkg: k, label: d.label, dirs: []}; groups.push(byPkg[k]); } byPkg[k].dirs.push(d); });
+    groups.forEach(function(g){
+      var a = apps.filter(function(x){ return x.pkg === g.pkg; })[0];
+      var card = h('div', {class: 'card glass', style: {padding: '10px 12px', marginBottom: '10px'}});
+      card.appendChild(h('div', {style: {display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px'}},
+        a && a.icon ? h('img', {src: a.icon, style: {width: '34px', height: '34px', borderRadius: '9px', flex: 'none'}}) : h('span', {class: 'ic', html: icon('folder')}),
+        h('b', {class: 'grow', text: g.label || (a && a.label) || '（不指定 App）'}),
+        h('button', {class: 'btn sm', html: icon('plus', 'sm') + '加資料夾', onclick: function(){ NAT.call('watchAddFor', g.pkg, g.label || (a && a.label) || ''); }})));
+      g.dirs.forEach(function(d){
+        card.appendChild(h('div', {style: {display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderTop: '1px solid var(--line)'}},
+          h('span', {html: icon('folder', 'sm')}), h('div', {class: 'grow sub ell', style: {minWidth: 0}, text: d.name}),
+          h('button', {class: 'btn sm ghost', text: '移除', onclick: function(){ NAT.call('watchRemoveFor', d.uri, d.pkg || ''); }})));
+      });
+      body.appendChild(card);
     });
     var del = h('input', {type: 'checkbox', checked: NAT.call('importDelGet'), onchange: function(){ NAT.call('importDel', this.checked); }});
     body.appendChild(h('label', {class: 'opt'}, del, h('div', {class: 'grow'}, h('b', {text: '搬回後刪除原檔'}), h('div', {class: 'sub', text: '避免手機裡存兩份'}))));
