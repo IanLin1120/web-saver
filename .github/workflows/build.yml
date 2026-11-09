@@ -85,6 +85,12 @@ jobs:
           L = [x for x in L if x.get('v') != ver]
           L.insert(0, {'v': ver, 'file': name, 'date': datetime.date.today().isoformat(), 'size': size, 'notes': notes})
           L.sort(key=lambda x: [int(n) for n in x['v'].split('.')], reverse=True)
+          # 網站只留最近 12 版 APK（太大會讓 GitHub Pages 部署逾時）；更舊的版本還在 git 歷史與 Actions 產物裡
+          KEEP = 12
+          for x in L[KEEP:]:
+              try: os.remove('apk/' + x['file'])
+              except Exception: pass
+          L = [x for x in L[:KEEP] if os.path.exists('apk/' + x['file'])]
           json.dump(L, open('apks.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
           try: old = json.load(open('version.json', encoding='utf-8'))
           except Exception: old = {}
