@@ -4,7 +4,7 @@
 <script>/* 線上更新開機程式：手機上若已下載比 APK 內建更新的介面版本，就改用新版（存在 IndexedDB）。
    新版連續兩次沒有正常開啟 → 自動退回 APK 內建版本。網址加上 #builtin 也會強制使用內建版本。 */
 (function () {
-  var B = '1.8.6'; if (!window.__OTA) window.APP_BUILTIN = B;
+  var B = '1.8.7'; if (!window.__OTA) window.APP_BUILTIN = B;
   if (window.__OTA || location.hash.indexOf('builtin') >= 0) return;
   var v = null; try { v = JSON.parse(localStorage.getItem('ws.ota') || 'null'); } catch (e) {}
   function gt(a, b) { a = String(a).split('.').map(Number); b = String(b).split('.').map(Number); for (var i = 0; i < Math.max(a.length, b.length); i++) { var p = a[i] || 0, q = b[i] || 0; if (p !== q) return p > q; } return false; }
@@ -560,7 +560,7 @@ input[type=range]{width:100%;accent-color:var(--accent);padding:0;border:0;backg
 .vpRow{display:flex;align-items:center;gap:10px;color:#fff;font:600 12.5px/1 sans-serif;text-shadow:0 1px 2px #000}
 .vpC{font:800 12px/1 sans-serif!important;padding:7px 10px!important;border-radius:99px;background:rgba(255,255,255,.18)!important}
 .vpI{width:38px;height:38px}.vpI svg{width:24px;height:24px}
-.vpBar{position:relative;height:26px;display:flex;align-items:center;cursor:pointer}
+.vpBar{position:relative;height:34px;display:flex;align-items:center;cursor:pointer;margin:0 4px 10px;touch-action:none}
 .vpBar .tr{position:absolute;left:0;right:0;height:3px;border-radius:3px;background:rgba(255,255,255,.3);overflow:hidden;transition:height .15s}
 .vpBar.drag .tr{height:6px}
 .vpBar .bf{position:absolute;left:0;top:0;bottom:0;background:rgba(255,255,255,.45)}
@@ -1979,7 +1979,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 /* ============================================================
    核心：工具函式、圖示、主題、面板（sheet）、提示、原生橋接、頁面切換
    ============================================================ */
-const APP_VERSION = '1.8.6';
+const APP_VERSION = '1.8.7';
 var GH = {user: 'IanLin1120', repo: 'web-saver',
   get pages(){ return 'https://' + this.user.toLowerCase() + '.github.io/' + this.repo + '/'; },
   get web(){ return 'https://github.com/' + this.user + '/' + this.repo; }};
@@ -2269,11 +2269,20 @@ function menu(title, items){
   /* items: [[icon, label, fn, danger]] */
   var list = h('div', {class: 'opts'});
   var s = openSheet({title: title, body: list});
+  /* items[5]（選用）：長按這一項時要做的事 */
   items.forEach(function(it){
     if(!it) return;
-    list.appendChild(h('div', {class: 'opt', onclick: function(){ s.close(); setTimeout(it[2], 60); }},
+    var row = h('div', {class: 'opt', onclick: function(){ if(row._lp){ row._lp = false; return; } s.close(); setTimeout(it[2], 60); }},
       h('span', {class: 'oi', html: icon(it[0]), style: it[3] ? {color: 'var(--danger)', background: 'color-mix(in srgb,var(--danger) 14%,var(--surface-2))'} : null}),
-      h('div', {class: 'grow'}, h('b', {text: it[1], style: it[3] ? {color: 'var(--danger)'} : null}), it[4] ? h('div', {class: 'sub', text: it[4]}) : null)));
+      h('div', {class: 'grow'}, h('b', {text: it[1], style: it[3] ? {color: 'var(--danger)'} : null}), it[4] ? h('div', {class: 'sub', text: it[4]}) : null));
+    if(it[5]){
+      var t = 0, sx = 0, sy = 0;
+      row.addEventListener('touchstart', function(e){ sx = e.touches[0].clientX; sy = e.touches[0].clientY; t = setTimeout(function(){ t = 0; row._lp = true; buzz(25); s.close(); setTimeout(it[5], 80); }, 480); }, {passive: true});
+      row.addEventListener('touchmove', function(e){ if(t && (Math.abs(e.touches[0].clientX - sx) > 10 || Math.abs(e.touches[0].clientY - sy) > 10)){ clearTimeout(t); t = 0; } }, {passive: true});
+      row.addEventListener('touchend', function(){ clearTimeout(t); t = 0; });
+      row.addEventListener('contextmenu', function(e){ e.preventDefault(); row._lp = true; s.close(); setTimeout(it[5], 80); });
+    }
+    list.appendChild(row);
   });
   return s;
 }
@@ -2913,7 +2922,7 @@ function manageFolders(after){
         h('div', {class: 't'}, h('b', {text: f.name}), h('div', {class: 'sub', text: BM.count(f.id) + ' 個網頁'})),
         h('button', {class: 'ib', html: icon(f.lock ? 'lock' : 'key'), title: f.lock ? '解除上鎖' : '上鎖', style: f.lock ? {color: 'var(--accent)'} : null, onclick: async function(){
           if(!SEC.has()){ dialog('還沒有設定密碼', '要先設定一組密碼，才能把收藏夾鎖起來。', [['設定密碼', function(){ setPinFlow(); }], ['取消', null, '']]); return; }
-          if(!(await SEC.need(f.lock ? '解除上鎖' : '上鎖「' + f.name + '」'))) return;
+          if(!(await (f.lock ? SEC.verify('解除「' + f.name + '」的上鎖') : SEC.need('上鎖「' + f.name + '」')))) return;
           f.lock = !f.lock; BM.save(); toast(f.lock ? '🔒 已上鎖「' + f.name + '」' : '已解除上鎖'); draw();
         }}),
         h('button', {class: 'ib', html: icon('palette'), title: '換圖示', onclick: function(){ iconPicker('「' + f.name + '」的圖示', f.icon, function(ic){ f.icon = ic; BM.save(); draw(); }); }}),
@@ -4801,11 +4810,14 @@ function vpSubs(it){
     var sh = /^zh-(Hant|TW|HK)/i.test(l) ? '繁中' : /^zh-(Hans|CN)/i.test(l) ? '簡中' : /^zh/i.test(l) ? '中文' : /^en/i.test(l) ? '英文' : /^ja/i.test(l) ? '日文' : /^ko/i.test(l) ? '韓文' : '';
     out.push({item: item, lang: l, label: label && label !== l ? label : sh ? sh + '（' + l + '）' : (l || item.name), short: sh || l || '開'});
   };
-  (it.subs || []).forEach(function(x){ add(Lib.byId(x.id), x.lang, x.label); });
+  /* 只算還在檔案庫裡的字幕（原檔被刪掉、丟進垃圾桶就不再顯示）；被「移除連結」的不顯示 */
+  var alive = function(id){ return Lib.items.filter(function(y){ return y.id === id; })[0]; };
+  var hide = it.subsHide || [];
+  (it.subs || []).forEach(function(x){ if(hide.indexOf(x.id) < 0) add(alive(x.id), x.lang, x.label); });
   var stem = String(it.name || '').replace(/\.[^.]+$/, '').toLowerCase(), nv = vpNorm(it.name), nt = vpNorm(it.title);
   Lib.items.forEach(function(x){
     var n = String(x.name || '').toLowerCase();
-    if(!/\.(srt|vtt|ass|ssa)$/.test(n)) return;
+    if(!/\.(srt|vtt|ass|ssa)$/.test(n) || hide.indexOf(x.id) >= 0) return;
     var b = n.replace(/\.(srt|vtt|ass|ssa)$/, '');
     if(stem && (b === stem || b.indexOf(stem + '.') === 0)){ add(x, b === stem ? '' : b.slice(stem.length + 1)); return; }
     var lm = b.match(/\.([a-z]{2,3}(-[a-z0-9]{2,4})?)$/i), lang = lm ? lm[1] : '', nb = vpNorm(lm ? b.slice(0, -lm[0].length) : b);
@@ -4901,12 +4913,35 @@ async function viewVideo(it, body){
     subTick();
   }
   function subMenu(){
+    /* 字幕原檔在檔案庫被刪掉了：這裡跟著拿掉 */
+    var cur = subI >= 0 ? subs[subI] : null;
+    subs = subs.filter(function(x){ return Lib.items.some(function(y){ return y.id === x.item.id; }); });
+    subI = cur ? subs.indexOf(cur) : -1;
+    if(cur && subI < 0) setSub(-1);
     var items = [];
-    subs.forEach(function(x, i){ items.push(['film', x.label + (i === subI ? '　✓' : ''), function(){ setSub(i); fl('字幕：' + x.label); }, false, x.item.name]); });
+    subs.forEach(function(x, i){ items.push(['film', x.label + (i === subI ? '　✓' : ''), function(){ setSub(i); fl('字幕：' + x.label); }, false, x.item.name, function(){ unlinkSub(x, i); }]); });
+    if(subs.length) items.push(null);
     if(subs.length) items.push(['x', '關閉字幕' + (subI < 0 ? '　✓' : ''), function(){ setSub(-1); fl('字幕：關'); }]);
     items.push(['sliders', '字幕樣式與同步…', function(){ subSettings(); }, false, '大小、顏色、背景、位置、提早／延後']);
     items.push(['folder', '從檔案庫選字幕檔…', function(){ pickSubFile(); }, false, 'SRT、VTT、ASS']);
     menu('字幕', items);
+  }
+  /* 長按字幕：只移除和這部影片的連結，不刪字幕原檔 */
+  function unlinkSub(x, i){
+    menu(x.label, [
+      ['x', '從這部影片移除這個字幕', function(){
+        var ls = (it.subs || []).filter(function(y){ return y.id !== x.item.id; });
+        var hd = (it.subsHide || []).filter(function(y){ return y !== x.item.id; }).concat([x.item.id]);
+        it.subs = ls; it.subsHide = hd;
+        if(isApp) NAT.call('libMeta', it.id, JSON.stringify({subs: ls, subsHide: hd}));
+        if(subI === i) setSub(-1); else if(subI > i) subI--;
+        subs.splice(i, 1);
+        if(subI >= subs.length) subI = -1;
+        ccB.textContent = subI >= 0 ? '字幕：' + (subs[subI].short || '開') : (subs.length ? '字幕：關' : '字幕');
+        toast('已移除連結（字幕原檔還在檔案庫）');
+      }, true, '不會刪除字幕檔本身；之後可以用「從檔案庫選字幕檔」再加回來'],
+      ['film', '取消', function(){}]
+    ]);
   }
   function pickSubFile(){
     var L = Lib.items.filter(function(x){ return /\.(srt|vtt|ass|ssa)$/i.test(x.name || ''); });
@@ -4915,7 +4950,8 @@ async function viewVideo(it, body){
       var k = subs.findIndex(function(y){ return y.item.id === x.id; });
       if(k < 0){ subs.push({item: x, lang: '', label: x.name, short: '開'}); k = subs.length - 1; }
       var ls = (it.subs || []).filter(function(y){ return y.id !== x.id; }).concat([{id: x.id, lang: '', label: x.name}]);
-      it.subs = ls; if(isApp) NAT.call('libMeta', it.id, JSON.stringify({subs: ls}));
+      var hd2 = (it.subsHide || []).filter(function(y){ return y !== x.id; });
+      it.subs = ls; it.subsHide = hd2; if(isApp) NAT.call('libMeta', it.id, JSON.stringify({subs: ls, subsHide: hd2}));
       setSub(k); fl('已套用字幕');
     }]; }));
   }
@@ -5031,7 +5067,8 @@ async function viewVideo(it, body){
   }, true);
   function ptUp(e){ delete pts[e.pointerId]; if(Object.keys(pts).length < 2) pz = null; }
   box.addEventListener('pointerup', ptUp, true); box.addEventListener('pointercancel', ptUp, true);
-  var bot = h('div', {class: 'vpBot'}, bar, h('div', {class: 'vpRow'}, tm, h('span', {style: {flex: 1}}), ccB, fitB, sp, moreB, fsB));
+  var row = h('div', {class: 'vpRow'}, tm, h('span', {style: {flex: 1}}), ccB, fitB, sp, moreB, fsB);
+  var bot = h('div', {class: 'vpBot'}, bar, row);
   var flash = h('div', {class: 'vpFlash'});
   ui.appendChild(mid); ui.appendChild(bot);
   box.appendChild(subBox); box.appendChild(ui); box.appendChild(flash); box.appendChild(lockOv);
@@ -5042,10 +5079,10 @@ async function viewVideo(it, body){
   function fl(t){ flash.textContent = t; flash.classList.add('on'); clearTimeout(fl.t); fl.t = setTimeout(function(){ flash.classList.remove('on'); }, 900); }
   function fmtT(t){ t = Math.max(0, Math.floor(t || 0)); var hh = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), ss = t % 60; return (hh ? hh + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (ss < 10 ? '0' : '') + ss; }
   function seek(d){ v.currentTime = Math.max(0, Math.min((v.duration || 0) - 0.3, v.currentTime + d)); }
-  function tog(){ if(v.paused) v.play().catch(function(){}); else v.pause(); }
+  function tog(){ buzz(10); if(v.paused) v.play().catch(function(){}); else v.pause(); }
   pv.onclick = function(e){ e.stopPropagation(); tog(); show(); };
-  rw.onclick = function(e){ e.stopPropagation(); seek(-10); fl('-10 秒'); show(); };
-  fw.onclick = function(e){ e.stopPropagation(); seek(10); fl('+10 秒'); show(); };
+  rw.onclick = function(e){ e.stopPropagation(); buzz(10); seek(-10); fl('-10 秒'); show(); };
+  fw.onclick = function(e){ e.stopPropagation(); buzz(10); seek(10); fl('+10 秒'); show(); };
   var SP = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
   sp.onclick = function(e){ e.stopPropagation(); var i = SP.indexOf(v.playbackRate); v.playbackRate = SP[(i + 1) % SP.length]; sp.textContent = v.playbackRate + '×'; fl('速度 ' + v.playbackRate + '×'); show(); };
   /* 全螢幕：整個 App 隱藏狀態列、橫向影片自動轉橫向 */
@@ -5066,10 +5103,19 @@ async function viewVideo(it, body){
   /* 進度條 */
   var drag = false;
   function pos(x){ var r = bar.getBoundingClientRect(); return Math.max(0, Math.min(1, (x - r.left) / r.width)); }
-  bar.addEventListener('pointerdown', function(e){ e.stopPropagation(); drag = true; bar.setPointerCapture(e.pointerId); bar.classList.add('drag'); mv(e); show(true); });
+  /* 進度條：按下震一下、拖動時每移動一小段輕震（像轉盤的段落感）；放開後短時間內擋掉下方按鈕，避免誤觸 */
+  var tick = -1, guard = 0;
+  bar.addEventListener('pointerdown', function(e){ e.stopPropagation(); drag = true; bar.setPointerCapture(e.pointerId); bar.classList.add('drag'); tick = -1; buzz(14); mv(e); show(true); });
   bar.addEventListener('pointermove', function(e){ if(drag) mv(e); });
-  function mv(e){ var f = pos(e.clientX); bar.querySelector('.pl').style.width = f * 100 + '%'; bar.querySelector('.kn').style.left = f * 100 + '%'; fl(fmtT(f * (v.duration || 0))); bar.__f = f; }
-  function upB(){ if(!drag) return; drag = false; bar.classList.remove('drag'); if(bar.__f != null && v.duration) v.currentTime = bar.__f * v.duration; show(); }
+  function mv(e){
+    var f = pos(e.clientX); bar.querySelector('.pl').style.width = f * 100 + '%'; bar.querySelector('.kn').style.left = f * 100 + '%'; fl(fmtT(f * (v.duration || 0))); bar.__f = f;
+    var k = Math.round(f * 40); if(tick >= 0 && k !== tick) buzz(5); tick = k;
+  }
+  function upB(){ if(!drag) return; drag = false; guard = Date.now(); bar.classList.remove('drag'); if(bar.__f != null && v.duration) v.currentTime = bar.__f * v.duration; buzz(10); show(); }
+  row.addEventListener('click', function(e){
+    if(Date.now() - guard < 500){ e.stopPropagation(); e.preventDefault(); return; }
+    if(e.target.closest('button')) buzz(10);
+  }, true);
   bar.addEventListener('pointerup', upB); bar.addEventListener('pointercancel', upB);
   /* 手勢：點一下顯示控制、兩側連點快轉／快退、長按 2 倍速、左右滑拖曳 */
   var G = null, last = {t: 0, side: ''}, combo = {n: 0, side: '', t: 0}, tapT = 0;
@@ -5638,6 +5684,13 @@ function renderUpdCard(){
     isApp && (window.__OTA || ota) ? row('↩️', '還原為 APK 內建版本', '線上更新後有問題時使用（v' + (window.APP_BUILTIN || '') + '）', function(){
       self.dialog('還原為 APK 內建版本？', '會刪除線上下載的新版介面，改回這支 APK 內建的版本。設定、收藏與檔案不受影響。', [['還原', function(){ try{ localStorage.removeItem('ws.ota'); }catch(e){} location.replace(location.pathname + '#builtin'); location.reload(); }], ['取消', null]]);
     }) : null,
+    row('📤', '分享這個 App', '傳下載網址給朋友：網址固定不變，打開永遠是最新版 APK', function(){
+      var url = GH.pages + 'download.html';
+      var txt = '推薦你用「網頁擷取」：存網頁、無廣告看 YouTube、下載影片音樂、AI 影片摘要。\n用 Android 手機打開這個網址就能下載最新版：\n' + url;
+      if(isApp && NAT.has('share')) NAT.call('share', '網頁擷取 App', txt);
+      else if(navigator.share) navigator.share({title: '網頁擷取 App', text: txt}).catch(function(){});
+      else { copyText(url); }
+    }),
     row('🌐', '網頁版', GH.pages.replace('https://', ''), function(){ self.open(GH.pages); }),
     row('📦', 'GitHub 儲存庫', '所有版本的 APK、更新說明', function(){ self.open(GH.web); }));
   mount.appendChild(card);
@@ -6376,6 +6429,8 @@ async function openYt(id){
       sect('字幕（可複選，會跟影片一起下載）', it.C.length ? it.C : []); if(!it.C.length) body.appendChild(h('div', {class: 'ydRow dis'}, h('span', {class: 'ydQ', style: {background: '#999'}}, h('b', {text: 'CC'})), h('div', {class: 'grow'}, h('b', {text: '字幕／CC'}), h('div', {class: 'sub', text: '這部影片沒有字幕'}))));
       sect('縮圖', it.T);
     } else {
+      /* 交給其他 App 下載放在最上面（音樂上方） */
+      var hob = handOffButtons('https://youtu.be/' + d.id, function(){ s.close(); }); if(hob){ hob.style.marginBottom = '6px'; body.appendChild(hob); }
       /* 精簡清單：像 Snaptube 一樣只列最常用的 */
       var vs = it.V.filter(function(x){ return x.h; });
       var fast = vs.filter(function(x){ return x.h <= 480; })[0] || vs[vs.length - 1];
@@ -6392,7 +6447,6 @@ async function openYt(id){
     name.oninput = function(){ nameRow.firstChild.textContent = '檔名：' + nm(); };
     body.appendChild(nameRow);
     if(!more && !d.page) body.appendChild(h('div', {class: 'sub', style: {fontSize: '11.5px', margin: '8px 2px', lineHeight: '1.6'}, html: '來源：' + esc(d.src)}));
-    var hob = handOffButtons('https://youtu.be/' + d.id, function(){ s.close(); }); if(hob) body.appendChild(hob);
     var rows = qsa('.ydRow:not(.ydChk)', body), last = lsGet('ws.ytLastK', '');
     var pre = rows.filter(function(r){ return r.dataset.k === last; })[0] || rows.filter(function(r){ return /^v/.test(r.dataset.k || ''); }).pop() || rows[0];
     if(pre && pre.dataset.k) pre.click();
@@ -6787,7 +6841,7 @@ function folderMenu(f, redraw){
   }
   var lockItem = ['key', f.lock ? '解除上鎖' : '上鎖', async function(){
     if(!SEC.has()){ dialog('還沒有設定密碼', '要先設定一組密碼，才能把資料夾鎖起來。', [['設定密碼', function(){ setPinFlow(); }], ['取消', null, '']]); return; }
-    if(!(await SEC.need(f.lock ? '解除上鎖' : '上鎖「' + f.name + '」'))) return;
+    if(!(await (f.lock ? SEC.verify('解除「' + f.name + '」的上鎖') : SEC.need('上鎖「' + f.name + '」')))) return;
     f.lock = !f.lock; LF.save(); toast(f.lock ? '🔒 已上鎖「' + f.name + '」（離開 App 後要密碼才能打開）' : '已解除上鎖'); redraw();
   }, false, f.lock ? '' : '裡面的檔案和子資料夾都要密碼才能看'];
   menu(f.icon + ' ' + f.name, [lockItem,
@@ -7375,6 +7429,11 @@ function handOffButtons(url, before){
     row.appendChild(h('button', {class: 'hoBtn', onclick: function(){ if(before) before(); handOff(url, a.pkg, a.label); }},
       a.icon ? h('img', {src: a.icon, alt: ''}) : h('span', {html: icon('download')}), h('span', {class: 'ell', text: a.label})));
   });
+  /* 沒裝 Snaptube：提供官方網站下載（App 不另外散布別人的安裝檔） */
+  if(!list.some(function(a){ return /snaptube/i.test(a.pkg + ' ' + a.label); }))
+    row.appendChild(h('button', {class: 'hoBtn', onclick: function(){
+      dialog('還沒安裝 Snaptube', '要用 Snaptube 下載，請先到 Snaptube 官方網站下載安裝（Google Play 沒有上架）。安裝時 Android 會詢問是否允許安裝未知來源的 App。<br><br>裝好後回來，這裡就會出現 Snaptube 按鈕。', [['開啟官方網站', function(){ openExternal('https://www.snaptubeapp.com/'); }], ['取消', null, '']]);
+    }}, h('span', {class: 'more', html: icon('download')}), h('span', {class: 'ell', text: '取得 Snaptube'})));
   row.appendChild(h('button', {class: 'hoBtn', onclick: function(){ if(before) before(); pickShareApp(url); }}, h('span', {class: 'more', html: icon('more')}), h('span', {text: '其他 App…'})));
   return h('div', null, h('div', {class: 'ydSect', text: '交給其他 App 下載（下載完自動搬回、刪除原檔）'}), row);
 }
@@ -7731,6 +7790,15 @@ function ensureIntruderFolder(){
 }
 
 /* 設定頁的「隱私與安全」 */
+/* 取消打勾（解除上鎖、關掉保護）一定要再驗證一次密碼或指紋；打勾（加鎖）不用 */
+function lockToggle(on, apply){
+  return function(){
+    var cb = this;
+    if(cb.checked){ apply(true); return; }
+    cb.checked = true;
+    SEC.verify('解除上鎖要先驗證').then(function(ok){ if(ok){ cb.checked = false; apply(false); toast('已解除'); } });
+  };
+}
 function openSecurity(){
   var body = h('div');
   var s = openSheet({title: '隱私與安全', icon: 'key', body: body, tall: true});
@@ -7740,24 +7808,24 @@ function openSecurity(){
     body.appendChild(h('div', {class: 'setRow', onclick: function(){ setPinFlow(); }}, h('span', {class: 'ic', html: icon('key')}),
       h('div', {class: 'grow'}, h('b', {text: has ? '更改密碼' : '設定密碼'}), h('div', {class: 'sub', text: has ? '要先輸入目前的密碼' : '6 位數字，所有上鎖的地方共用同一組密碼'})), h('span', {class: 'chev', text: '›'})));
     if(!has){ body.appendChild(h('div', {class: 'note', text: '先設定密碼，才能鎖住帳號密碼、檔案庫的分類或資料夾。'})); paintIcons(body); return; }
-    if(isApp) body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: SEC.cfg.bio !== false, disabled: !bioOk(), onchange: function(){ SEC.cfg.bio = this.checked; SEC.save(); }}),
+    if(isApp) body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: SEC.cfg.bio !== false, disabled: !bioOk(), onchange: lockToggle(0, function(v){ SEC.cfg.bio = v; SEC.save(); })}),
       h('div', {class: 'grow'}, h('b', {text: '可以用指紋／臉部解鎖'}), h('div', {class: 'sub', text: bioOk() ? '解鎖時自動跳出指紋，也可以改用密碼' : '這支手機沒有設定指紋或臉部辨識'}))));
     body.appendChild(h('div', {class: 'ydSect', text: '要上鎖的地方'}));
     body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: true, disabled: true}),
       h('div', {class: 'grow'}, h('b', {text: '帳號密碼（每一組都要單獨驗證）'}), h('div', {class: 'sub', text: '固定開啟：每次查看、複製、修改任何一組密碼，都要重新輸入密碼或指紋；離開畫面就馬上鎖回去'}))));
-    body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.trash, onchange: function(){ SEC.cfg.trash = this.checked; SEC.save(); }}),
+    body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.trash, onchange: lockToggle(0, function(v){ SEC.cfg.trash = v; SEC.save(); })}),
       h('div', {class: 'grow'}, h('b', {text: '垃圾桶'}), h('div', {class: 'sub', text: '打開檔案庫或收藏的垃圾桶（還原、永久刪除）前要解鎖'}))));
-    body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.bm, onchange: function(){ SEC.cfg.bm = this.checked; SEC.save(); }}),
+    body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.bm, onchange: lockToggle(0, function(v){ SEC.cfg.bm = v; SEC.save(); fire('secChanged'); })}),
       h('div', {class: 'grow'}, h('b', {text: '整個我的收藏'}), h('div', {class: 'sub', text: '打開收藏清單前要解鎖。只想鎖某個收藏夾（例如「社交」）：在「我的收藏 → 右上角鉛筆（管理收藏夾）」按那個收藏夾的鎖頭'}))));
     Object.keys(CAT).forEach(function(k){
-      body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.cats[k], onchange: function(){ if(this.checked) SEC.cfg.cats[k] = true; else delete SEC.cfg.cats[k]; SEC.save(); fire('secChanged'); }}),
+      body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.cats[k], onchange: lockToggle(0, function(v){ if(v) SEC.cfg.cats[k] = true; else delete SEC.cfg.cats[k]; SEC.save(); fire('secChanged'); })}),
         h('div', {class: 'grow'}, h('b', {text: '檔案庫：' + (k === 'audio' ? '音樂庫' : CAT[k].name)}), h('div', {class: 'sub', text: '整個分類（包含裡面的資料夾）'}))));
     });
     var lockedF = LF.folders.filter(function(f){ return f.lock && !f.sys; });
     body.appendChild(h('div', {class: 'sub', style: {margin: '8px 2px', lineHeight: '1.6'}, text: '只鎖某個資料夾：在檔案庫的資料夾按「⋯」→「上鎖」。' + (lockedF.length ? '目前上鎖的資料夾：' + lockedF.map(function(f){ return f.name; }).join('、') : '')}));
     if(isApp && NAT.has('intruderCam')){
       body.appendChild(h('div', {class: 'ydSect', text: '入侵者拍照'}));
-      body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!NAT.call('intruderCamGet'), onchange: function(){ NAT.call('intruderCam', this.checked); if(this.checked && !NAT.call('camOk')) NAT.call('camAsk'); }}),
+      body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!NAT.call('intruderCamGet'), onchange: lockToggle(0, function(v){ NAT.call('intruderCam', v); if(v && !NAT.call('camOk')) NAT.call('camAsk'); })}),
         h('div', {class: 'grow'}, h('b', {text: '連續輸錯 3 次時用前鏡頭拍照'}), h('div', {class: 'sub', text: NAT.call('camOk') ? '照片存在上鎖的「圖片 → 入侵者照片」資料夾' : '需要相機權限（勾選後會詢問）'}))));
     }
     body.appendChild(h('div', {class: 'btn-row', style: {marginTop: '10px'}},
