@@ -488,8 +488,18 @@ function holdRange(r, holdMs){
   return r;
 }
 
-/* ---------- 切換分頁、設定裡的按鈕：輕震一下 ---------- */
+/* ---------- 所有可以點的地方（按鈕、卡片、選項、分類、清單項目、開關…）：點下去輕震一下 ---------- */
+var BUZZ_SEL = 'button, a[href], label, select, input[type=checkbox], input[type=radio], summary, [role=button], .tile, .chip, .setRow, .opt, .bmItem, .row, .hoBtn, .ydRow, .ydMore, .aiHRow, .aiFRow, .aiLine, .aiCh, .crumb, .crumbs > *, .fav';
+var lastBuzzT = 0;
 document.addEventListener('click', function(e){
-  var el = e.target.closest && e.target.closest('#nav button, .seg button, .pal button, #v-set button, #v-set input[type=checkbox], .sheet input[type=checkbox]');
-  if(el && typeof buzz === 'function') buzz(10);
+  if(typeof buzz !== 'function' || !e.target.closest) return;
+  var el = e.target, hit = null;
+  /* 往上找：有 onclick 的元素或常見的可點元件 */
+  for(var n = el, k = 0; n && n !== document.body && k < 8; n = n.parentElement, k++){
+    if(n.onclick || (n.matches && n.matches(BUZZ_SEL))){ hit = n; break; }
+  }
+  if(!hit || hit.disabled || hit.classList.contains('dis')) return;
+  if(hit.tagName === 'LABEL' && e.target.tagName === 'INPUT') return;   /* 點 label 會再觸發一次 input 的 click，只震一次 */
+  var now = Date.now(); if(now - lastBuzzT < 60) return; lastBuzzT = now;
+  buzz(10);
 }, true);

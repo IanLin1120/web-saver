@@ -76,7 +76,8 @@ public class Bridge {
     @JavascriptInterface public void nativeToast(final String msg) { ui(new Runnable() { @Override public void run() { android.widget.Toast.makeText(a, msg, android.widget.Toast.LENGTH_SHORT).show(); } }); }
 
     @JavascriptInterface public void share(String title, String url) {
-        Intent i = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_SUBJECT, title).putExtra(Intent.EXTRA_TEXT, url);
+        Intent i = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, url);
+        if (title != null && !title.isEmpty()) i.putExtra(Intent.EXTRA_SUBJECT, title);
         a.startActivity(Intent.createChooser(i, "分享網址").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
     }
 

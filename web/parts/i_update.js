@@ -152,10 +152,10 @@ function renderUpdCard(){
       self.dialog('還原為 APK 內建版本？', '會刪除線上下載的新版介面，改回這支 APK 內建的版本。設定、收藏與檔案不受影響。', [['還原', function(){ try{ localStorage.removeItem('ws.ota'); }catch(e){} location.replace(location.pathname + '#builtin'); location.reload(); }], ['取消', null]]);
     }) : null,
     row('📤', '分享這個 App', '傳下載網址給朋友：網址固定不變，打開永遠是最新版 APK', function(){
+      /* 只分享網址本身 */
       var url = GH.pages + 'download.html';
-      var txt = '推薦你用「網頁擷取」：存網頁、無廣告看 YouTube、下載影片音樂、AI 影片摘要。\n用 Android 手機打開這個網址就能下載最新版：\n' + url;
-      if(isApp && NAT.has('share')) NAT.call('share', '網頁擷取 App', txt);
-      else if(navigator.share) navigator.share({title: '網頁擷取 App', text: txt}).catch(function(){});
+      if(isApp && NAT.has('share')) NAT.call('share', '', url);
+      else if(navigator.share) navigator.share({url: url}).catch(function(){});
       else { copyText(url); }
     }),
     row('🌐', '網頁版', GH.pages.replace('https://', ''), function(){ self.open(GH.pages); }),
