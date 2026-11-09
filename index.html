@@ -4,7 +4,7 @@
 <script>/* 線上更新開機程式：手機上若已下載比 APK 內建更新的介面版本，就改用新版（存在 IndexedDB）。
    新版連續兩次沒有正常開啟 → 自動退回 APK 內建版本。網址加上 #builtin 也會強制使用內建版本。 */
 (function () {
-  var B = '1.8.5'; if (!window.__OTA) window.APP_BUILTIN = B;
+  var B = '1.8.6'; if (!window.__OTA) window.APP_BUILTIN = B;
   if (window.__OTA || location.hash.indexOf('builtin') >= 0) return;
   var v = null; try { v = JSON.parse(localStorage.getItem('ws.ota') || 'null'); } catch (e) {}
   function gt(a, b) { a = String(a).split('.').map(Number); b = String(b).split('.').map(Number); for (var i = 0; i < Math.max(a.length, b.length); i++) { var p = a[i] || 0, q = b[i] || 0; if (p !== q) return p > q; } return false; }
@@ -1979,7 +1979,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 /* ============================================================
    核心：工具函式、圖示、主題、面板（sheet）、提示、原生橋接、頁面切換
    ============================================================ */
-const APP_VERSION = '1.8.5';
+const APP_VERSION = '1.8.6';
 var GH = {user: 'IanLin1120', repo: 'web-saver',
   get pages(){ return 'https://' + this.user.toLowerCase() + '.github.io/' + this.repo + '/'; },
   get web(){ return 'https://github.com/' + this.user + '/' + this.repo; }};
@@ -2467,7 +2467,7 @@ document.addEventListener('click', function(e){
    設定值、主題配色、介面大小
    ============================================================ */
 var CFG_DEF = {
-  theme: 'auto', palette: 'earth', uiScale: 100, motion: true,
+  theme: 'auto', palette: 'earth', uiScale: 100, motion: true, haptic: 2,
   mode: 'mobile', textZoom: 100, home: '', search: 'google', popups: 'smart',
   ads: true, adHosts: '', adCss: '', adAllow: '', pw: true,
   cap: {format: 'html', mode: 'full', removeAds: true, reader: false, embedImages: true, imgQ: 'orig', embedFonts: true, removeHidden: true, autoScroll: true, bg: true, banner: true, nameTpl: '{title}', paper: 'a4', landscape: false, margin: 10},
@@ -5312,7 +5312,9 @@ function renderSettings(){
     h('div', {class: 'field'}, h('div', {class: 'lbl'}, '主題'), segRow([['auto', '跟隨系統'], ['light', '淺色'], ['dark', '深色']], 'theme')),
     h('div', {class: 'field'}, h('div', {class: 'lbl'}, '配色'), paletteRow()),
     rangeRow('App 介面大小', 'uiScale', 85, 125, 5, function(v){ return v + '%'; }),
-    swRow('動畫效果', '關閉後切換畫面更直接（較舊的手機可關閉）', 'motion')
+    swRow('動畫效果', '關閉後切換畫面更直接（較舊的手機可關閉）', 'motion'),
+    h('div', {class: 'field'}, h('div', {class: 'lbl'}, h('span', null, '震動強度'), h('span', {class: 'sub', text: '切換分頁、按鈕、拖動時'})),
+      segRow([[0, '關閉'], [1, '輕'], [2, '中'], [3, '強']], 'haptic', function(){ setTimeout(function(){ buzz(20); }, 30); }))
   ]));
 
   /* 瀏覽器 */
@@ -7684,7 +7686,19 @@ function pinPad(o){
   }
   if(o.bio && bioOk() && o.mode !== 'new' && SEC.cfg.bio !== false) setTimeout(bio, 250);
 }
-function buzz(ms){ try{ if(isApp && NAT.has('buzz')) NAT.call('buzz', ms); else if(navigator.vibrate) navigator.vibrate(ms < 0 ? [40, 70, 60] : ms); }catch(e){} }
+/* 震動：依設定的強度（關／輕／中／強）放大時間與力道 */
+function buzz(ms){
+  try{
+    var lv = typeof CFG !== 'undefined' && CFG.haptic != null ? +CFG.haptic : 2;
+    if(lv <= 0) return;
+    if(ms >= 0){
+      var k = [0, 1, 1.7, 2.6][lv], amp = [0, 80, 170, 255][lv];
+      ms = Math.round(Math.max(8, ms * k));
+      if(isApp && NAT.has('buzzAmp')){ NAT.call('buzzAmp', ms, amp); return; }
+    }
+    if(isApp && NAT.has('buzz')) NAT.call('buzz', ms); else if(navigator.vibrate) navigator.vibrate(ms < 0 ? [40, 70, 60] : ms);
+  }catch(e){}
+}
 function bioOk(){ return isApp && NAT.has('lockBioOk') && !!NAT.call('lockBioOk'); }
 async function sha(t){ var b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('ws:' + t)); return Array.from(new Uint8Array(b)).map(function(x){ return ('0' + x.toString(16)).slice(-2); }).join(''); }
 
