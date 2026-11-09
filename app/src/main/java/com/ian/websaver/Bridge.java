@@ -124,7 +124,8 @@ public class Bridge {
 
     @JavascriptInterface public void ytShow(final boolean on) { ui(new Runnable() { @Override public void run() { a.yt.show(on); a.fab.refresh(); } }); }
 
-    @JavascriptInterface public void ytLoad(final String url) { ui(new Runnable() { @Override public void run() { a.yt.load(url); } }); }
+    /* 只換網址，不改變顯示狀態：在 AI 摘要等其他分頁背景讀取影片時，YouTube 畫面不能蓋上來（要顯示由網頁的 ytShow 決定） */
+    @JavascriptInterface public void ytLoad(final String url) { ui(new Runnable() { @Override public void run() { boolean was = a.yt.shown; a.yt.load(url); if (!was) a.yt.show(false); } }); }
 
     @JavascriptInterface public void ytNav(final String what) {
         ui(new Runnable() {

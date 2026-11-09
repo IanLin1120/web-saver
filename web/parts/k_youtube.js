@@ -191,17 +191,21 @@ function sMime(s){ try{ return decodeURIComponent(s.mime || ''); }catch(e){ retu
 /* 讓 App 內的播放器載入這部影片並回報資訊；影片沒開著就先在 YouTube 分頁打開 */
 async function ytPageData(id, onStep){
   if(!isApp || !NAT.has('ytInfoReq')) return null;
-  var where = NAT.call('ytInfoReq', id);
+  var where = NAT.call('ytInfoReq', id), bg = false;
+  /* 在別的分頁（例如 AI 摘要）背景讀取時：YouTube 畫面不顯示、影片不出聲 */
+  var hush = function(){ if(bg && curView !== 'yt') NAT.call('ytNav', 'pause'); };
   if(!where){
+    bg = curView !== 'yt';
     if(onStep) onStep('在 YouTube 分頁開啟影片…');
     YTB.started = true; NAT.call('ytLoad', 'https://m.youtube.com/watch?v=' + id);
-    for(var k = 0; k < 40 && !where; k++){ await sleep(500); where = NAT.call('ytInfoReq', id); }
+    for(var k = 0; k < 40 && !where; k++){ await sleep(500); hush(); where = NAT.call('ytInfoReq', id); }
     if(!where) return null;
   }
   if(onStep) onStep('讀取影片資訊…');
   for(var i = 0; i < 24; i++){
     var pd = NAT.json('ytSniff', id);
-    if(pd && pd.info && (pd.info.formats.length || pd.info.levels.length)) return pd;
+    hush();
+    if(pd && pd.info && (pd.info.formats.length || pd.info.levels.length)){ setTimeout(hush, 800); return pd; }
     await sleep(400);
     if(i % 4 === 3) NAT.call('ytInfoReq', id);
   }

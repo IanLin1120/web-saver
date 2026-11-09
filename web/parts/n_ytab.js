@@ -25,6 +25,7 @@ function ytUpdateVisible(){
 function ytEnsure(url){
   if(!isApp){ renderYtStart(); return; }
   if(!YTB.started || url){ YTB.started = true; NAT.call('ytLoad', url || YT_HOME); YTB.progress = 5; renderYt(); }
+  ytUpdateVisible();
   ytSyncLayout();
 }
 function ytOpen(url){
