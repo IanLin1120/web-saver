@@ -263,3 +263,15 @@ function openWatchSettings(){
   draw();
   on('watchDirs', function(){ if(!s.closed) draw(); });
 }
+
+/* 瀏覽分頁裡點到 YouTube 連結：不開新視窗、不播切換動畫，直接到 YouTube 分頁打開 */
+on('brToYt', function(u){
+  u = String(u || '');
+  var id = YT.idOf(u);
+  var url = id ? 'https://m.youtube.com/watch?v=' + id + ((u.match(/[?&#]t=(\d+)/) || [])[1] ? '&t=' + u.match(/[?&#]t=(\d+)/)[1] + 's' : '') : u.replace(/^https?:\/\/(www\.)?youtube\.com/, 'https://m.youtube.com');
+  var de = document.documentElement;
+  de.classList.add('no-motion');
+  showView('yt');
+  ytEnsure(url);
+  setTimeout(function(){ de.classList.remove('no-motion'); }, 400);
+});

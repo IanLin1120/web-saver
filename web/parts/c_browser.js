@@ -223,20 +223,64 @@ async function openBmList(startFolder){
   search.oninput = function(){ q = search.value.trim().toLowerCase(); draw(); };
   var chips = folderChips(sel, function(id){ sel = id; draw(); }, {toggle: true});
   chips.className = 'folderBar';
-  var body = h('div', null, search, chips, list);
+  /* 長按進入多選（跟檔案庫一樣），可以一次刪除或移動多個 */
+  var selMode = false, picked = [];
+  var selBar = h('div', {class: 'bmSelBar hide'});
+  var body = h('div', null, search, chips, selBar, list);
+  function drawSel(){
+    selBar.textContent = '';
+    selBar.classList.toggle('hide', !selMode);
+    if(!selMode) return;
+    var shown = curItems();
+    selBar.appendChild(h('b', {text: '已選 ' + picked.length + ' 個'}));
+    selBar.appendChild(h('span', {class: 'grow'}));
+    selBar.appendChild(h('button', {class: 'chip', text: picked.length === shown.length && shown.length ? '全不選' : '全選', onclick: function(){ picked = picked.length === shown.length ? [] : shown.slice(); draw(); }}));
+    selBar.appendChild(h('button', {class: 'ib', html: icon('folder'), title: '移到其他收藏夾', disabled: !picked.length, onclick: function(){
+      var s2 = openSheet({title: '移到…', icon: 'folder', body: folderChips('', function(id){ picked.forEach(function(it){ it.folder = id; }); BM.save(); s2.close(); toast('已把 ' + picked.length + ' 個移到「' + BM.folder(id).name + '」'); exitSel(); })});
+    }}));
+    selBar.appendChild(h('button', {class: 'ib', html: icon('trash'), title: '刪除（移到垃圾桶）', style: {color: 'var(--danger)'}, disabled: !picked.length, onclick: function(){
+      var gone = picked.slice();
+      gone.forEach(function(it){ BM.remove(it); });
+      toast('已把 ' + gone.length + ' 個收藏移到垃圾桶', false, ['復原', function(){
+        BM.trash = BM.trash.filter(function(x){ return !gone.some(function(g){ return g.url === x.url && x.deleted; }); });
+        gone.slice().reverse().forEach(function(it){ BM.items.unshift(it); }); BM.save(); chips.redraw(); draw(); renderBr();
+      }]);
+      exitSel(); chips.redraw(); renderBr();
+    }}));
+    selBar.appendChild(h('button', {class: 'ib', html: icon('x'), title: '取消', onclick: exitSel}));
+    paintIcons(selBar);
+  }
+  function exitSel(){ selMode = false; picked = []; draw(); }
+  function curItems(){ return BM.items.filter(function(x){ return !BM.locked(x.folder) && (q || x.folder === sel) && (!q || (x.title + ' ' + x.url).toLowerCase().indexOf(q) >= 0); }); }
+  function longPress(el, fn){
+    var t = 0, sx = 0, sy = 0;
+    el.addEventListener('touchstart', function(e){ var p = e.touches[0]; sx = p.clientX; sy = p.clientY; t = setTimeout(function(){ t = 0; el._lp = true; fn(); if(typeof buzz === 'function') buzz(15); }, 480); }, {passive: true});
+    el.addEventListener('touchmove', function(e){ var p = e.touches[0]; if(t && (Math.abs(p.clientX - sx) > 10 || Math.abs(p.clientY - sy) > 10)){ clearTimeout(t); t = 0; } }, {passive: true});
+    el.addEventListener('touchend', function(){ if(t){ clearTimeout(t); t = 0; } });
+    el.addEventListener('contextmenu', function(e){ e.preventDefault(); if(!el._lp){ el._lp = true; fn(); } });
+  }
   var manage = h('span', {style: {display: 'contents'}}, h('button', {class: 'ib', html: icon('trash'), title: '收藏的垃圾桶', onclick: function(){ openBmTrash(function(){ chips.redraw(); draw(); }); }}), h('button', {class: 'ib', html: icon('history'), title: '瀏覽記錄', onclick: function(){ s.close(); openHistory(); }}), h('button', {class: 'ib', html: icon('edit'), title: '管理收藏夾', onclick: function(){ manageFolders(function(){ chips.redraw(); draw(); }); }}));
   var s = openSheet({title: '我的收藏', icon: 'books', body: body, tall: true, headExtra: manage});
   function draw(){
     list.textContent = '';
+    drawSel();
     if(!sel && !q){ list.appendChild(h('div', {class: 'libClosed', html: icon('books', 'lg') + '<b>點上方的收藏夾顯示內容</b><span class="sub">再點一次可以收起來；也可以直接搜尋全部收藏</span>'})); paintIcons(list); return; }
-    var items = BM.items.filter(function(x){ return !BM.locked(x.folder) && (q || x.folder === sel) && (!q || (x.title + ' ' + x.url).toLowerCase().indexOf(q) >= 0); });
+    var items = curItems();
     if(!items.length){ list.appendChild(h('div', {class: 'empty', html: '<div class="big">☆</div>' + (BM.items.length ? '這裡沒有符合的收藏' : '還沒有收藏任何網頁<br><span class="sub">瀏覽時按上方的 ☆ 就能收藏，並放進自訂的收藏夾</span>')})); return; }
     items.forEach(function(it){
       var f = BM.folder(it.folder);
-      list.appendChild(h('div', {class: 'bmItem', onclick: function(){ s.close(); navigate(it.url); }},
+      var on = picked.indexOf(it) >= 0;
+      var row = h('div', {class: 'bmItem' + (selMode ? ' selMode' : '') + (on ? ' picked' : ''), onclick: function(){
+        if(row._lp){ row._lp = false; return; }
+        if(selMode){ var i = picked.indexOf(it); if(i >= 0) picked.splice(i, 1); else picked.push(it); if(!picked.length) selMode = false; draw(); return; }
+        s.close(); navigate(it.url);
+      }},
+        selMode ? h('span', {class: 'bmCk', html: on ? icon('check', 'sm') : ''}) : null,
         favEl(it, true),
         h('div', {class: 't'}, h('b', {text: it.title || it.url}), h('div', {class: 'sub', text: (sel ? '' : f.icon + ' ' + f.name + '・') + hostOf(it.url) + '・' + fmtDate(it.time)})),
-        h('button', {class: 'ib', html: icon('more'), onclick: function(e){ e.stopPropagation(); bmItemMenu(it, draw); }})));
+        selMode ? null : h('button', {class: 'ib', html: icon('more'), onclick: function(e){ e.stopPropagation(); bmItemMenu(it, draw); }}));
+      longPress(row, function(){ if(!selMode){ selMode = true; picked = [it]; } else if(picked.indexOf(it) < 0) picked.push(it); draw(); });
+      list.appendChild(row);
     });
   }
   draw();
@@ -307,6 +351,9 @@ function renderStart(){
   tiles.appendChild(h('div', {class: 'tile', onclick: function(){ openBmList(''); }}, h('div', {class: 'fav', html: icon('books')}), h('span', {text: '我的收藏'}), h('small', {class: 'sub', text: BM.items.length + ' 個'})));
   tiles.appendChild(h('div', {class: 'tile', onclick: function(){ openHistory(); }}, h('div', {class: 'fav', html: icon('history')}), h('span', {text: '瀏覽記錄'}), h('small', {class: 'sub', text: Hist.items.length + ' 筆'})));
   tiles.appendChild(h('div', {class: 'tile', onclick: function(){ ytOpen(); }}, h('div', {class: 'fav', html: icon('ytplay')}), h('span', {text: 'YouTube'}), h('small', {class: 'sub', text: '無廣告播放器'})));
+  /* 立即上鎖（跟「隱私與安全」裡的按鈕一樣）：有設定密碼才顯示 */
+  if(SEC.has()) tiles.appendChild(h('div', {class: 'tile', onclick: function(){ if(isApp) NAT.call('lockRelock'); SEC.webOk = false; fire('secChanged'); toast('🔒 已上鎖'); renderStart(); }},
+    h('div', {class: 'fav', html: icon('lock')}), h('span', {text: '立即上鎖'}), h('small', {class: 'sub', text: SEC.open() ? '目前已解鎖' : '目前已上鎖'})));
   sects.appendChild(h('div', {class: 'sect-h'}, h('span', {text: '⭐ 收藏'}), h('button', {text: '管理收藏夾', onclick: function(){ manageFolders(renderStart); }})));
   sects.appendChild(tiles);
   /* 說明 */
@@ -652,3 +699,4 @@ async function openBmTrash(after){
   }
   draw();
 }
+on('secChanged', function(){ try{ renderStart(); }catch(e){} });

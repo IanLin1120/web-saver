@@ -106,6 +106,25 @@ final class Browser {
         }
     }
 
+    /** 瀏覽分頁裡點到 YouTube 連結：直接交給 App 的 YouTube 分頁 */
+    static boolean isYtLink(Uri u) {
+        if (u == null) return false;
+        String h = u.getHost();
+        if (h == null) return false;
+        h = h.toLowerCase();
+        if (h.equals("youtu.be")) return true;
+        if (!isYt(h) || h.startsWith("accounts.") || h.startsWith("studio.") || h.startsWith("music.")) return false;
+        String path = u.getPath() == null ? "" : u.getPath();
+        return !path.startsWith("/embed/") && !path.startsWith("/iframe_api") && !path.startsWith("/s/");
+    }
+
+    private boolean handOffYt(Uri u, boolean isPopup) {
+        if (!"br".equals(tag) || !isYtLink(u)) return false;
+        if (isPopup) Util.MAIN.post(new Runnable() { @Override public void run() { closePopupView(); MainActivity.emit("popup", "{\"open\":false}"); } });
+        MainActivity.emit("brToYt", JSONObject.quote(u.toString()));
+        return true;
+    }
+
     static boolean isYt(String host) {
         if (host == null) return false;
         String h = host.toLowerCase();
@@ -302,6 +321,7 @@ final class Browser {
                     return true;
                 }
                 if (isPopup && ads && AdBlock.match(u.getHost())) { closePopup(); MainActivity.toast("已阻擋廣告視窗"); return true; }
+                if ((r.isForMainFrame() || isPopup) && handOffYt(u, isPopup)) return true;
                 return false;
             }
             if (s.equals("about") || s.equals("data") || s.equals("blob") || s.equals("javascript")) return false;
@@ -321,7 +341,11 @@ final class Browser {
         }
 
         @Override public void onPageStarted(WebView v, String url, Bitmap fav) {
-            if (isPopup) { if (popupTitle != null) popupTitle.setText(Uri.parse(url).getHost()); return; }
+            if (isPopup) {
+                /* 新視窗直接開 YouTube（例如 IG 個人檔案的連結）：不開視窗，直接切到 YouTube 分頁 */
+                if (handOffYt(Uri.parse(url), true)) { v.stopLoading(); return; }
+                if (popupTitle != null) popupTitle.setText(Uri.parse(url).getHost()); return;
+            }
             curUrl = url;
             curHost = hostOf(url);
             favicon = fav;
@@ -334,7 +358,7 @@ final class Browser {
             emitMediaCount();
         }
 
-        @Override public void onPageCommitVisible(WebView v, String url) { if (!isPopup) inject(v, ytAds && isYt(hostOf(url)) ? injectYt : null); }
+        @Override public void onPageCommitVisible(WebView v, String url) { if (!isPopup) inject(v, ytAds && isYt(hostOf(url)) ? injectYt : null); else if (url != null && !url.startsWith("about:")) revealPopup(); }
 
         @Override public void onPageFinished(WebView v, String url) {
             if (isPopup) return;
@@ -742,12 +766,25 @@ final class Browser {
         a.root.addView(popupHost, new FrameLayout.LayoutParams(-1, -1));
         popupHost.setTranslationY(Util.dp(a, 40));
         popupHost.setAlpha(0f);
-        popupHost.animate().translationY(0).alpha(1f).setDuration(200).start();
+        popupShown = false;
+        /* 瀏覽分頁：先等網址出來再顯示視窗（如果是 YouTube 連結就不開視窗，直接切到 YouTube 分頁） */
+        if ("br".equals(tag)) {
+            final FrameLayout ph = popupHost;
+            Util.MAIN.postDelayed(new Runnable() { @Override public void run() { if (popupHost == ph) revealPopup(); } }, 2500);
+        } else revealPopup();
         WebView.WebViewTransport t = (WebView.WebViewTransport) msg.obj;
         t.setWebView(popup);
         msg.sendToTarget();
         MainActivity.emit("popup", "{\"open\":true}");
         a.restack();
+    }
+
+    private boolean popupShown = true;
+
+    private void revealPopup() {
+        if (popupHost == null || popupShown) return;
+        popupShown = true;
+        popupHost.animate().translationY(0).alpha(1f).setDuration(200).start();
     }
 
     private void closePopupView() {

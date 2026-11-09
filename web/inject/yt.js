@@ -367,8 +367,10 @@
   var ICON = {
     play: '<path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none"/>',
     pause: '<rect x="6.5" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="13.5" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/>',
-    rew: '<path d="M12 6.2a6.8 6.8 0 1 1-6.8 6.8"/><path d="M12.6 2.8 9.2 6.2l3.4 3.4"/>',
-    fwd: '<path d="M12 6.2a6.8 6.8 0 1 0 6.8 6.8"/><path d="M11.4 2.8l3.4 3.4-3.4 3.4"/>',
+    rew0: '<path d="M12 6.2a6.8 6.8 0 1 1-6.8 6.8"/><path d="M12.6 2.8 9.2 6.2l3.4 3.4"/>',
+    fwd0: '<path d="M12 6.2a6.8 6.8 0 1 0 6.8 6.8"/><path d="M11.4 2.8l3.4 3.4-3.4 3.4"/>',
+    rew10: '<path d="M12 5.4A7.6 7.6 0 1 1 5.4 9.2" stroke-width="1.9"/><path d="M8.7 5.4 12.7 2.9v5z" fill="currentColor" stroke="currentColor" stroke-width=".8" stroke-linejoin="round"/><text x="12" y="15.7" text-anchor="middle" font-size="7.2" font-weight="800" font-family="system-ui,-apple-system,Roboto,sans-serif" fill="currentColor" stroke="none" letter-spacing="-.3">10</text>',
+    fwd10: '<path d="M12 5.4A7.6 7.6 0 1 0 18.6 9.2" stroke-width="1.9"/><path d="M15.3 5.4 11.3 2.9v5z" fill="currentColor" stroke="currentColor" stroke-width=".8" stroke-linejoin="round"/><text x="12" y="15.7" text-anchor="middle" font-size="7.2" font-weight="800" font-family="system-ui,-apple-system,Roboto,sans-serif" fill="currentColor" stroke="none" letter-spacing="-.3">10</text>',
     full: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>', exit: '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M2.5 12h3M18.5 12h3M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/>',
     loop: '<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
@@ -463,7 +465,7 @@
       '.mid{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:clamp(6px,3.2vw,34px);max-width:100%}' +
       '.mid button{flex:none;width:clamp(38px,11vw,48px);height:clamp(38px,11vw,48px);border-radius:50%;background:rgba(0,0,0,.34);box-shadow:0 2px 10px rgba(0,0,0,.25);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}' +
       '.mid button svg{width:55%;height:55%}.mid .pp{width:clamp(54px,16vw,66px);height:clamp(54px,16vw,66px);background:rgba(0,0,0,.45)}.mid .pp svg{width:50%;height:50%}' +
-      '.mid .sk{position:relative;width:clamp(44px,12.5vw,54px);height:clamp(44px,12.5vw,54px)}.mid .sk svg{width:66%;height:66%}' +
+      '.mid .sk{position:relative;width:clamp(44px,12.5vw,54px);height:clamp(44px,12.5vw,54px)}.mid .sk svg{width:70%;height:70%;overflow:visible}' +
       '.mid .sk i{position:absolute;left:0;right:0;top:57%;transform:translateY(-50%);text-align:center;font:800 clamp(8.5px,2.4vw,11px)/1 sans-serif;font-style:normal;letter-spacing:-.3px;pointer-events:none}' +
       '.mid .nv svg{width:46%;height:46%}' +
       '.bot{position:absolute;left:0;right:0;bottom:0;padding:0 12px 4px}' +
@@ -495,7 +497,7 @@
       '<div class="ui" id="ui"><div class="top"><button id="mn" class="fsOnly" title="離開全螢幕">' + ic('down') + '</button><div class="t"><b id="tt"></b><small id="tl"></small></div>' +
       '<button class="chip" id="sp">1×</button><button id="lp" title="循環">' + ic('loop') + '</button>' +
       '<button id="pp2" title="子母畫面">' + ic('pip') + '</button><button id="dl" title="下載">' + ic('dl') + '</button><button id="mo" title="更多">' + ic('more') + '</button></div>' +
-      '<div class="mid"><button id="pv2" class="nv" title="上一部">' + ic('prev') + '</button><button class="sk" id="rw">' + ic('rew') + '<i>10</i></button><button class="pp" id="pp">' + ic('play') + '</button><button class="sk" id="fw">' + ic('fwd') + '<i>10</i></button><button id="nx" class="nv" title="下一部">' + ic('next') + '</button></div>' +
+      '<div class="mid"><button id="pv2" class="nv" title="上一部">' + ic('prev') + '</button><button class="sk" id="rw">' + ic('rew10') + '</button><button class="pp" id="pp">' + ic('play') + '</button><button class="sk" id="fw">' + ic('fwd10') + '</button><button id="nx" class="nv" title="下一部">' + ic('next') + '</button></div>' +
       '<div class="bot"><div class="bar" id="bar"><div class="tr"><div class="bf" id="bf"></div><div id="segs"></div><div class="pl" id="pl"></div></div><div class="kn" id="kn"></div></div>' +
       '<div class="row"><span id="tm">0:00 / 0:00</span><span class="g"></span><span id="sb"></span><button id="fill" class="fsOnly" title="填滿螢幕">' + ic('fill') + '</button><button id="lk" class="fsOnly" title="鎖定畫面">' + ic('lock') + '</button><button id="cc" title="字幕">' + ic('cc') + '</button><button id="q" title="畫質">' + ic('gear') + '</button><button id="fs" title="全螢幕">' + ic('full') + '</button></div></div></div>' +
       '<div class="mini" id="mini"><i id="miniB"></i></div><button class="lockb" id="ulk">' + ic('unlock') + '</button>' +
@@ -644,7 +646,7 @@
         clearTimeout(tapT);
         combo.n = inCombo ? combo.n + 1 : 1; combo.side = side; combo.t = now;
         seekBy(side === 'l' ? -10 : 10);
-        var rp = $(side === 'l' ? 'rl' : 'rr'); setH(rp, ic(side === 'l' ? 'rew' : 'fwd') + '<span>' + (combo.n * 10) + ' 秒</span>'); rp.classList.add('on');
+        var rp = $(side === 'l' ? 'rl' : 'rr'); setH(rp, ic(side === 'l' ? 'rew0' : 'fwd0') + '<span>' + (combo.n * 10) + ' 秒</span>'); rp.classList.add('on');
         clearTimeout(rp._t); rp._t = setTimeout(function () { rp.classList.remove('on'); }, 700);
         lastTap = {t: 0, side: ''}; hide(); return;
       }
@@ -680,7 +682,9 @@
         $('tm').textContent = fmt(t) + ' / ' + fmt(d);
         var pp = v.paused ? 'play' : 'pause'; if ($('pp').dataset.s !== pp) { $('pp').dataset.s = pp; setH($('pp'), ic(pp)); }
         $('spin').classList.toggle('on', !v.paused && v.readyState < 3 && !prepSt);
-        if (v.paused && !root.classList.contains('show') && !root.classList.contains('locked') && !prepSt) show(true);
+        /* 剛暫停時自動顯示控制列；之後點一下畫面就能把它收起來（暫停中也可以） */
+        if (v.paused && !W.wasPaused && !root.classList.contains('show') && !root.classList.contains('locked') && !prepSt) show(true);
+        W.wasPaused = v.paused;
         if ($('segs').childNodes.length !== SB.segs.length && d) W.drawSegs();
       }
       var ad = !!document.querySelector('.ad-showing, .ad-interrupting');

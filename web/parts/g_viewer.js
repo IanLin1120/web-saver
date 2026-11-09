@@ -272,8 +272,8 @@ async function viewVideo(it, body){
   var box = h('div', {class: 'vwVideo vp'}, v);
   var ui = h('div', {class: 'vpUi'});
   var pv = h('button', {class: 'vpB', html: icon('play')});
-  var rw = h('button', {class: 'vpB sk', html: '<svg viewBox="0 0 24 24"><path d="M12 6.2a6.8 6.8 0 1 1-6.8 6.8"/><path d="M12.6 2.8 9.2 6.2l3.4 3.4"/></svg><i>10</i>'});
-  var fw = h('button', {class: 'vpB sk', html: '<svg viewBox="0 0 24 24"><path d="M12 6.2a6.8 6.8 0 1 0 6.8 6.8"/><path d="M11.4 2.8l3.4 3.4-3.4 3.4"/></svg><i>10</i>'});
+  var rw = h('button', {class: 'vpB sk', html: '<svg viewBox="0 0 24 24"><path d="M12 5.4A7.6 7.6 0 1 1 5.4 9.2" stroke-width="1.9"/><path d="M8.7 5.4 12.7 2.9v5z" fill="currentColor" stroke="currentColor" stroke-width=".8" stroke-linejoin="round"/><text x="12" y="15.7" text-anchor="middle" font-size="7.2" font-weight="800" font-family="system-ui,-apple-system,Roboto,sans-serif" fill="currentColor" stroke="none" letter-spacing="-.3">10</text></svg>'});
+  var fw = h('button', {class: 'vpB sk', html: '<svg viewBox="0 0 24 24"><path d="M12 5.4A7.6 7.6 0 1 0 18.6 9.2" stroke-width="1.9"/><path d="M15.3 5.4 11.3 2.9v5z" fill="currentColor" stroke="currentColor" stroke-width=".8" stroke-linejoin="round"/><text x="12" y="15.7" text-anchor="middle" font-size="7.2" font-weight="800" font-family="system-ui,-apple-system,Roboto,sans-serif" fill="currentColor" stroke="none" letter-spacing="-.3">10</text></svg>'});
   var mid = h('div', {class: 'vpMid'}, rw, pv, fw);
   var tm = h('span', {class: 'vpT', text: '0:00 / 0:00'});
   var sp = h('button', {class: 'vpC', text: '1×'});

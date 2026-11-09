@@ -510,7 +510,7 @@ input[type=range]{width:100%;accent-color:var(--accent);padding:0;border:0;backg
 .vpB svg{width:56%;height:56%}
 .vpMid>.vpB:nth-child(2){width:clamp(60px,17vw,72px);height:clamp(60px,17vw,72px)}
 .vpMid>.vpB:nth-child(2) svg{width:46%;height:46%}
-.vpB.sk svg{width:62%;height:62%}
+.vpB.sk svg{width:66%;height:66%;overflow:visible}
 .vpB.sk i{position:absolute;left:0;right:0;top:57%;transform:translateY(-50%);text-align:center;font:800 11px/1 sans-serif;font-style:normal;color:#fff;pointer-events:none}
 .vpBot{position:absolute;left:0;right:0;bottom:0;padding:0 14px 8px}
 .vpRow{display:flex;align-items:center;gap:10px;color:#fff;font:600 12.5px/1 sans-serif;text-shadow:0 1px 2px #000}
@@ -722,3 +722,10 @@ body.brFull #brArea{left:0!important;right:0!important;top:0!important;bottom:0!
 .aiFHead b{display:block;font-size:17px}
 .aiFHead .chip{font-size:12px;padding:6px 10px;background:var(--surface-3);color:var(--text);white-space:nowrap}
 .aiHRow .spin.sm{width:18px;height:18px}
+.bmSelBar{display:flex;align-items:center;gap:6px;padding:6px 6px 6px 12px;margin:0 0 8px;border-radius:16px;background:color-mix(in srgb,var(--accent) 14%,var(--surface-2));position:sticky;top:0;z-index:3}
+.bmSelBar b{font-size:14px}
+.bmSelBar .chip{font-size:12.5px;padding:5px 10px;background:var(--surface-3);color:var(--text)}
+.bmItem.picked{background:color-mix(in srgb,var(--accent) 13%,transparent)}
+.bmCk{width:22px;height:22px;border-radius:50%;border:2px solid var(--border-soft);display:grid;place-items:center;flex:none;color:var(--accent-fg)}
+.bmItem.picked .bmCk{background:var(--accent);border-color:var(--accent)}
+.bmItem.selMode{-webkit-user-select:none;user-select:none}
