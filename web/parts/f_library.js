@@ -170,6 +170,13 @@ function libVisible(){
   });
   return L;
 }
+/* 目前畫面上真的看得到的檔案（在資料夾裡時只算這一層，不含子資料夾裡的） */
+function libShown(){
+  var cat = CFG.lib.cat, L = libVisible();
+  if(!LV.open && !LV.q && !LV.selMode) return [];
+  if(cat !== 'all' && !LV.q){ var cur = LV.folder[cat] || ''; if(cur && !LF.get(cur)) cur = ''; L = L.filter(function(it){ return LF.folderOf(it.id) === cur; }); }
+  return L;
+}
 async function renderStor(){
   var s = await Lib.stats(), card = $('storCard'); card.textContent = '';
   var total = s.bytes || 0, R = 38, C = 2 * Math.PI * R, off = 0;
@@ -313,7 +320,7 @@ function renderLibList(){
         h('span', {class: 'ck', html: icon('check')}));
     }
     var press = 0, moved = false, sx = 0, sy = 0;
-    el.addEventListener('pointerdown', function(e){ moved = false; sx = e.clientX; sy = e.clientY; press = setTimeout(function(){ press = -1; if(!LV.selMode){ LV.selMode = true; } LV.sel.add(it.id); if(navigator.vibrate) navigator.vibrate(12); renderLib(); }, 480); });
+    el.addEventListener('pointerdown', function(e){ moved = false; sx = e.clientX; sy = e.clientY; press = setTimeout(function(){ press = -1; if(!LV.selMode){ LV.selMode = true; } LV.sel.add(it.id); buzz(15); renderLib(); }, 480); });
     el.addEventListener('pointermove', function(e){ if(Math.abs(e.clientX - sx) + Math.abs(e.clientY - sy) > 10){ moved = true; clearTimeout(press); } });
     el.addEventListener('pointerup', function(){
       if(press === -1 || moved){ press = 0; return; }
@@ -339,7 +346,7 @@ function renderSelBar(){
   var allHtml = picked.length && picked.every(function(it){ return it.cat === 'html'; });
   bar.appendChild(h('button', {class: 'ib', html: icon('x'), onclick: function(){ LV.selMode = false; LV.sel.clear(); renderLib(); }}));
   bar.appendChild(h('b', {text: n ? '已選 ' + n + ' 個' : '點選檔案'}));
-  bar.appendChild(h('button', {class: 'ib', html: icon('checks'), title: '全選', onclick: function(){ var L = libVisible(); var all = L.every(function(it){ return LV.sel.has(it.id); }); L.forEach(function(it){ if(all) LV.sel.delete(it.id); else LV.sel.add(it.id); }); renderLib(); }}));
+  bar.appendChild(h('button', {class: 'ib', html: icon('checks'), title: '全選', onclick: function(){ var L = libShown(); var all = L.length && L.every(function(it){ return LV.sel.has(it.id); }); L.forEach(function(it){ if(all) LV.sel.delete(it.id); else LV.sel.add(it.id); }); renderLib(); }}));
   if(allHtml && isApp) bar.appendChild(h('button', {class: 'ib', html: icon('pdf'), title: '轉成 PDF', onclick: function(){ picked.forEach(function(it){ toPdf(it); }); }}));
   var cats = {}; picked.forEach(function(it){ cats[areaOf(it)] = 1; });
   var oneCat = Object.keys(cats).length === 1 ? Object.keys(cats)[0] : '';
