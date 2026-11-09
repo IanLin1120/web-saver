@@ -309,7 +309,7 @@ function manageFolders(after){
         h('div', {class: 't'}, h('b', {text: f.name}), h('div', {class: 'sub', text: BM.count(f.id) + ' 個網頁'})),
         h('button', {class: 'ib', html: icon(f.lock ? 'lock' : 'key'), title: f.lock ? '解除上鎖' : '上鎖', style: f.lock ? {color: 'var(--accent)'} : null, onclick: async function(){
           if(!SEC.has()){ dialog('還沒有設定密碼', '要先設定一組密碼，才能把收藏夾鎖起來。', [['設定密碼', function(){ setPinFlow(); }], ['取消', null, '']]); return; }
-          if(!(await SEC.need(f.lock ? '解除上鎖' : '上鎖「' + f.name + '」'))) return;
+          if(!(await (f.lock ? SEC.verify('解除「' + f.name + '」的上鎖') : SEC.need('上鎖「' + f.name + '」')))) return;
           f.lock = !f.lock; BM.save(); toast(f.lock ? '🔒 已上鎖「' + f.name + '」' : '已解除上鎖'); draw();
         }}),
         h('button', {class: 'ib', html: icon('palette'), title: '換圖示', onclick: function(){ iconPicker('「' + f.name + '」的圖示', f.icon, function(ic){ f.icon = ic; BM.save(); draw(); }); }}),

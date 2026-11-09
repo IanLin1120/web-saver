@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>下載 網頁擷取</title>
+<meta name="description" content="網頁擷取 Android App：存網頁、無廣告 YouTube、影片音樂下載、AI 影片摘要。">
+<meta property="og:title" content="下載「網頁擷取」App">
+<meta property="og:description" content="存網頁、無廣告 YouTube、影片音樂下載、AI 影片摘要。打開就能下載最新版 APK。">
+<meta property="og:image" content="icon-512.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#efe4d2">
+<style>
+/* 一張下載卡：大地色系，跟 App 同一套配色 */
+:root{--bg:#efe4d2;--card:#fbf5ea;--fg:#3b2f24;--muted:#7b6a58;--accent:#a2613a;--accent-fg:#fff;--line:#e3d4bd;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#1d1814;--card:#29221c;--fg:#efe4d4;--muted:#b3a28d;--accent:#e0a066;--accent-fg:#22170e;--line:#3d3329;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.7 system-ui,-apple-system,"Noto Sans TC","PingFang TC",sans-serif;
+  padding:max(24px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+main{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.hero{display:flex;align-items:center;gap:14px}
+.hero img{width:72px;height:72px;border-radius:20px;box-shadow:0 6px 18px rgba(80,50,20,.18)}
+h1{margin:0;font-size:24px;line-height:1.25;text-wrap:balance}
+.tag{color:var(--muted);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.dl{display:flex;align-items:center;justify-content:center;gap:10px;background:var(--accent);color:var(--accent-fg);text-decoration:none;font-weight:800;font-size:18px;border-radius:999px;padding:15px 18px}
+.dl:focus-visible{outline:3px solid var(--fg);outline-offset:3px}
+.meta{display:flex;justify-content:center;gap:12px;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums;flex-wrap:wrap}
+h2{font-size:16px;margin:0}
+ol,ul{margin:0;padding-left:20px}
+li{margin:2px 0}
+.notes{white-space:pre-line;color:var(--muted);font-size:14px}
+.small{font-size:13px;color:var(--muted)}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<main>
+  <div class="hero">
+    <img src="icon-192.png" alt="">
+    <div><h1>網頁擷取</h1><div class="tag">存網頁・無廣告 YouTube・影片音樂下載・AI 影片摘要</div></div>
+  </div>
+
+  <div class="card">
+    <a class="dl" id="dl" href="https://github.com/IanLin1120/web-saver/tree/main/apk">下載最新版 APK</a>
+    <div class="meta" id="meta">讀取最新版本中…</div>
+  </div>
+
+  <div class="card">
+    <h2>安裝方式（Android）</h2>
+    <ol>
+      <li>按上面的按鈕下載 APK。</li>
+      <li>下載完點通知或到「下載」資料夾打開它。</li>
+      <li>手機詢問「允許安裝未知的應用程式」時，選允許（只要第一次）。</li>
+      <li>安裝完成後，之後的新版本可以在 App 的「設定 → 版本與更新」直接更新。</li>
+    </ol>
+    <div class="small">這是 Android 的 App，iPhone 無法安裝。</div>
+  </div>
+
+  <div class="card" id="newsCard" hidden>
+    <h2 id="newsTitle">這一版更新了什麼</h2>
+    <div class="notes" id="news"></div>
+  </div>
+
+  <div class="small" style="text-align:center">舊版本與原始碼：<a href="https://github.com/IanLin1120/web-saver">GitHub</a></div>
+</main>
+<script>
+(function(){
+  function size(b){ return b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB'; }
+  /* 永遠抓最新的版本清單（不用快取），所以這個網址分享出去後也會一直是最新版 */
+  fetch('apks.json?t=' + Date.now(), {cache: 'no-store'}).then(function(r){ return r.json(); }).then(function(L){
+    var x = L && L[0]; if(!x) throw 0;
+    var a = document.getElementById('dl');
+    a.href = 'apk/' + encodeURIComponent(x.file);
+    a.setAttribute('download', x.file);
+    a.textContent = '下載最新版 v' + x.v;
+    document.getElementById('meta').textContent = 'v' + x.v + '・' + size(x.size) + '・' + x.date + ' 更新';
+    if(x.notes){ document.getElementById('news').textContent = x.notes; document.getElementById('newsTitle').textContent = 'v' + x.v + ' 更新了什麼'; document.getElementById('newsCard').hidden = false; }
+  }).catch(function(){ document.getElementById('meta').textContent = '讀不到版本資訊，按上面的按鈕到 GitHub 下載'; });
+})();
+</script>
+</body>
+</html>

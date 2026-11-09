@@ -137,6 +137,15 @@ function ensureIntruderFolder(){
 }
 
 /* 設定頁的「隱私與安全」 */
+/* 取消打勾（解除上鎖、關掉保護）一定要再驗證一次密碼或指紋；打勾（加鎖）不用 */
+function lockToggle(on, apply){
+  return function(){
+    var cb = this;
+    if(cb.checked){ apply(true); return; }
+    cb.checked = true;
+    SEC.verify('解除上鎖要先驗證').then(function(ok){ if(ok){ cb.checked = false; apply(false); toast('已解除'); } });
+  };
+}
 function openSecurity(){
   var body = h('div');
   var s = openSheet({title: '隱私與安全', icon: 'key', body: body, tall: true});
@@ -146,24 +155,24 @@ function openSecurity(){
     body.appendChild(h('div', {class: 'setRow', onclick: function(){ setPinFlow(); }}, h('span', {class: 'ic', html: icon('key')}),
       h('div', {class: 'grow'}, h('b', {text: has ? '更改密碼' : '設定密碼'}), h('div', {class: 'sub', text: has ? '要先輸入目前的密碼' : '6 位數字，所有上鎖的地方共用同一組密碼'})), h('span', {class: 'chev', text: '›'})));
     if(!has){ body.appendChild(h('div', {class: 'note', text: '先設定密碼，才能鎖住帳號密碼、檔案庫的分類或資料夾。'})); paintIcons(body); return; }
-    if(isApp) body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: SEC.cfg.bio !== false, disabled: !bioOk(), onchange: function(){ SEC.cfg.bio = this.checked; SEC.save(); }}),
+    if(isApp) body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: SEC.cfg.bio !== false, disabled: !bioOk(), onchange: lockToggle(0, function(v){ SEC.cfg.bio = v; SEC.save(); })}),
       h('div', {class: 'grow'}, h('b', {text: '可以用指紋／臉部解鎖'}), h('div', {class: 'sub', text: bioOk() ? '解鎖時自動跳出指紋，也可以改用密碼' : '這支手機沒有設定指紋或臉部辨識'}))));
     body.appendChild(h('div', {class: 'ydSect', text: '要上鎖的地方'}));
     body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: true, disabled: true}),
       h('div', {class: 'grow'}, h('b', {text: '帳號密碼（每一組都要單獨驗證）'}), h('div', {class: 'sub', text: '固定開啟：每次查看、複製、修改任何一組密碼，都要重新輸入密碼或指紋；離開畫面就馬上鎖回去'}))));
-    body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.trash, onchange: function(){ SEC.cfg.trash = this.checked; SEC.save(); }}),
+    body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.trash, onchange: lockToggle(0, function(v){ SEC.cfg.trash = v; SEC.save(); })}),
       h('div', {class: 'grow'}, h('b', {text: '垃圾桶'}), h('div', {class: 'sub', text: '打開檔案庫或收藏的垃圾桶（還原、永久刪除）前要解鎖'}))));
-    body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.bm, onchange: function(){ SEC.cfg.bm = this.checked; SEC.save(); }}),
+    body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.bm, onchange: lockToggle(0, function(v){ SEC.cfg.bm = v; SEC.save(); fire('secChanged'); })}),
       h('div', {class: 'grow'}, h('b', {text: '整個我的收藏'}), h('div', {class: 'sub', text: '打開收藏清單前要解鎖。只想鎖某個收藏夾（例如「社交」）：在「我的收藏 → 右上角鉛筆（管理收藏夾）」按那個收藏夾的鎖頭'}))));
     Object.keys(CAT).forEach(function(k){
-      body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.cats[k], onchange: function(){ if(this.checked) SEC.cfg.cats[k] = true; else delete SEC.cfg.cats[k]; SEC.save(); fire('secChanged'); }}),
+      body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!SEC.cfg.cats[k], onchange: lockToggle(0, function(v){ if(v) SEC.cfg.cats[k] = true; else delete SEC.cfg.cats[k]; SEC.save(); fire('secChanged'); })}),
         h('div', {class: 'grow'}, h('b', {text: '檔案庫：' + (k === 'audio' ? '音樂庫' : CAT[k].name)}), h('div', {class: 'sub', text: '整個分類（包含裡面的資料夾）'}))));
     });
     var lockedF = LF.folders.filter(function(f){ return f.lock && !f.sys; });
     body.appendChild(h('div', {class: 'sub', style: {margin: '8px 2px', lineHeight: '1.6'}, text: '只鎖某個資料夾：在檔案庫的資料夾按「⋯」→「上鎖」。' + (lockedF.length ? '目前上鎖的資料夾：' + lockedF.map(function(f){ return f.name; }).join('、') : '')}));
     if(isApp && NAT.has('intruderCam')){
       body.appendChild(h('div', {class: 'ydSect', text: '入侵者拍照'}));
-      body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!NAT.call('intruderCamGet'), onchange: function(){ NAT.call('intruderCam', this.checked); if(this.checked && !NAT.call('camOk')) NAT.call('camAsk'); }}),
+      body.appendChild(h('label', {class: 'opt'}, h('input', {type: 'checkbox', checked: !!NAT.call('intruderCamGet'), onchange: lockToggle(0, function(v){ NAT.call('intruderCam', v); if(v && !NAT.call('camOk')) NAT.call('camAsk'); })}),
         h('div', {class: 'grow'}, h('b', {text: '連續輸錯 3 次時用前鏡頭拍照'}), h('div', {class: 'sub', text: NAT.call('camOk') ? '照片存在上鎖的「圖片 → 入侵者照片」資料夾' : '需要相機權限（勾選後會詢問）'}))));
     }
     body.appendChild(h('div', {class: 'btn-row', style: {marginTop: '10px'}},

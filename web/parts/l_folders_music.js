@@ -76,7 +76,7 @@ function folderMenu(f, redraw){
   }
   var lockItem = ['key', f.lock ? '解除上鎖' : '上鎖', async function(){
     if(!SEC.has()){ dialog('還沒有設定密碼', '要先設定一組密碼，才能把資料夾鎖起來。', [['設定密碼', function(){ setPinFlow(); }], ['取消', null, '']]); return; }
-    if(!(await SEC.need(f.lock ? '解除上鎖' : '上鎖「' + f.name + '」'))) return;
+    if(!(await (f.lock ? SEC.verify('解除「' + f.name + '」的上鎖') : SEC.need('上鎖「' + f.name + '」')))) return;
     f.lock = !f.lock; LF.save(); toast(f.lock ? '🔒 已上鎖「' + f.name + '」（離開 App 後要密碼才能打開）' : '已解除上鎖'); redraw();
   }, false, f.lock ? '' : '裡面的檔案和子資料夾都要密碼才能看'];
   menu(f.icon + ' ' + f.name, [lockItem,

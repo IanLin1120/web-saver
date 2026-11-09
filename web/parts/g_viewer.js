@@ -223,11 +223,14 @@ function vpSubs(it){
     var sh = /^zh-(Hant|TW|HK)/i.test(l) ? '繁中' : /^zh-(Hans|CN)/i.test(l) ? '簡中' : /^zh/i.test(l) ? '中文' : /^en/i.test(l) ? '英文' : /^ja/i.test(l) ? '日文' : /^ko/i.test(l) ? '韓文' : '';
     out.push({item: item, lang: l, label: label && label !== l ? label : sh ? sh + '（' + l + '）' : (l || item.name), short: sh || l || '開'});
   };
-  (it.subs || []).forEach(function(x){ add(Lib.byId(x.id), x.lang, x.label); });
+  /* 只算還在檔案庫裡的字幕（原檔被刪掉、丟進垃圾桶就不再顯示）；被「移除連結」的不顯示 */
+  var alive = function(id){ return Lib.items.filter(function(y){ return y.id === id; })[0]; };
+  var hide = it.subsHide || [];
+  (it.subs || []).forEach(function(x){ if(hide.indexOf(x.id) < 0) add(alive(x.id), x.lang, x.label); });
   var stem = String(it.name || '').replace(/\.[^.]+$/, '').toLowerCase(), nv = vpNorm(it.name), nt = vpNorm(it.title);
   Lib.items.forEach(function(x){
     var n = String(x.name || '').toLowerCase();
-    if(!/\.(srt|vtt|ass|ssa)$/.test(n)) return;
+    if(!/\.(srt|vtt|ass|ssa)$/.test(n) || hide.indexOf(x.id) >= 0) return;
     var b = n.replace(/\.(srt|vtt|ass|ssa)$/, '');
     if(stem && (b === stem || b.indexOf(stem + '.') === 0)){ add(x, b === stem ? '' : b.slice(stem.length + 1)); return; }
     var lm = b.match(/\.([a-z]{2,3}(-[a-z0-9]{2,4})?)$/i), lang = lm ? lm[1] : '', nb = vpNorm(lm ? b.slice(0, -lm[0].length) : b);
@@ -323,12 +326,35 @@ async function viewVideo(it, body){
     subTick();
   }
   function subMenu(){
+    /* 字幕原檔在檔案庫被刪掉了：這裡跟著拿掉 */
+    var cur = subI >= 0 ? subs[subI] : null;
+    subs = subs.filter(function(x){ return Lib.items.some(function(y){ return y.id === x.item.id; }); });
+    subI = cur ? subs.indexOf(cur) : -1;
+    if(cur && subI < 0) setSub(-1);
     var items = [];
-    subs.forEach(function(x, i){ items.push(['film', x.label + (i === subI ? '　✓' : ''), function(){ setSub(i); fl('字幕：' + x.label); }, false, x.item.name]); });
+    subs.forEach(function(x, i){ items.push(['film', x.label + (i === subI ? '　✓' : ''), function(){ setSub(i); fl('字幕：' + x.label); }, false, x.item.name, function(){ unlinkSub(x, i); }]); });
+    if(subs.length) items.push(null);
     if(subs.length) items.push(['x', '關閉字幕' + (subI < 0 ? '　✓' : ''), function(){ setSub(-1); fl('字幕：關'); }]);
     items.push(['sliders', '字幕樣式與同步…', function(){ subSettings(); }, false, '大小、顏色、背景、位置、提早／延後']);
     items.push(['folder', '從檔案庫選字幕檔…', function(){ pickSubFile(); }, false, 'SRT、VTT、ASS']);
     menu('字幕', items);
+  }
+  /* 長按字幕：只移除和這部影片的連結，不刪字幕原檔 */
+  function unlinkSub(x, i){
+    menu(x.label, [
+      ['x', '從這部影片移除這個字幕', function(){
+        var ls = (it.subs || []).filter(function(y){ return y.id !== x.item.id; });
+        var hd = (it.subsHide || []).filter(function(y){ return y !== x.item.id; }).concat([x.item.id]);
+        it.subs = ls; it.subsHide = hd;
+        if(isApp) NAT.call('libMeta', it.id, JSON.stringify({subs: ls, subsHide: hd}));
+        if(subI === i) setSub(-1); else if(subI > i) subI--;
+        subs.splice(i, 1);
+        if(subI >= subs.length) subI = -1;
+        ccB.textContent = subI >= 0 ? '字幕：' + (subs[subI].short || '開') : (subs.length ? '字幕：關' : '字幕');
+        toast('已移除連結（字幕原檔還在檔案庫）');
+      }, true, '不會刪除字幕檔本身；之後可以用「從檔案庫選字幕檔」再加回來'],
+      ['film', '取消', function(){}]
+    ]);
   }
   function pickSubFile(){
     var L = Lib.items.filter(function(x){ return /\.(srt|vtt|ass|ssa)$/i.test(x.name || ''); });
@@ -337,7 +363,8 @@ async function viewVideo(it, body){
       var k = subs.findIndex(function(y){ return y.item.id === x.id; });
       if(k < 0){ subs.push({item: x, lang: '', label: x.name, short: '開'}); k = subs.length - 1; }
       var ls = (it.subs || []).filter(function(y){ return y.id !== x.id; }).concat([{id: x.id, lang: '', label: x.name}]);
-      it.subs = ls; if(isApp) NAT.call('libMeta', it.id, JSON.stringify({subs: ls}));
+      var hd2 = (it.subsHide || []).filter(function(y){ return y !== x.id; });
+      it.subs = ls; it.subsHide = hd2; if(isApp) NAT.call('libMeta', it.id, JSON.stringify({subs: ls, subsHide: hd2}));
       setSub(k); fl('已套用字幕');
     }]; }));
   }
@@ -453,7 +480,8 @@ async function viewVideo(it, body){
   }, true);
   function ptUp(e){ delete pts[e.pointerId]; if(Object.keys(pts).length < 2) pz = null; }
   box.addEventListener('pointerup', ptUp, true); box.addEventListener('pointercancel', ptUp, true);
-  var bot = h('div', {class: 'vpBot'}, bar, h('div', {class: 'vpRow'}, tm, h('span', {style: {flex: 1}}), ccB, fitB, sp, moreB, fsB));
+  var row = h('div', {class: 'vpRow'}, tm, h('span', {style: {flex: 1}}), ccB, fitB, sp, moreB, fsB);
+  var bot = h('div', {class: 'vpBot'}, bar, row);
   var flash = h('div', {class: 'vpFlash'});
   ui.appendChild(mid); ui.appendChild(bot);
   box.appendChild(subBox); box.appendChild(ui); box.appendChild(flash); box.appendChild(lockOv);
@@ -464,10 +492,10 @@ async function viewVideo(it, body){
   function fl(t){ flash.textContent = t; flash.classList.add('on'); clearTimeout(fl.t); fl.t = setTimeout(function(){ flash.classList.remove('on'); }, 900); }
   function fmtT(t){ t = Math.max(0, Math.floor(t || 0)); var hh = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), ss = t % 60; return (hh ? hh + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (ss < 10 ? '0' : '') + ss; }
   function seek(d){ v.currentTime = Math.max(0, Math.min((v.duration || 0) - 0.3, v.currentTime + d)); }
-  function tog(){ if(v.paused) v.play().catch(function(){}); else v.pause(); }
+  function tog(){ buzz(10); if(v.paused) v.play().catch(function(){}); else v.pause(); }
   pv.onclick = function(e){ e.stopPropagation(); tog(); show(); };
-  rw.onclick = function(e){ e.stopPropagation(); seek(-10); fl('-10 秒'); show(); };
-  fw.onclick = function(e){ e.stopPropagation(); seek(10); fl('+10 秒'); show(); };
+  rw.onclick = function(e){ e.stopPropagation(); buzz(10); seek(-10); fl('-10 秒'); show(); };
+  fw.onclick = function(e){ e.stopPropagation(); buzz(10); seek(10); fl('+10 秒'); show(); };
   var SP = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
   sp.onclick = function(e){ e.stopPropagation(); var i = SP.indexOf(v.playbackRate); v.playbackRate = SP[(i + 1) % SP.length]; sp.textContent = v.playbackRate + '×'; fl('速度 ' + v.playbackRate + '×'); show(); };
   /* 全螢幕：整個 App 隱藏狀態列、橫向影片自動轉橫向 */
@@ -488,10 +516,19 @@ async function viewVideo(it, body){
   /* 進度條 */
   var drag = false;
   function pos(x){ var r = bar.getBoundingClientRect(); return Math.max(0, Math.min(1, (x - r.left) / r.width)); }
-  bar.addEventListener('pointerdown', function(e){ e.stopPropagation(); drag = true; bar.setPointerCapture(e.pointerId); bar.classList.add('drag'); mv(e); show(true); });
+  /* 進度條：按下震一下、拖動時每移動一小段輕震（像轉盤的段落感）；放開後短時間內擋掉下方按鈕，避免誤觸 */
+  var tick = -1, guard = 0;
+  bar.addEventListener('pointerdown', function(e){ e.stopPropagation(); drag = true; bar.setPointerCapture(e.pointerId); bar.classList.add('drag'); tick = -1; buzz(14); mv(e); show(true); });
   bar.addEventListener('pointermove', function(e){ if(drag) mv(e); });
-  function mv(e){ var f = pos(e.clientX); bar.querySelector('.pl').style.width = f * 100 + '%'; bar.querySelector('.kn').style.left = f * 100 + '%'; fl(fmtT(f * (v.duration || 0))); bar.__f = f; }
-  function upB(){ if(!drag) return; drag = false; bar.classList.remove('drag'); if(bar.__f != null && v.duration) v.currentTime = bar.__f * v.duration; show(); }
+  function mv(e){
+    var f = pos(e.clientX); bar.querySelector('.pl').style.width = f * 100 + '%'; bar.querySelector('.kn').style.left = f * 100 + '%'; fl(fmtT(f * (v.duration || 0))); bar.__f = f;
+    var k = Math.round(f * 40); if(tick >= 0 && k !== tick) buzz(5); tick = k;
+  }
+  function upB(){ if(!drag) return; drag = false; guard = Date.now(); bar.classList.remove('drag'); if(bar.__f != null && v.duration) v.currentTime = bar.__f * v.duration; buzz(10); show(); }
+  row.addEventListener('click', function(e){
+    if(Date.now() - guard < 500){ e.stopPropagation(); e.preventDefault(); return; }
+    if(e.target.closest('button')) buzz(10);
+  }, true);
   bar.addEventListener('pointerup', upB); bar.addEventListener('pointercancel', upB);
   /* 手勢：點一下顯示控制、兩側連點快轉／快退、長按 2 倍速、左右滑拖曳 */
   var G = null, last = {t: 0, side: ''}, combo = {n: 0, side: '', t: 0}, tapT = 0;

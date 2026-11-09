@@ -395,6 +395,8 @@ async function openYt(id){
       sect('字幕（可複選，會跟影片一起下載）', it.C.length ? it.C : []); if(!it.C.length) body.appendChild(h('div', {class: 'ydRow dis'}, h('span', {class: 'ydQ', style: {background: '#999'}}, h('b', {text: 'CC'})), h('div', {class: 'grow'}, h('b', {text: '字幕／CC'}), h('div', {class: 'sub', text: '這部影片沒有字幕'}))));
       sect('縮圖', it.T);
     } else {
+      /* 交給其他 App 下載放在最上面（音樂上方） */
+      var hob = handOffButtons('https://youtu.be/' + d.id, function(){ s.close(); }); if(hob){ hob.style.marginBottom = '6px'; body.appendChild(hob); }
       /* 精簡清單：像 Snaptube 一樣只列最常用的 */
       var vs = it.V.filter(function(x){ return x.h; });
       var fast = vs.filter(function(x){ return x.h <= 480; })[0] || vs[vs.length - 1];
@@ -411,7 +413,6 @@ async function openYt(id){
     name.oninput = function(){ nameRow.firstChild.textContent = '檔名：' + nm(); };
     body.appendChild(nameRow);
     if(!more && !d.page) body.appendChild(h('div', {class: 'sub', style: {fontSize: '11.5px', margin: '8px 2px', lineHeight: '1.6'}, html: '來源：' + esc(d.src)}));
-    var hob = handOffButtons('https://youtu.be/' + d.id, function(){ s.close(); }); if(hob) body.appendChild(hob);
     var rows = qsa('.ydRow:not(.ydChk)', body), last = lsGet('ws.ytLastK', '');
     var pre = rows.filter(function(r){ return r.dataset.k === last; })[0] || rows.filter(function(r){ return /^v/.test(r.dataset.k || ''); }).pop() || rows[0];
     if(pre && pre.dataset.k) pre.click();

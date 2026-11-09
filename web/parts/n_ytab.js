@@ -191,6 +191,11 @@ function handOffButtons(url, before){
     row.appendChild(h('button', {class: 'hoBtn', onclick: function(){ if(before) before(); handOff(url, a.pkg, a.label); }},
       a.icon ? h('img', {src: a.icon, alt: ''}) : h('span', {html: icon('download')}), h('span', {class: 'ell', text: a.label})));
   });
+  /* 沒裝 Snaptube：提供官方網站下載（App 不另外散布別人的安裝檔） */
+  if(!list.some(function(a){ return /snaptube/i.test(a.pkg + ' ' + a.label); }))
+    row.appendChild(h('button', {class: 'hoBtn', onclick: function(){
+      dialog('還沒安裝 Snaptube', '要用 Snaptube 下載，請先到 Snaptube 官方網站下載安裝（Google Play 沒有上架）。安裝時 Android 會詢問是否允許安裝未知來源的 App。<br><br>裝好後回來，這裡就會出現 Snaptube 按鈕。', [['開啟官方網站', function(){ openExternal('https://www.snaptubeapp.com/'); }], ['取消', null, '']]);
+    }}, h('span', {class: 'more', html: icon('download')}), h('span', {class: 'ell', text: '取得 Snaptube'})));
   row.appendChild(h('button', {class: 'hoBtn', onclick: function(){ if(before) before(); pickShareApp(url); }}, h('span', {class: 'more', html: icon('more')}), h('span', {text: '其他 App…'})));
   return h('div', null, h('div', {class: 'ydSect', text: '交給其他 App 下載（下載完自動搬回、刪除原檔）'}), row);
 }

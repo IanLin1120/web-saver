@@ -291,11 +291,20 @@ function menu(title, items){
   /* items: [[icon, label, fn, danger]] */
   var list = h('div', {class: 'opts'});
   var s = openSheet({title: title, body: list});
+  /* items[5]（選用）：長按這一項時要做的事 */
   items.forEach(function(it){
     if(!it) return;
-    list.appendChild(h('div', {class: 'opt', onclick: function(){ s.close(); setTimeout(it[2], 60); }},
+    var row = h('div', {class: 'opt', onclick: function(){ if(row._lp){ row._lp = false; return; } s.close(); setTimeout(it[2], 60); }},
       h('span', {class: 'oi', html: icon(it[0]), style: it[3] ? {color: 'var(--danger)', background: 'color-mix(in srgb,var(--danger) 14%,var(--surface-2))'} : null}),
-      h('div', {class: 'grow'}, h('b', {text: it[1], style: it[3] ? {color: 'var(--danger)'} : null}), it[4] ? h('div', {class: 'sub', text: it[4]}) : null)));
+      h('div', {class: 'grow'}, h('b', {text: it[1], style: it[3] ? {color: 'var(--danger)'} : null}), it[4] ? h('div', {class: 'sub', text: it[4]}) : null));
+    if(it[5]){
+      var t = 0, sx = 0, sy = 0;
+      row.addEventListener('touchstart', function(e){ sx = e.touches[0].clientX; sy = e.touches[0].clientY; t = setTimeout(function(){ t = 0; row._lp = true; buzz(25); s.close(); setTimeout(it[5], 80); }, 480); }, {passive: true});
+      row.addEventListener('touchmove', function(e){ if(t && (Math.abs(e.touches[0].clientX - sx) > 10 || Math.abs(e.touches[0].clientY - sy) > 10)){ clearTimeout(t); t = 0; } }, {passive: true});
+      row.addEventListener('touchend', function(){ clearTimeout(t); t = 0; });
+      row.addEventListener('contextmenu', function(e){ e.preventDefault(); row._lp = true; s.close(); setTimeout(it[5], 80); });
+    }
+    list.appendChild(row);
   });
   return s;
 }
