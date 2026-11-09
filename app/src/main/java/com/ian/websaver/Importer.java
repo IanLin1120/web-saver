@@ -168,6 +168,11 @@ final class Importer {
     private static JSONObject copyIn(MainActivity a, Lib lib, ContentResolver cr, Doc x) throws Exception { return copyIn(a, lib, cr, x, x.name); }
 
     private static JSONObject copyIn(MainActivity a, Lib lib, ContentResolver cr, Doc x, String name) throws Exception {
+        try { return copyIn1(a, lib, cr, x, name); }
+        catch (java.io.FileNotFoundException e) { Thread.sleep(800); return copyIn1(a, lib, cr, x, name); }   /* 暫存資料夾剛被清掉之類：重試一次 */
+    }
+
+    private static JSONObject copyIn1(MainActivity a, Lib lib, ContentResolver cr, Doc x, String name) throws Exception {
         String ext = Util.extOf(x.name);
         File t = lib.tmpFile(ext);
         InputStream in = cr.openInputStream(x.uri);

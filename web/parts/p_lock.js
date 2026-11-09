@@ -92,7 +92,19 @@ function pinPad(o){
   }
   if(o.bio && bioOk() && o.mode !== 'new' && SEC.cfg.bio !== false) setTimeout(bio, 250);
 }
-function buzz(ms){ try{ if(isApp && NAT.has('buzz')) NAT.call('buzz', ms); else if(navigator.vibrate) navigator.vibrate(ms < 0 ? [40, 70, 60] : ms); }catch(e){} }
+/* 震動：依設定的強度（關／輕／中／強）放大時間與力道 */
+function buzz(ms){
+  try{
+    var lv = typeof CFG !== 'undefined' && CFG.haptic != null ? +CFG.haptic : 2;
+    if(lv <= 0) return;
+    if(ms >= 0){
+      var k = [0, 1, 1.7, 2.6][lv], amp = [0, 80, 170, 255][lv];
+      ms = Math.round(Math.max(8, ms * k));
+      if(isApp && NAT.has('buzzAmp')){ NAT.call('buzzAmp', ms, amp); return; }
+    }
+    if(isApp && NAT.has('buzz')) NAT.call('buzz', ms); else if(navigator.vibrate) navigator.vibrate(ms < 0 ? [40, 70, 60] : ms);
+  }catch(e){}
+}
 function bioOk(){ return isApp && NAT.has('lockBioOk') && !!NAT.call('lockBioOk'); }
 async function sha(t){ var b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('ws:' + t)); return Array.from(new Uint8Array(b)).map(function(x){ return ('0' + x.toString(16)).slice(-2); }).join(''); }
 

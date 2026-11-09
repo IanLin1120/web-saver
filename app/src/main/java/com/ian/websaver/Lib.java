@@ -45,7 +45,8 @@ final class Lib {
         catch (Throwable t) { items = new JSONArray(); }
     }
 
-    File tmpFile(String ext) { return new File(tmp, "t" + System.nanoTime() + "_" + new Random().nextInt(9999) + (ext.isEmpty() ? "" : "." + ext)); }
+    /* 系統（或手機的「清理／最佳化」）可能在 App 執行中把快取資料夾整個清掉：每次都確認資料夾還在 */
+    File tmpFile(String ext) { if (!tmp.isDirectory()) tmp.mkdirs(); return new File(tmp, "t" + System.nanoTime() + "_" + new Random().nextInt(9999) + (ext.isEmpty() ? "" : "." + ext)); }
 
     private void save() {
         try { Util.writeText(index, items.toString()); } catch (Throwable t) { /* ignore */ }
@@ -80,6 +81,8 @@ final class Lib {
         if (mime == null || mime.isEmpty() || mime.equals("application/octet-stream")) mime = Util.mimeOfExt(ext);
         String id = Long.toString(System.currentTimeMillis(), 36) + Integer.toString(new Random().nextInt(46655), 36);
         String fname = id + (ext.isEmpty() ? "" : "." + ext);
+        if (!files.isDirectory()) files.mkdirs();
+        if (!thumbs.isDirectory()) thumbs.mkdirs();
         File dst = new File(files, fname);
         if (!src.renameTo(dst)) { Util.copyFile(src, dst); src.delete(); }
         JSONObject o = new JSONObject();

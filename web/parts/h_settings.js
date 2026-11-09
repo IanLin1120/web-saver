@@ -13,7 +13,9 @@ function renderSettings(){
     h('div', {class: 'field'}, h('div', {class: 'lbl'}, '主題'), segRow([['auto', '跟隨系統'], ['light', '淺色'], ['dark', '深色']], 'theme')),
     h('div', {class: 'field'}, h('div', {class: 'lbl'}, '配色'), paletteRow()),
     rangeRow('App 介面大小', 'uiScale', 85, 125, 5, function(v){ return v + '%'; }),
-    swRow('動畫效果', '關閉後切換畫面更直接（較舊的手機可關閉）', 'motion')
+    swRow('動畫效果', '關閉後切換畫面更直接（較舊的手機可關閉）', 'motion'),
+    h('div', {class: 'field'}, h('div', {class: 'lbl'}, h('span', null, '震動強度'), h('span', {class: 'sub', text: '切換分頁、按鈕、拖動時'})),
+      segRow([[0, '關閉'], [1, '輕'], [2, '中'], [3, '強']], 'haptic', function(){ setTimeout(function(){ buzz(20); }, 30); }))
   ]));
 
   /* 瀏覽器 */

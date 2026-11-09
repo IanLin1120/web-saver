@@ -271,6 +271,14 @@ public class Bridge {
     @JavascriptInterface public boolean lockHas() { return Lock.has(a); }
     @JavascriptInterface public int lockLen() { return Lock.len(a); }
     /** 短震動（按鍵回饋）：ms 毫秒；ms＜0 代表「成功」的兩下震動 */
+    @JavascriptInterface public void buzzAmp(int ms, int amp) {
+        try {
+            android.os.Vibrator v = (android.os.Vibrator) a.getSystemService(android.content.Context.VIBRATOR_SERVICE);
+            if (v == null || !v.hasVibrator()) return;
+            int am = v.hasAmplitudeControl() ? Math.max(1, Math.min(255, amp)) : android.os.VibrationEffect.DEFAULT_AMPLITUDE;
+            v.vibrate(android.os.VibrationEffect.createOneShot(Math.max(5, Math.min(400, ms)), am));
+        } catch (Throwable t) { /* ignore */ }
+    }
     @JavascriptInterface public void buzz(int ms) {
         try {
             android.os.Vibrator v = (android.os.Vibrator) a.getSystemService(android.content.Context.VIBRATOR_SERVICE);

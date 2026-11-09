@@ -2,7 +2,7 @@
    設定值、主題配色、介面大小
    ============================================================ */
 var CFG_DEF = {
-  theme: 'auto', palette: 'earth', uiScale: 100, motion: true,
+  theme: 'auto', palette: 'earth', uiScale: 100, motion: true, haptic: 2,
   mode: 'mobile', textZoom: 100, home: '', search: 'google', popups: 'smart',
   ads: true, adHosts: '', adCss: '', adAllow: '', pw: true,
   cap: {format: 'html', mode: 'full', removeAds: true, reader: false, embedImages: true, imgQ: 'orig', embedFonts: true, removeHidden: true, autoScroll: true, bg: true, banner: true, nameTpl: '{title}', paper: 'a4', landscape: false, margin: 10},
