@@ -129,6 +129,7 @@ var IC = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
   history: '<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4.5h4.5M12 7.5V12l3 2"/>',
   folderPlus: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10.5v5M9.5 13h5"/>',
+  grip: '<circle cx="9" cy="6" r="1.3" fill="currentColor"/><circle cx="15" cy="6" r="1.3" fill="currentColor"/><circle cx="9" cy="12" r="1.3" fill="currentColor"/><circle cx="15" cy="12" r="1.3" fill="currentColor"/><circle cx="9" cy="18" r="1.3" fill="currentColor"/><circle cx="15" cy="18" r="1.3" fill="currentColor"/>',
   send: '<path d="M4 12l16-8-6 16-2.5-6.5z"/><path d="M11.5 13.5L20 4"/>',
   sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>'
 };
@@ -383,3 +384,103 @@ function downloadBlob(blob, name){
   document.body.appendChild(a); a.click();
   setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
 }
+
+/* ---------- 長按拖動排序：震動＋提示線 ---------- */
+function dragSort(list, onMove, opt){
+  opt = opt || {};
+  if(getComputedStyle(list).position === 'static') list.style.position = 'relative';
+  var line = null, D = null;
+  function rows(){ return Array.prototype.filter.call(list.children, function(x){ return x !== line && !x.classList.contains('dsLine'); }); }
+  function scroller(){ var e = list; while(e && e !== document.body){ var o = getComputedStyle(e).overflowY; if((o === 'auto' || o === 'scroll') && e.scrollHeight > e.clientHeight) return e; e = e.parentElement; } return null; }
+  rows().forEach(function(row, idx){
+    var t = 0, sy = 0, sx = 0;
+    row.addEventListener('touchstart', function(e){
+      if(e.touches.length > 1) return;
+      sy = e.touches[0].clientY; sx = e.touches[0].clientX;
+      clearTimeout(t);
+      t = setTimeout(function(){ t = 0; begin(row, sy); }, opt.hold || 320);
+    }, {passive: true});
+    row.addEventListener('touchmove', function(e){
+      var y = e.touches[0].clientY, x = e.touches[0].clientX;
+      if(t && (Math.abs(y - sy) > 8 || Math.abs(x - sx) > 8)){ clearTimeout(t); t = 0; }
+      if(D && D.row === row){ e.preventDefault(); move(y); }
+    }, {passive: false});
+    row.addEventListener('touchend', function(){ clearTimeout(t); t = 0; if(D && D.row === row) end(); });
+    row.addEventListener('touchcancel', function(){ clearTimeout(t); t = 0; if(D && D.row === row) end(true); });
+  });
+  function begin(row, y){
+    var R = rows();
+    D = {row: row, from: R.indexOf(row), to: R.indexOf(row), y0: y, sc: scroller()};
+    D.st0 = D.sc ? D.sc.scrollTop : 0;
+    row.classList.add('dsDrag');
+    line = h('div', {class: 'dsLine'}); list.appendChild(line);
+    buzz(25);
+    place();
+    row.addEventListener('click', swallow, true);
+  }
+  function swallow(e){ e.stopPropagation(); e.preventDefault(); D || this.removeEventListener('click', swallow, true); }
+  function move(y){
+    var sc = D.sc;
+    if(sc){ var r = sc.getBoundingClientRect(); if(y < r.top + 50) sc.scrollTop -= 8; else if(y > r.bottom - 50) sc.scrollTop += 8; }
+    var dy = y - D.y0 + (sc ? sc.scrollTop - D.st0 : 0);
+    D.row.style.transform = 'translateY(' + dy + 'px)';
+    var R = rows(), to = 0;
+    for(var i = 0; i < R.length; i++){ if(R[i] === D.row) continue; var b = R[i].getBoundingClientRect(); if(y > b.top + b.height / 2) to = i + 1; }
+    if(to > D.from) to--;   /* 拿掉自己之後的位置 */
+    to = Math.max(0, Math.min(R.length - 1, to));
+    if(to !== D.to){ D.to = to; buzz(8); place(); }
+  }
+  function place(){
+    var R = rows().filter(function(x){ return x !== D.row; });
+    var lr = list.getBoundingClientRect(), y;
+    if(D.to >= R.length){ var last = R[R.length - 1]; y = last ? last.getBoundingClientRect().bottom - lr.top : 0; }
+    else y = R[D.to].getBoundingClientRect().top - lr.top;
+    line.style.top = (y - 2 + list.scrollTop) + 'px';
+  }
+  function end(cancel){
+    var d = D; D = null;
+    d.row.classList.remove('dsDrag'); d.row.style.transform = '';
+    if(line){ line.remove(); line = null; }
+    setTimeout(function(){ d.row.removeEventListener('click', swallow, true); }, 50);
+    if(!cancel && d.to !== d.from){ buzz(15); onMove(d.from, d.to); }
+  }
+}
+
+/* ---------- 滑桿：要先在圓點上長按 0.2 秒才能拖動，拖動時每一格震動一下（避免捲動時誤觸） ---------- */
+function holdRange(r, holdMs){
+  holdMs = holdMs || 200;
+  var t = 0, armed = false, sx = 0, sy = 0, last = 0, sc = null;
+  function geo(){ var b = r.getBoundingClientRect(), tw = 22, min = +r.min || 0, max = +r.max || 100; return {b: b, tw: tw, min: min, max: max}; }
+  function thumbX(g){ return g.b.left + g.tw / 2 + ((+r.value - g.min) / ((g.max - g.min) || 1)) * (g.b.width - g.tw); }
+  function valAt(x, g){ var f = Math.max(0, Math.min(1, (x - g.b.left - g.tw / 2) / ((g.b.width - g.tw) || 1))), st = +r.step || 1, v = g.min + f * (g.max - g.min); return Math.round(v / st) * st; }
+  r.addEventListener('touchstart', function(e){
+    e.preventDefault();
+    var p = e.touches[0]; sx = p.clientX; sy = p.clientY; last = sy; armed = false;
+    sc = r.closest('.scroll, .sh-body, .view');
+    var g = geo();
+    if(Math.abs(sx - thumbX(g)) > 30) return;   /* 只有按在圓點上才算 */
+    t = setTimeout(function(){ t = 0; armed = true; r.classList.add('hrArmed'); buzz(20); }, holdMs);
+  }, {passive: false});
+  r.addEventListener('touchmove', function(e){
+    e.preventDefault();
+    var p = e.touches[0];
+    if(armed){
+      var v = valAt(p.clientX, geo());
+      if(v !== +r.value){ r.value = v; r.dispatchEvent(new Event('input', {bubbles: true})); buzz(6); }
+      return;
+    }
+    if(t && (Math.abs(p.clientX - sx) > 8 || Math.abs(p.clientY - sy) > 8)){ clearTimeout(t); t = 0; }
+    if(sc){ sc.scrollTop -= (p.clientY - last); }   /* 沒長按就當作捲動畫面 */
+    last = p.clientY;
+  }, {passive: false});
+  function up(){ clearTimeout(t); t = 0; if(armed){ armed = false; r.classList.remove('hrArmed'); r.dispatchEvent(new Event('change', {bubbles: true})); } }
+  r.addEventListener('touchend', up);
+  r.addEventListener('touchcancel', up);
+  return r;
+}
+
+/* ---------- 切換分頁、設定裡的按鈕：輕震一下 ---------- */
+document.addEventListener('click', function(e){
+  var el = e.target.closest && e.target.closest('#nav button, .seg button, .pal button, #v-set button, #v-set input[type=checkbox], .sheet input[type=checkbox]');
+  if(el && typeof buzz === 'function') buzz(10);
+}, true);

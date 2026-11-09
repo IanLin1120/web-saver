@@ -351,7 +351,7 @@ async function viewVideo(it, body){
     }
     function range(label, key, min, max, step, fmt){
       var val = h('b', {text: fmt(ST[key])});
-      var r = h('input', {type: 'range', min: min, max: max, step: step, value: ST[key], style: {width: '100%'}, oninput: function(){ ST[key] = +this.value; val.textContent = fmt(ST[key]); save(); }});
+      var r = holdRange(h('input', {type: 'range', min: min, max: max, step: step, value: ST[key], style: {width: '100%'}, oninput: function(){ ST[key] = +this.value; val.textContent = fmt(ST[key]); save(); }}));
       return h('div', {style: {marginBottom: '12px'}}, h('div', {style: {display: 'flex', justifyContent: 'space-between', margin: '4px 2px'}}, h('span', {style: {fontWeight: 700}, text: label}), val), r);
     }
     var dl = h('b', {text: (ST.delay > 0 ? '+' : '') + ST.delay.toFixed(1) + ' 秒'});

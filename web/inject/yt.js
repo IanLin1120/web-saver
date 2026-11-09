@@ -421,10 +421,12 @@
   function skin() {
     var host = document.getElementById('__ws_skin');
     var p = playerEl();
-    if (O.skin === false || !videoId() || !p) {
+    /* Shorts 用 YouTube 自己的介面（愛心、留言、分享、訂閱都要能按），不蓋上 App 的播放控制 */
+    var shorts = /^\/shorts\//.test(location.pathname);
+    if (O.skin === false || !videoId() || !p || shorts) {
       if (host) host.style.display = 'none';
       document.documentElement.classList.remove('__wsskin');
-      if (FS.on && !videoId()) setFs(false);
+      if (FS.on && (!videoId() || shorts)) setFs(false);
       return;
     }
     if (!skinCss) {

@@ -132,7 +132,7 @@ function lyricsStyleSheet(after){
   var prev = h('div', {class: 'lyrView', style: 'height:150px;' + lyrStyle()}, h('div', {class: 'lyrLine', text: '上一句歌詞'}), h('div', {class: 'lyrLine on', text: '正在唱的這一句'}), h('div', {class: 'lyrLine', text: '下一句歌詞'}));
   function upd(){ prev.setAttribute('style', 'height:150px;' + lyrStyle()); saveCfg(); if(after) after(); }
   body.appendChild(prev);
-  var sz = h('input', {type: 'range', min: 13, max: 40, step: 1, value: c.size}); var szv = h('span', {text: c.size + 'px'});
+  var sz = holdRange(h('input', {type: 'range', min: 13, max: 40, step: 1, value: c.size})); var szv = h('span', {text: c.size + 'px'});
   sz.oninput = function(){ c.size = +sz.value; szv.textContent = c.size + 'px'; upd(); };
   body.appendChild(h('div', {class: 'field'}, h('div', {class: 'lbl'}, h('span', null, '字體大小'), szv), sz));
   function colorRow(label, key, def){

@@ -121,7 +121,7 @@ final class Browser {
     private boolean handOffYt(Uri u, boolean isPopup) {
         if (!"br".equals(tag) || !isYtLink(u)) return false;
         if (isPopup) Util.MAIN.post(new Runnable() { @Override public void run() { closePopupView(); MainActivity.emit("popup", "{\"open\":false}"); } });
-        MainActivity.emit("brToYt", JSONObject.quote(u.toString()));
+        MainActivity.emit("brToYt", u.toString());
         return true;
     }
 

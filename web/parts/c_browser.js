@@ -304,9 +304,9 @@ function manageFolders(after){
     list.textContent = '';
     BM.folders.forEach(function(f, i){
       list.appendChild(h('div', {class: 'bmItem'},
+        h('span', {class: 'dsGrip', html: icon('grip', 'sm'), title: '長按上下拖動排序'}),
         h('div', {class: 'fav sm', text: f.icon, style: {fontSize: '20px'}, onclick: function(){ iconPicker('「' + f.name + '」的圖示', f.icon, function(ic){ f.icon = ic; BM.save(); draw(); }); }}),
         h('div', {class: 't'}, h('b', {text: f.name}), h('div', {class: 'sub', text: BM.count(f.id) + ' 個網頁'})),
-        i > 0 ? h('button', {class: 'ib', html: icon('back'), style: {transform: 'rotate(90deg)'}, title: '往上移', onclick: function(){ BM.folders.splice(i, 1); BM.folders.splice(i - 1, 0, f); BM.save(); draw(); }}) : null,
         h('button', {class: 'ib', html: icon(f.lock ? 'lock' : 'key'), title: f.lock ? '解除上鎖' : '上鎖', style: f.lock ? {color: 'var(--accent)'} : null, onclick: async function(){
           if(!SEC.has()){ dialog('還沒有設定密碼', '要先設定一組密碼，才能把收藏夾鎖起來。', [['設定密碼', function(){ setPinFlow(); }], ['取消', null, '']]); return; }
           if(!(await SEC.need(f.lock ? '解除上鎖' : '上鎖「' + f.name + '」'))) return;
@@ -322,6 +322,9 @@ function manageFolders(after){
           BM.folders = BM.folders.filter(function(x){ return x !== f; }); BM.save(); draw();
         }}) : null));
     });
+    paintIcons(list);
+    /* 長按任一列上下拖動排序 */
+    dragSort(list, function(from, to){ var f = BM.folders.splice(from, 1)[0]; BM.folders.splice(to, 0, f); BM.save(); draw(); });
   }
   draw();
 }
