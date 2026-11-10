@@ -966,7 +966,7 @@
 (function () {
   'use strict';
   if (!/^music\./.test(location.hostname)) return;
-  var VER = 7;
+  var VER = 8;
   if (window.__wsMu === VER) return;
   if (window.__wsMuT) clearInterval(window.__wsMuT);
   window.__wsMu = VER;
@@ -1065,7 +1065,7 @@
     /* 使用網頁擷取的播放介面：藏起 YouTube Music 自己的播放列與播放頁（按鈕還在，由 App 控制） */
     'html.wsMuOwn ytmusic-player-bar,html.wsMuOwn #player-bar-background{position:fixed!important;left:-200vw!important;bottom:0!important;opacity:0!important;pointer-events:none!important}',
     /* YouTube Music 自己的播放頁：完全看不到、點不到（音樂照常由它播放，畫面由 App 的播放面板負責）；清單內容保持顯示、可以捲動 */
-    'html.wsMuOwn ytmusic-player-page,html.wsMuOwn ytmusic-player-page *{visibility:hidden!important;pointer-events:none!important}',
+    'html.wsMuOwn:not(.wsMuShowPage) ytmusic-player-page,html.wsMuOwn:not(.wsMuShowPage) ytmusic-player-page *{visibility:hidden!important;pointer-events:none!important}',
     'html.wsMuOwn body{overflow:visible!important}',
     'html.wsMuOwn #content,html.wsMuOwn ytmusic-app-layout #content,html.wsMuOwn ytmusic-nav-bar,html.wsMuOwn #nav-bar-background,html.wsMuOwn ytmusic-app-layout > [slot],html.wsMuOwn #guide-wrapper{visibility:visible!important}',
     'html.wsMuOwn ytmusic-app-layout[player-ui-state="PLAYER_PAGE_OPEN"] #content,html.wsMuOwn ytmusic-app-layout[player-page-open] #content{display:block!important;opacity:1!important;transform:none!important}',
@@ -1074,9 +1074,9 @@
     X + 'img.wsMuImg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:10px;z-index:0}',
     'html.wsMuOwn ytmusic-app-layout{--ytmusic-player-bar-height:0px!important}',
     /* 小播放器的影片縮圖（YouTube Music 會讓它浮在畫面上跟著捲動）：用 App 的播放列，所以藏起來 */
-    'html.wsMuOwn ytmusic-player#player,html.wsMuOwn #player.ytmusic-player-page,html.wsMuOwn ytmusic-app-layout > #player{opacity:0!important;pointer-events:none!important}',
+    'html.wsMuOwn:not(.wsMuShowPage) ytmusic-player#player,html.wsMuOwn:not(.wsMuShowPage) #player.ytmusic-player-page,html.wsMuOwn:not(.wsMuShowPage) ytmusic-app-layout > #player{opacity:0!important;pointer-events:none!important}',
     'html.wsMuOwn #wsMuX{display:none!important}',
-    'html.wsMuOff ytmusic-player-bar,html.wsMuOff #player-bar-background,html.wsMuOff ytmusic-player-page,html.wsMuOff ytmusic-player-page *{visibility:hidden!important;pointer-events:none!important}',
+    'html.wsMuOff ytmusic-player-bar,html.wsMuOff #player-bar-background,html.wsMuOff:not(.wsMuShowPage) ytmusic-player-page,html.wsMuOff:not(.wsMuShowPage) ytmusic-player-page *{visibility:hidden!important;pointer-events:none!important}',
     'html.wsMuOff body{overflow:visible!important}',
     'html.wsMuOff #content,html.wsMuOff ytmusic-nav-bar{visibility:visible!important}',
     'html.wsMuOff ytmusic-app-layout{--ytmusic-player-bar-height:0px!important}'
@@ -1241,11 +1241,38 @@
     var r = pp.getBoundingClientRect();
     return r.height > innerHeight * 0.5 && r.top < innerHeight * 0.3 && r.bottom > innerHeight * 0.6;
   }
+  /* 清單有沒有真的顯示在畫面上（YouTube Music 的播放頁開著時，會把清單整個藏起來 → 畫面空白） */
+  function contentShown() {
+    var pts = [[innerWidth / 2, innerHeight * 0.35], [innerWidth / 2, innerHeight * 0.6], [innerWidth * 0.3, innerHeight * 0.5]];
+    for (var i = 0; i < pts.length; i++) {
+      var el = document.elementFromPoint(pts[i][0], pts[i][1]);
+      if (el && el.closest && el.closest('#content, ytmusic-browse-response, ytmusic-section-list-renderer, ytmusic-search-page, ytmusic-tabbed-search-results-renderer, ytmusic-guide-renderer, tp-yt-app-drawer, ytmusic-nav-bar, ytmusic-search-box, tp-yt-iron-dropdown, ytmusic-popup-container, tp-yt-paper-dialog')) return true;
+    }
+    return false;
+  }
+  function chevron() {
+    var pp = q('ytmusic-player-page'); if (!pp) return null;
+    var c = pp.querySelectorAll('[icon*="expand_more"], [icon*="arrow_down"], [icon*="chevron_down"], [icon*="keyboard_arrow_down"], [icon*="collapse"]');
+    for (var i = 0; i < c.length; i++) { var b = c[i].closest('button, tp-yt-paper-icon-button, yt-icon-button, yt-button-shape') || c[i]; return b; }
+    var bs = pp.querySelectorAll('button, tp-yt-paper-icon-button, yt-icon-button');
+    for (var k = 0; k < bs.length; k++) if (/收合|最小化|縮小|收起|關閉|向下|minimi|collapse|close|down/i.test(lbl(bs[k]))) return bs[k];
+    return null;
+  }
+  var step = 0, blankSince = 0;
+  /* 依序試不同方法把 YouTube Music 的播放頁收起來 */
   function collapsePage() {
-    if (!pageOpen() || Date.now() - collapseAt < 800) return;
+    if (Date.now() - collapseAt < 700) return;
+    var open = pageOpen(), shown = contentShown();
+    if (!open && shown) { step = 0; blankSince = 0; document.documentElement.classList.remove('wsMuShowPage'); return; }
     collapseAt = Date.now();
-    var b = q('ytmusic-player-bar .toggle-player-page-button, .toggle-player-page-button') || findByLabel(/收合|最小化|關閉播放器|縮小|minimi|collapse|close player/i) || q('ytmusic-player-page .collapse-button, ytmusic-player-page tp-yt-paper-icon-button.minimize');
-    if (b) { try { b.click(); } catch (e) {} }
+    if (!blankSince) blankSince = Date.now();
+    var s = step++ % 4;
+    if (s === 0) click(q('ytmusic-player-bar .toggle-player-page-button, .toggle-player-page-button'));
+    else if (s === 1) click(chevron() || findByLabel(/收合|最小化|關閉播放器|縮小|minimi|collapse|close player/i));
+    else if (s === 2) { if (/^\/watch/.test(location.pathname) && history.length > 1) history.back(); }
+    else { try { document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true})); } catch (e) {} }
+    /* 收不起來：與其讓畫面空白，不如先顯示 YouTube Music 原本的播放頁 */
+    if (!contentShown() && Date.now() - blankSince > 2500) document.documentElement.classList.add('wsMuShowPage');
   }
   window.__wsMuCollapse = function () { collapseAt = 0; collapsePage(); };
   function click(el) { if (!el) return false; try { el.click(); return true; } catch (e) { return false; } }
