@@ -1,1 +1,4 @@
-修正 YouTube Music 整個畫面空白：YouTube Music 自己的播放頁收不起來時，會依序試四種方法收起；真的收不起來就先顯示它原本的播放頁，絕對不會再留下空白畫面
+修正 YouTube Music 一打開就空白、要按上方 ✕ 才出現：自動收起 YouTube Music 播放頁的檢查之前在背景時不會執行，現在一直會執行
+修正 YouTube Music 明明沒播放卻顯示正在播放：剛打開時 YouTube Music 載入上次的歌但沒在播，不再顯示播放列
+修正按 ✕ 關閉後點歌無法播放：關閉時不再把 YouTube Music 的播放器整個停掉，只暫停
+新增「YouTube 播放器設定 → YouTube Music 診斷資訊」：有問題時打開截圖，方便找出原因

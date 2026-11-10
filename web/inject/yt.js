@@ -966,7 +966,7 @@
 (function () {
   'use strict';
   if (!/^music\./.test(location.hostname)) return;
-  var VER = 8;
+  var VER = 9;
   if (window.__wsMu === VER) return;
   if (window.__wsMuT) clearInterval(window.__wsMuT);
   window.__wsMu = VER;
@@ -1096,7 +1096,6 @@
   var offAt = 0;
   function collapsePage0() { try { if (window.__wsMuCollapse) window.__wsMuCollapse(); } catch (e) {} }
   function stop() {
-    try { var mp = document.getElementById('movie_player'); if (mp && mp.stopVideo) mp.stopVideo(); } catch (e) {}
     try { var v = document.querySelector('video'); if (v) v.pause(); } catch (e) {}
     offAt = Date.now();
     document.documentElement.classList.add('wsMuOff');
@@ -1113,6 +1112,7 @@
   window.__wsMuPlayFn = function (e) {
     if (!e.target || e.target.tagName !== 'VIDEO') return;
     lastPlayAt = Date.now();
+    dlog('video play');
     var stopped = false; try { stopped = localStorage.getItem('__wsMuStopped') === '1'; } catch (x) {}
     if (stopped && Date.now() - tapAt > 4000) { try { e.target.pause(); } catch (x) {} document.documentElement.classList.add('wsMuOff'); }
   };
@@ -1172,6 +1172,8 @@
   }
   /* ---------- 由 App 的播放介面控制（跟離線音樂播放器同一套） ---------- */
   var B = window.WSPage;
+  var DLOG = window.__wsMuLog = window.__wsMuLog || [];
+  function dlog(m) { DLOG.push(new Date().toTimeString().slice(0, 8) + ' ' + m); if (DLOG.length > 60) DLOG.shift(); }
   function own() { try { return localStorage.getItem('__wsMuOwn') !== '0'; } catch (e) { return true; } }
   function q(sel, root) { return (root || document).querySelector(sel); }
   function qa(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
@@ -1211,7 +1213,8 @@
     var title = (md && md.title) || txt(bar && q('.title', bar));
     var artist = (md && md.artist) || txt(bar && q('.byline', bar)).split('•')[0].trim();
     var vid = vidNow();
-    var off = document.documentElement.classList.contains('wsMuOff') || !title || !v || !v.src;
+    /* 剛打開頁面時 YouTube Music 會載入上次的歌但沒在播：不要當成正在播放 */
+    var off = document.documentElement.classList.contains('wsMuOff') || !title || !v || !v.src || !(lastPlayAt > 0 || (v && !v.paused));
     var likeR = q('ytmusic-player-bar ytmusic-like-button-renderer') || q('ytmusic-like-button-renderer');
     var o = {off: off, vid: vid, title: title, artist: artist, album: (md && md.album) || '',
       art: bigArt(md, bar && q('img', bar) && q('img', bar).getAttribute('src')),
@@ -1267,18 +1270,31 @@
     collapseAt = Date.now();
     if (!blankSince) blankSince = Date.now();
     var s = step++ % 4;
+    dlog('collapse step ' + s + ' open=' + open + ' shown=' + shown + ' path=' + location.pathname);
     if (s === 0) click(q('ytmusic-player-bar .toggle-player-page-button, .toggle-player-page-button'));
     else if (s === 1) click(chevron() || findByLabel(/收合|最小化|關閉播放器|縮小|minimi|collapse|close player/i));
     else if (s === 2) { if (/^\/watch/.test(location.pathname) && history.length > 1) history.back(); }
     else { try { document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true})); } catch (e) {} }
     /* 收不起來：與其讓畫面空白，不如先顯示 YouTube Music 原本的播放頁 */
-    if (!contentShown() && Date.now() - blankSince > 2500) document.documentElement.classList.add('wsMuShowPage');
+    if (!contentShown() && Date.now() - blankSince > 2500 && !document.documentElement.classList.contains('wsMuShowPage')) { document.documentElement.classList.add('wsMuShowPage'); dlog('fallback show page'); }
   }
   window.__wsMuCollapse = function () { collapseAt = 0; collapsePage(); };
   function click(el) { if (!el) return false; try { el.click(); return true; } catch (e) { return false; } }
   window.__wsMuCmd = function (c, a) {
     var v = q('video');
     if (/^(play|toggle|next|prev|q)$/.test(c)) { try { localStorage.removeItem('__wsMuStopped'); } catch (e) {} tapAt = Date.now(); document.documentElement.classList.remove('wsMuOff'); }
+    if (c === 'diag') {
+      var lay = q('ytmusic-app-layout'), pp = q('ytmusic-player-page'), v0 = q('video'), r0 = pp ? pp.getBoundingClientRect() : null;
+      var at = lay ? Array.prototype.map.call(lay.attributes, function (x) { return x.name + (x.value ? '=' + x.value.slice(0, 30) : ''); }).join(' ') : '(無 layout)';
+      var info = ['VER ' + VER + '  url ' + location.pathname + location.search.slice(0, 30), 'hidden=' + document.hidden + ' vis=' + document.visibilityState, 'html.class=' + document.documentElement.className,
+        'layout: ' + at, 'playerPage: ' + (r0 ? Math.round(r0.top) + ',' + Math.round(r0.height) + ' vis=' + getComputedStyle(pp).visibility + ' disp=' + getComputedStyle(pp).display : '無'),
+        'pageOpen=' + pageOpen() + ' contentShown=' + contentShown(), 'toggleBtn=' + !!q('.toggle-player-page-button') + ' chevron=' + !!chevron(),
+        'center=' + (function () { var e = document.elementFromPoint(innerWidth / 2, innerHeight / 2); return e ? e.tagName + '#' + e.id + '.' + String(e.className).slice(0, 40) : 'null'; })(),
+        'video: ' + (v0 ? 'paused=' + v0.paused + ' t=' + Math.round(v0.currentTime) + ' src=' + !!v0.src : '無'), 'rows=' + qa('ytmusic-responsive-list-item-renderer').length + ' cards=' + qa('ytmusic-two-row-item-renderer').length + ' queue=' + qa('ytmusic-player-queue-item').length,
+        'stopped=' + (function () { try { return localStorage.getItem('__wsMuStopped'); } catch (e) { return '?'; } })(), '--- log ---'].concat(DLOG.slice(-30)).join('\n');
+      try { B.muState(JSON.stringify({diag: info})); } catch (e) {}
+      return;
+    }
     if (c === 'own') { try { localStorage.setItem('__wsMuOwn', a === '0' ? '0' : '1'); } catch (e) {} document.documentElement.classList.toggle('wsMuOwn', a !== '0'); state(true); return; }
     if (c === 'toggle' || c === 'play' || c === 'pause') {
       if (!v) return;
@@ -1304,6 +1320,7 @@
   function fakeTap(el, pb, row) {
     var r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
     var tgt = document.elementFromPoint(x, y) || el;
+    dlog('fakeTap at ' + Math.round(x) + ',' + Math.round(y) + ' hit=' + (tgt.tagName || '') + '.' + String(tgt.className || '').slice(0, 30));
     if (!el.contains(tgt) && !(pb && pb.contains(tgt))) tgt = pb && (pb.querySelector('#play-button, .content-wrapper, yt-icon') || pb) || el;
     synth = true;
     try {
@@ -1338,6 +1355,7 @@
     var pb = box.querySelector ? box.querySelector('ytmusic-play-button-renderer') : null;
     if (song && !onPlayBtn && !pb) return;
     lastTap = Date.now(); tapAt = Date.now();
+    dlog('tap ' + (song ? 'song' : card ? 'card' : 'btn') + ' onPlayBtn=' + onPlayBtn + ' pb=' + !!pb + ' "' + txt(q('.title', box)).slice(0, 24) + '"');
     document.documentElement.classList.remove('wsMuOff');
     if (own() && B && B.muState) {
       var im = box.querySelector && box.querySelector('img');
@@ -1384,9 +1402,8 @@
     var o = own();
     try { fixThumbs(); } catch (e) {}
     document.documentElement.classList.toggle('wsMuOwn', o);
-    if (document.hidden && !(q('video') && !q('video').paused)) return;
     addCss(); if (!o) place(); hidePromos();
-    if (o) { collapsePage(); state(false); }
+    if (o) { try { collapsePage(); } catch (e) { dlog('collapse err ' + e.message); } state(false); }
   }
   window.__wsMuT = setInterval(tick, 1000);
   addEventListener('resize', function () { setTimeout(place, 120); });

@@ -29,6 +29,8 @@ YTMU.item = function(){
 on('muState', function(d){
   if(typeof d === 'string') try{ d = JSON.parse(d); }catch(e){ return; }
   if(!d) return;
+  if(d.diag){ var ta = h('textarea', {readOnly: true, class: 'sel-text', style: {width: '100%', minHeight: '50vh', font: '11px/1.4 ui-monospace,monospace'}}); ta.value = d.diag;
+    openSheet({title: 'YouTube Music 診斷資訊', icon: 'info', body: h('div', null, h('div', {class: 'sub', style: {marginBottom: '8px'}, text: '請截圖或按「複製」傳給 Claude'}), ta, h('div', {class: 'btn-row'}, h('button', {class: 'btn pri sm', html: icon('copy', 'sm') + '複製', onclick: function(){ copyText(d.diag); }}))), tall: true}); return; }
   /* 在 YouTube Music 點了一首歌：馬上打開播放面板（先用清單上的歌名、封面），等真的開始播再更新 */
   if(d.tap){
     if(!ytmuOn()) return;
