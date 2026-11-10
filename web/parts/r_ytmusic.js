@@ -44,7 +44,7 @@ on('muState', function(d){
     var base = YTMU.st || {};
     YTMU.st = Object.assign({}, base, {off: false, vid: base.vid || '', title: d.title || base.title || '載入中…', artist: d.artist || '', art: d.art || base.art || '', cur: 0, dur: 0, playing: true, pend: Date.now()});
     YTMU.t0 = Date.now();
-    if(!Music.el.paused) Music.el.pause();
+    if((Music.queue || []).length) Music.stop();
     YTMU.mini();
     if(curView === 'yt' && !Sheets.stack.length) YTMU.openPlayer(); else YTMU.draw();
     return;
@@ -54,14 +54,16 @@ on('muState', function(d){
   if(prev.pend && Date.now() - prev.pend < 6000 && d.vid === prev.vid && !d.open && d.title !== prev.title){ if(d.queue) YTMU.queue = d.queue; return; }
   if(d.queue) YTMU.queue = d.queue;
   YTMU.st = d; YTMU.t0 = Date.now();
-  /* YouTube Music 開始播放：離線音樂先停 */
-  if(d.playing && !Music.el.paused) Music.el.pause();
+  /* YouTube Music 開始播放：離線音樂整個關掉（不留兩個播放列） */
+  if(d.playing && (Music.queue || []).length) Music.stop();
   var big = !prev.title || prev.vid !== d.vid || prev.playing !== d.playing || prev.off !== d.off || prev.like !== d.like || prev.repeat !== d.repeat || prev.shuffle !== d.shuffle || prev.art !== d.art || !!d.queue;
   if(big){ YTMU.mini(); YTMU.draw(prev.like !== d.like || prev.repeat !== d.repeat || prev.shuffle !== d.shuffle); } else YTMU.progress();
   if(d.vid !== prev.vid && typeof fabSync === 'function'){ fabSync.k = null; fabSync(); }
 });
 /* 離線音樂開始播放：YouTube Music 暫停 */
-Music.el.addEventListener('play', function(){ if(YTMU.st && YTMU.st.playing){ YTMU.cmd('pause'); YTMU.st.playing = false; YTMU.mini(); } });
+Music.el.addEventListener('play', function(){ if(YTMU.active()) YTMU.stop(); });
+/* 之前 YouTube Music 面板切到「封面」時會連帶改到離線音樂：恢復一次 */
+if(!lsGet('ws.lyrMig1', false)){ CFG.lyr.view = 'lyrics'; saveCfg(); lsSet('ws.lyrMig1', true); }
 
 /* 按下去立刻更新畫面（不等網頁回報），網頁回報後再校正 */
 YTMU.toggle = function(){
@@ -137,17 +139,17 @@ YTMU.draw = function(force){
   var s = this.st, self = this;
   /* 只有換歌、換封面、佇列或歌詞改變才整個重畫；播放／暫停等只更新按鈕（畫面不閃） */
   var Q0 = this.queue || [], it0 = this.active() ? this.item() : null;
-  var key = [this.active(), s && s.vid, s && s.title, s && s.art, Q0.length, Q0.length && Q0[0].t, Q0.map(function(q){ return q.on ? 1 : 0; }).join(''), it0 && Lyrics.of(it0).length, it0 && it0.lrcOff, CFG.lyr.view].join('|');
+  var key = [this.active(), s && s.vid, s && s.title, s && s.art, Q0.length, Q0.length && Q0[0].t, Q0.map(function(q){ return q.on ? 1 : 0; }).join(''), it0 && Lyrics.of(it0).length, it0 && it0.lrcOff, CFG.lyr.ytView].join('|');
   if(!force && key === this.drawKey && body.firstChild){ this.soft(); return; }
   this.drawKey = key;
   var keep = body.querySelector('.list'), sc = keep ? keep.scrollTop : 0;
   body.textContent = '';
   if(!this.active()){ body.appendChild(h('div', {class: 'empty', text: '沒有播放中的歌曲'})); return; }
   var it = this.item();
-  var showLyr = CFG.lyr.show !== false && CFG.lyr.view !== 'cover' && !(it && it.lrcOff);
+  var showLyr = CFG.lyr.show !== false && CFG.lyr.ytView !== 'cover' && !(it && it.lrcOff);
   var stage = h('div', {class: 'mpStage'});
   if(showLyr && it) LyrView.mount(stage, it, {time: function(){ return YTMU.time(); }, seek: function(t){ YTMU.seek(t); if(!YTMU.st.playing) YTMU.toggle(); }, redraw: function(){ YTMU.draw(true); }});
-  else stage.appendChild(h('div', {class: 'art', style: s.art ? {backgroundImage: 'url("' + s.art + '")'} : null, html: s.art ? '' : icon('audio', 'lg'), onclick: function(){ CFG.lyr.view = 'lyrics'; saveCfg(); self.draw(true); }}));
+  else stage.appendChild(h('div', {class: 'art', style: s.art ? {backgroundImage: 'url("' + s.art + '")'} : null, html: s.art ? '' : icon('audio', 'lg'), onclick: function(){ CFG.lyr.ytView = 'lyrics'; saveCfg(); self.draw(true); }}));
   body.appendChild(stage);
   body.appendChild(h('div', {class: 'row', style: {gap: '10px', marginTop: '10px'}},
     h('div', {class: 'th', style: Object.assign({width: '46px', height: '46px', borderRadius: '12px', flex: 'none', backgroundSize: 'cover'}, s.art ? {backgroundImage: 'url("' + s.art + '")'} : {background: 'var(--c-audio)'})}),
@@ -158,7 +160,7 @@ YTMU.draw = function(force){
       onclick: function(){ self.cmd('like'); s.like = s.like === 'LIKE' ? 'INDIFFERENT' : 'LIKE'; buzz(10); self.draw(true); }})));
   var tb = h('div', {class: 'mpTools'});
   var tbtn = function(ic, label, fn){ tb.appendChild(h('button', {class: 'chip', style: {background: 'var(--surface-3)', color: 'var(--text)', border: '1px solid var(--border-soft)'}, html: icon(ic, 'sm') + label, onclick: fn})); };
-  tbtn(showLyr ? 'image' : 'type', showLyr ? '封面' : '歌詞', function(){ CFG.lyr.view = showLyr ? 'cover' : 'lyrics'; saveCfg(); self.draw(true); });
+  tbtn(showLyr ? 'image' : 'type', showLyr ? '封面' : '歌詞', function(){ CFG.lyr.ytView = showLyr ? 'cover' : 'lyrics'; saveCfg(); self.draw(true); });
   if(it) tbtn('search', '找歌詞', function(){ it.lrcOff = false; lyricsSearchSheet(it, function(){ self.draw(true); }); });
   if(it && Lyrics.of(it)) tbtn('trash', '移除歌詞', function(){ it.lrcOff = true; Lyrics.save(it, '', ''); toast('已移除歌詞'); self.draw(true); });
   tbtn('palette', '樣式', function(){ lyricsStyleSheet(function(){ if(LyrView.el) LyrView.el.setAttribute('style', lyrStyle()); }); });
