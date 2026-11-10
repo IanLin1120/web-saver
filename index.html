@@ -4,7 +4,7 @@
 <script>/* 線上更新開機程式：手機上若已下載比 APK 內建更新的介面版本，就改用新版（存在 IndexedDB）。
    新版連續兩次沒有正常開啟 → 自動退回 APK 內建版本。網址加上 #builtin 也會強制使用內建版本。 */
 (function () {
-  var B = '1.9.0'; if (!window.__OTA) window.APP_BUILTIN = B;
+  var B = '1.9.1'; if (!window.__OTA) window.APP_BUILTIN = B;
   if (window.__OTA || location.hash.indexOf('builtin') >= 0) return;
   var v = null; try { v = JSON.parse(localStorage.getItem('ws.ota') || 'null'); } catch (e) {}
   function gt(a, b) { a = String(a).split('.').map(Number); b = String(b).split('.').map(Number); for (var i = 0; i < Math.max(a.length, b.length); i++) { var p = a[i] || 0, q = b[i] || 0; if (p !== q) return p > q; } return false; }
@@ -1989,7 +1989,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 /* ============================================================
    核心：工具函式、圖示、主題、面板（sheet）、提示、原生橋接、頁面切換
    ============================================================ */
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.9.1';
 var GH = {user: 'IanLin1120', repo: 'web-saver',
   get pages(){ return 'https://' + this.user.toLowerCase() + '.github.io/' + this.repo + '/'; },
   get web(){ return 'https://github.com/' + this.user + '/' + this.repo; }};
@@ -7483,10 +7483,11 @@ function handOffButtons(url, before){
     row.appendChild(h('button', {class: 'hoBtn', onclick: function(){ if(before) before(); handOff(url, a.pkg, a.label); }},
       a.icon ? h('img', {src: a.icon, alt: ''}) : h('span', {html: icon('download')}), h('span', {class: 'ell', text: a.label})));
   });
-  /* 沒裝 Snaptube：提供官方網站下載（App 不另外散布別人的安裝檔） */
+  /* 沒裝 Snaptube：提供 Snaptube 官方放在 OneDrive 的安裝檔連結 */
+  var SNAPTUBE_DL = 'https://1drv.ms/u/c/bbba28619ef92f91/IQBFJF1V6wAhR6rHaAh_t_npAdQPGLvLd9SI3AagEVw1qC0';
   if(!list.some(function(a){ return /snaptube/i.test(a.pkg + ' ' + a.label); }))
     row.appendChild(h('button', {class: 'hoBtn', onclick: function(){
-      dialog('還沒安裝 Snaptube', '要用 Snaptube 下載，請先到 Snaptube 官方網站下載安裝（Google Play 沒有上架）。安裝時 Android 會詢問是否允許安裝未知來源的 App。<br><br>裝好後回來，這裡就會出現 Snaptube 按鈕。', [['開啟官方網站', function(){ openExternal('https://www.snaptubeapp.com/'); }], ['取消', null, '']]);
+      dialog('還沒安裝 Snaptube', '要用 Snaptube 下載，請先下載安裝 Snaptube（Google Play 沒有上架）。下載完打開安裝檔，Android 會詢問是否允許安裝未知來源的 App，選允許。<br><br>裝好後回來，這裡就會出現 Snaptube 按鈕。', [['下載 Snaptube', function(){ openExternal(SNAPTUBE_DL); }], ['取消', null, '']]);
     }}, h('span', {class: 'more', html: icon('download')}), h('span', {class: 'ell', text: '取得 Snaptube'})));
   row.appendChild(h('button', {class: 'hoBtn', onclick: function(){ if(before) before(); pickShareApp(url); }}, h('span', {class: 'more', html: icon('more')}), h('span', {text: '其他 App…'})));
   return h('div', null, h('div', {class: 'ydSect', text: '交給其他 App 下載（下載完自動搬回、刪除原檔）'}), row);
