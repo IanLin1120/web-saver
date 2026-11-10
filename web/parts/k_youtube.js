@@ -190,12 +190,25 @@ function sMime(s){ try{ return decodeURIComponent(s.mime || ''); }catch(e){ retu
 
 /* 讓 App 內的播放器載入這部影片並回報資訊；影片沒開著就先在 YouTube 分頁打開 */
 async function ytPageData(id, onStep){
+  /* 從 YouTube Music 按下載：影片資訊要靠 YouTube 那邊的播放器讀，讀完自動切回 YouTube Music（不出聲、不留在 YouTube 畫面） */
+  var fromMusic = typeof ytIsMusic === 'function' && ytIsMusic(YTB.url) && isApp && NAT.has('ytSwitch');
+  var muUrl = YTB.url;
+  try{ return await ytPageData0(id, onStep, fromMusic); }
+  finally{
+    if(fromMusic && !ytIsMusic(YTB.url)){
+      NAT.call('ytNav', 'pause');
+      NAT.call('ytSwitch', true, (YTB.last && YTB.last.music) || muUrl || YT_MUSIC);
+      setTimeout(function(){ if(typeof ytUpdateVisible === 'function') ytUpdateVisible(); if(typeof ytModeUi === 'function') ytModeUi(); }, 300);
+    }
+  }
+}
+async function ytPageData0(id, onStep, quiet){
   if(!isApp || !NAT.has('ytInfoReq')) return null;
   var where = NAT.call('ytInfoReq', id), bg = false;
   /* 在別的分頁（例如 AI 摘要）背景讀取時：YouTube 畫面不顯示、影片不出聲 */
-  var hush = function(){ if(bg && curView !== 'yt') NAT.call('ytNav', 'pause'); };
+  var hush = function(){ if(bg && (quiet || curView !== 'yt')) NAT.call('ytNav', 'pause'); };
   if(!where){
-    bg = curView !== 'yt';
+    bg = quiet || curView !== 'yt';
     if(onStep) onStep('在 YouTube 分頁開啟影片…');
     YTB.started = true; NAT.call('ytLoad', 'https://m.youtube.com/watch?v=' + id);
     for(var k = 0; k < 40 && !where; k++){ await sleep(500); hush(); where = NAT.call('ytInfoReq', id); }

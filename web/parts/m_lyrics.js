@@ -60,8 +60,9 @@ Lyrics.save = function(it, lrc, src){
   else IDB.tx(['meta'], 'readwrite', function(t){ t.objectStore('meta').put(it); });
   var li = Lib.byId(it.id); if(li && li !== it){ li.lrc = lrc; li.lrcSrc = src; delete li.__lines; }
 };
-Lyrics.auto = async function(it){
-  if(Lyrics.of(it)) return Lyrics.of(it);
+Lyrics.auto = async function(it, needSynced){
+  /* needSynced：已經有純文字歌詞（例如 YouTube Music 內建的），還是要找有時間軸的來換 */
+  if(Lyrics.of(it) && !(needSynced && !Lyrics.isSynced(Lyrics.of(it)))) return Lyrics.of(it);
   if(it.lrcOff) return '';
   var q = it.title && it.title !== it.name ? it.title : it.name;
   var L = await Lyrics.search(q, it.artist || '', it.dur || 0);
@@ -73,7 +74,8 @@ Lyrics.auto = async function(it){
     var durOk = !(it.dur && x.dur) || Math.abs(x.dur - it.dur) <= 5;
     return nameOk && durOk;
   };
-  var best = L.filter(function(x){ return x.lrc && ok(x); })[0] || L.filter(ok)[0];
+  var best = L.filter(function(x){ return x.lrc && ok(x); })[0] || (needSynced && Lyrics.of(it) ? null : L.filter(ok)[0]);
+  if(needSynced && best && !Lyrics.isSynced(best.lrc || '')) best = null;
   if(best){ var l = best.lrc || best.plain; Lyrics.save(it, l, best.src + '：' + best.name + ' - ' + best.artist); return l; }
   return '';
 };

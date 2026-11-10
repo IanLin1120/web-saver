@@ -11,6 +11,18 @@ YTMU.time = function(){
   var t = s.cur + (s.playing ? (Date.now() - this.t0) / 1000 : 0);
   return s.dur ? Math.min(t, s.dur) : t;
 };
+YTMU.syncTry = function(it, delay){
+  if(it.__syncTried) return; 
+  var n = 0;
+  (function go(){
+    setTimeout(function(){
+      if(YTMU.it !== it || it.__syncTried) return;
+      if(!it.dur && n++ < 6){ var s = YTMU.st; if(s && s.vid === it.vid && s.dur) it.dur = s.dur; else return go(); }
+      it.__syncTried = true;
+      Lyrics.auto(it, true).then(function(l){ if(l && Lyrics.isSynced(l) && YTMU.it === it){ CFG.lyr.ytView = CFG.lyr.ytView || 'lyrics'; YTMU.draw(true); } }).catch(function(){});
+    }, delay);
+  })();
+};
 YTMU.active = function(){ var s = this.st; return !!(s && !s.off && s.title); };
 /* 給歌詞用的「假檔案」：同一首歌（影片 ID）共用，歌詞存在快取 */
 YTMU.item = function(){
@@ -21,10 +33,8 @@ YTMU.item = function(){
   var it = this.it;
   /* 先拿 YouTube Music 自己的歌詞；同時找有時間軸的同步歌詞（找到就用同步的，歌詞會跟著捲動） */
   if(!it.lrc && !it.lrcOff) this.cmd('lyrics', s.vid);
-  if(!it.lrc && !it.lrcOff && CFG.lyr && CFG.lyr.auto) setTimeout(function(){
-    if(YTMU.it !== it || !it.dur) return;
-    Lyrics.auto(it).then(function(l){ if(l && YTMU.it === it) YTMU.draw(true); }).catch(function(){});
-  }, 1200);
+  /* 沒有歌詞，或只有不會動的純文字歌詞（YouTube Music 內建的）：找有時間軸的同步歌詞來換，找到就會跟著唱到哪句移動 */
+  if(!it.lrcOff && !Lyrics.isSynced(it.lrc || '') && (!it.lrc || /^YouTube Music/.test(it.lrcSrc || ''))) YTMU.syncTry(it, 1500);
   return it;
 };
 
