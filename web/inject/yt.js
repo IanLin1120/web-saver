@@ -966,7 +966,7 @@
 (function () {
   'use strict';
   if (!/^music\./.test(location.hostname)) return;
-  var VER = 13;
+  var VER = 14;
   if (window.__wsMu === VER) return;
   if (window.__wsMuT) clearInterval(window.__wsMuT);
   window.__wsMu = VER;
@@ -1364,7 +1364,6 @@
     if (card && !onPlayBtn) return;            /* 專輯、播放清單卡片：打開那一頁 */
     var box = song || card || row;
     var pb = box.querySelector ? box.querySelector('ytmusic-play-button-renderer') : null;
-    if (song && !onPlayBtn && !pb) return;
     lastTap = Date.now(); tapAt = Date.now();
     dlog('tap ' + (song ? 'song' : card ? 'card' : 'btn') + ' onPlayBtn=' + onPlayBtn + ' pb=' + !!pb + ' "' + txt(q('.title', box)).slice(0, 24) + '"');
     document.documentElement.classList.remove('wsMuOff');
@@ -1396,20 +1395,21 @@
     var vid = (ep && ep.watchEndpoint && ep.watchEndpoint.videoId) || (d && d.playlistItemData && d.playlistItemData.videoId) || (a && (a.getAttribute('href').match(/[?&]v=([\w-]{11})/) || [])[1]) || '';
     var list = (ep && ep.watchEndpoint && ep.watchEndpoint.playlistId) || '';
     var before = vidNow(), t0 = Date.now();
-    function ok() { return vidNow() !== before || lastPlayAt > t0 || /playing|loading/i.test(row.getAttribute('play-button-state') || ''); }
+    var path0 = location.pathname;
+    function ok() { return vidNow() !== before || lastPlayAt > t0 || location.pathname !== path0 || /playing|loading/i.test(row.getAttribute('play-button-state') || ''); }
     dlog('playRow vid=' + vid + ' ep=' + !!ep + ' a=' + !!a + ' pb=' + !!pb);
     var steps = [
       function () { if (!ep) return false; row.dispatchEvent(new CustomEvent('yt-navigate', {bubbles: true, composed: true, detail: {endpoint: ep}})); return true; },
-      function () { if (!pb) return false; fakeTap(pb, pb, row); return true; },
+      function () { var th = pb || row.querySelector('ytmusic-item-thumbnail-overlay-renderer, ytmusic-thumbnail-renderer, .left-items, img'); if (!th) return false; fakeTap(th, pb, row); return true; },
       function () { if (!a) return false; synth = true; try { a.click(); } catch (x) {} synth = false; return true; },
-      function () { if (!vid) return false; location.href = '/watch?v=' + vid + (list ? '&list=' + encodeURIComponent(list) : ''); return true; }
+      function () { if (!vid) return false; try { sessionStorage.setItem('__wsMuAuto', String(Date.now())); } catch (x) {} location.href = '/watch?v=' + vid + (list ? '&list=' + encodeURIComponent(list) : ''); return true; }
     ];
     var i = 0;
     setTimeout(function next() {
       if (ok()) { dlog('playRow ok at step ' + (i - 1)); return; }
       while (i < steps.length) { var f = steps[i++]; var did = false; try { did = f(); } catch (x) { dlog('step err ' + x.message); } if (did) { dlog('playRow step ' + (i - 1)); setTimeout(next, 900); return; } }
       dlog('playRow failed');
-    }, 400);
+    }, 700);
   }
   /* YouTube Music 自己的歌詞（播放頁「歌詞」分頁的內容） */
   function ytLyrics(vid) {
@@ -1473,6 +1473,18 @@
     });
   }
   function noSwipe() { var d = q('tp-yt-app-drawer'); if (d && (d.hasAttribute('swipe-open') || d.swipeOpen)) { d.removeAttribute('swipe-open'); try { d.swipeOpen = false; } catch (e) {} } }
+  /* 用換頁方式播放時，頁面載入後自動按播放（YouTube Music 會停在「開始播放」） */
+  (function () {
+    var t = 0; try { t = +sessionStorage.getItem('__wsMuAuto') || 0; sessionStorage.removeItem('__wsMuAuto'); } catch (e) {}
+    if (!t || Date.now() - t > 20000) return;
+    tapAt = Date.now(); var n = 0;
+    var iv = setInterval(function () {
+      var v = q('video'); n++;
+      if (v && !v.paused && v.currentTime > 0.2) { clearInterval(iv); collapseSoon(); return; }
+      if (n > 24) { clearInterval(iv); return; }
+      if (v && v.src && v.paused) { tapAt = Date.now(); var pb = q('ytmusic-player-bar #play-pause-button, #play-pause-button'); if (n % 2 && pb) click(pb); else { try { v.play(); } catch (e) {} } }
+    }, 500);
+  })();
   function tick() {
     var o = own();
     try { noSwipe(); } catch (e) {}

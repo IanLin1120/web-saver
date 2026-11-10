@@ -149,7 +149,7 @@ YTMU.draw = function(force){
   var showLyr = CFG.lyr.show !== false && CFG.lyr.ytView !== 'cover' && !(it && it.lrcOff);
   var stage = h('div', {class: 'mpStage'});
   if(showLyr && it) LyrView.mount(stage, it, {time: function(){ return YTMU.time(); }, seek: function(t){ YTMU.seek(t); if(!YTMU.st.playing) YTMU.toggle(); }, redraw: function(){ YTMU.draw(true); }});
-  else stage.appendChild(h('div', {class: 'art', style: s.art ? {backgroundImage: 'url("' + s.art + '")'} : null, html: s.art ? '' : icon('audio', 'lg'), onclick: function(){ CFG.lyr.ytView = 'lyrics'; saveCfg(); self.draw(true); }}));
+  else stage.appendChild(h('div', {class: 'art', style: s.art ? {backgroundImage: 'url("' + s.art + '")'} : null, html: s.art ? '' : icon('audio', 'lg'), onclick: function(){ CFG.lyr.ytView = 'lyrics'; CFG.lyr.show = true; saveCfg(); self.draw(true); }}));
   body.appendChild(stage);
   body.appendChild(h('div', {class: 'row', style: {gap: '10px', marginTop: '10px'}},
     h('div', {class: 'th', style: Object.assign({width: '46px', height: '46px', borderRadius: '12px', flex: 'none', backgroundSize: 'cover'}, s.art ? {backgroundImage: 'url("' + s.art + '")'} : {background: 'var(--c-audio)'})}),
@@ -160,7 +160,7 @@ YTMU.draw = function(force){
       onclick: function(){ self.cmd('like'); s.like = s.like === 'LIKE' ? 'INDIFFERENT' : 'LIKE'; buzz(10); self.draw(true); }})));
   var tb = h('div', {class: 'mpTools'});
   var tbtn = function(ic, label, fn){ tb.appendChild(h('button', {class: 'chip', style: {background: 'var(--surface-3)', color: 'var(--text)', border: '1px solid var(--border-soft)'}, html: icon(ic, 'sm') + label, onclick: fn})); };
-  tbtn(showLyr ? 'image' : 'type', showLyr ? '封面' : '歌詞', function(){ CFG.lyr.ytView = showLyr ? 'cover' : 'lyrics'; saveCfg(); self.draw(true); });
+  tbtn(showLyr ? 'image' : 'type', showLyr ? '封面' : '歌詞', function(){ CFG.lyr.ytView = showLyr ? 'cover' : 'lyrics'; if(!showLyr) CFG.lyr.show = true; saveCfg(); self.draw(true); });
   if(it) tbtn('search', '找歌詞', function(){ it.lrcOff = false; lyricsSearchSheet(it, function(){ self.draw(true); }); });
   if(it && Lyrics.of(it)) tbtn('trash', '移除歌詞', function(){ it.lrcOff = true; Lyrics.save(it, '', ''); toast('已移除歌詞'); self.draw(true); });
   tbtn('palette', '樣式', function(){ lyricsStyleSheet(function(){ if(LyrView.el) LyrView.el.setAttribute('style', lyrStyle()); }); });

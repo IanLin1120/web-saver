@@ -187,14 +187,14 @@ Music.drawPlayer = function(){
   var showLyr = CFG.lyr.show !== false && CFG.lyr.view !== 'cover' && !it.lrcOff;
   var stage = h('div', {class: 'mpStage'});
   if(showLyr) LyrView.mount(stage, it);
-  else stage.appendChild(h('div', {class: 'art', style: th ? {backgroundImage: 'url("' + th + '")'} : null, html: th ? '' : icon('audio', 'lg'), onclick: function(){ CFG.lyr.view = 'lyrics'; saveCfg(); self.drawPlayer(); }}));
+  else stage.appendChild(h('div', {class: 'art', style: th ? {backgroundImage: 'url("' + th + '")'} : null, html: th ? '' : icon('audio', 'lg'), onclick: function(){ CFG.lyr.view = 'lyrics'; CFG.lyr.show = true; saveCfg(); self.drawPlayer(); }}));
   body.appendChild(stage);
   body.appendChild(h('div', {class: 'row', style: {gap: '10px', marginTop: '10px'}},
     h('div', {class: 'th', style: Object.assign({width: '46px', height: '46px', borderRadius: '12px', flex: 'none', backgroundSize: 'cover'}, th ? {backgroundImage: 'url("' + th + '")'} : {background: 'var(--c-audio)'})}),
     h('div', {class: 'grow'}, h('b', {text: songTitle(it), style: {fontSize: '17px', display: 'block'}, class: 'ell'}), h('div', {class: 'sub ell', text: (it.artist || '') + '・' + (it.name.split('.').pop() || '').toUpperCase() + '・' + fmtSize(it.size) + (it.lrcSrc ? '・歌詞：' + it.lrcSrc.split('：')[0] : '')}))));
   var tb = h('div', {class: 'mpTools'});
   var tbtn = function(ic, label, fn, on){ tb.appendChild(h('button', {class: 'chip' + (on ? ' pri' : ''), style: on ? null : {background: 'var(--surface-3)', color: 'var(--text)', border: '1px solid var(--border-soft)'}, html: icon(ic, 'sm') + label, onclick: fn})); };
-  tbtn(showLyr ? 'image' : 'type', showLyr ? '封面' : '歌詞', function(){ CFG.lyr.view = showLyr ? 'cover' : 'lyrics'; saveCfg(); self.drawPlayer(); });
+  tbtn(showLyr ? 'image' : 'type', showLyr ? '封面' : '歌詞', function(){ CFG.lyr.view = showLyr ? 'cover' : 'lyrics'; if(!showLyr) CFG.lyr.show = true; saveCfg(); self.drawPlayer(); });
   tbtn('search', '找歌詞', function(){ delete it.lrcOff; if(isApp) NAT.call('libMeta', it.id, JSON.stringify({lrcOff: false})); lyricsSearchSheet(it, function(){ self.drawPlayer(); }); });
   if(Lyrics.of(it)) tbtn('trash', '移除歌詞', async function(){
     if(!await confirmDlg('移除這首歌的歌詞？', '歌詞抓錯時用：移除後這首歌不會再自動找歌詞，之後可以按「找歌詞」手動選正確的。', '移除', true)) return;

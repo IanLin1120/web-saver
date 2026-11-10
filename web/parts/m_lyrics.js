@@ -172,7 +172,7 @@ async function lyricsSearchSheet(it, after){
     if(!L.length){ list.appendChild(h('div', {class: 'empty', html: '<div class="big">🎤</div>找不到歌詞<br><span class="sub">試試只輸入歌名，或改成原文歌名</span>'})); return; }
     L.slice(0, 12).forEach(function(x){
       var lines = Lyrics.parse(x.lrc).slice(0, 3).map(function(l){ return l.text; }).filter(Boolean).join(' / ') || (x.plain || '').split('\n').slice(0, 2).join(' / ');
-      list.appendChild(h('div', {class: 'opt', onclick: function(){ Lyrics.save(it, x.lrc || x.plain, x.src + '：' + x.name + ' - ' + x.artist); if(x.trans) it.lrcTrans = x.trans; s.close(); toast('✓ 已套用歌詞'); if(it.ytm) CFG.lyr.ytView = 'lyrics'; else CFG.lyr.view = 'lyrics'; saveCfg(); if(after) after(); }},
+      list.appendChild(h('div', {class: 'opt', onclick: function(){ Lyrics.save(it, x.lrc || x.plain, x.src + '：' + x.name + ' - ' + x.artist); if(x.trans) it.lrcTrans = x.trans; s.close(); toast('✓ 已套用歌詞'); if(it.ytm) CFG.lyr.ytView = 'lyrics'; else CFG.lyr.view = 'lyrics'; CFG.lyr.show = true; saveCfg(); if(after) after(); }},
         h('span', {class: 'oi', html: icon(x.lrc ? 'audio' : 'type')}),
         h('div', {class: 'grow'}, h('b', {text: x.name + '－' + x.artist}), h('div', {class: 'sub', text: x.src + (x.lrc ? '・有時間軸（同步捲動）' : '・純文字') + (x.dur ? '・' + fmtDur(x.dur) : '')}), h('div', {class: 'sub ell', text: lines}))));
     });
