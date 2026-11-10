@@ -53,7 +53,7 @@ public class Bridge {
     @JavascriptInterface public void brShow(final boolean on) { ui(new Runnable() { @Override public void run() { a.br.show(on); } }); }
 
     @JavascriptInterface public void cover(final boolean on) {
-        ui(new Runnable() { @Override public void run() { a.br.cover(on); a.yt.cover(on); a.vw.cover(on); a.fab.cover(on); AiPlayer.cover(on); } });
+        ui(new Runnable() { @Override public void run() { a.br.cover(on); for (Browser b : a.ytAll()) b.cover(on); a.vw.cover(on); a.fab.cover(on); AiPlayer.cover(on); } });
     }
 
     /* ---------- YouTube 分頁 ---------- */
@@ -120,13 +120,30 @@ public class Bridge {
     @JavascriptInterface public void brMediaClear() { ui(new Runnable() { @Override public void run() { a.br.clearMedia(); } }); }
 
     @JavascriptInterface public void ytRect(final float top, final float bottom, final float left, final float right) {
-        ui(new Runnable() { @Override public void run() { a.yt.setRect(top, bottom, left, right); } });
+        ui(new Runnable() { @Override public void run() { a.ytRectV = new float[]{top, bottom, left, right}; for (Browser b : a.ytAll()) b.setRect(top, bottom, left, right); } });
     }
 
     @JavascriptInterface public void ytShow(final boolean on) { ui(new Runnable() { @Override public void run() { a.yt.show(on); a.fab.refresh(); } }); }
 
     /* 只換網址，不改變顯示狀態：在 AI 摘要等其他分頁背景讀取影片時，YouTube 畫面不能蓋上來（要顯示由網頁的 ytShow 決定） */
-    @JavascriptInterface public void ytLoad(final String url) { ui(new Runnable() { @Override public void run() { boolean was = a.yt.shown; a.yt.load(url); if (!was) a.yt.show(false); } }); }
+    @JavascriptInterface public void ytLoad(final String url) { ui(new Runnable() { @Override public void run() {
+        boolean was = a.yt.shown;
+        Browser t = a.ytFor(url != null && url.matches("(?i)^https?://music\\.youtube\\.com.*"));
+        a.ytActivate(t);
+        a.yt.load(url); if (!was) a.yt.show(false);
+    } }); }
+    /** YouTube ⇄ YouTube Music 切換：已經開過的直接換上來（保留原本的頁面），沒開過的先在背景載入，畫面出來再換 */
+    @JavascriptInterface public void ytSwitch(final boolean music, final String url) { ui(new Runnable() { @Override public void run() {
+        final Browser t = a.ytFor(music);
+        if (t == a.yt) { t.load(url); return; }
+        if (a.ytLoaded(t)) { a.ytActivate(t); return; }
+        final boolean vis = a.yt.shown;
+        t.onCommit = new Runnable() { @Override public void run() { if (a.yt != t) a.ytActivate(t); } };
+        t.wv.loadUrl(url);
+        Util.MAIN.postDelayed(new Runnable() { @Override public void run() { if (t.onCommit != null) { t.onCommit = null; a.ytActivate(t); } } }, 3500);
+        if (!vis) t.show(false);
+    } }); }
+    @JavascriptInterface public boolean ytHas(boolean music) { Browser b = music ? a.ytMu : a.ytYt; return b != null && a.ytLoaded(b); }
 
     @JavascriptInterface public void ytNav(final String what) {
         ui(new Runnable() {
@@ -192,7 +209,7 @@ public class Bridge {
     }
 
     @JavascriptInterface public void brConfig(final String json) {
-        ui(new Runnable() { @Override public void run() { try { a.br.config(new JSONObject(json)); a.yt.config(new JSONObject(json)); } catch (Throwable t) { /* ignore */ } } });
+        ui(new Runnable() { @Override public void run() { try { a.br.config(new JSONObject(json)); for (Browser b : a.ytAll()) b.config(new JSONObject(json)); } catch (Throwable t) { /* ignore */ } } });
     }
 
     @JavascriptInterface public String brState() {
@@ -225,7 +242,7 @@ public class Bridge {
         try { Comic.fromHtml(a, id, new JSONObject(opts == null || opts.isEmpty() ? "{}" : opts)); } catch (Throwable t) { MainActivity.toast("設定錯誤"); }
     }
 
-    @JavascriptInterface public void setInject(final String name, final String code) { ui(new Runnable() { @Override public void run() { a.br.setInject(name, code); a.yt.setInject(name, code); } }); }
+    @JavascriptInterface public void setInject(final String name, final String code) { ui(new Runnable() { @Override public void run() { a.injOverride.put(name, code); a.br.setInject(name, code); for (Browser b : a.ytAll()) b.setInject(name, code); } }); }
 
     @JavascriptInterface public void brMedia(final int minPx) { ui(new Runnable() { @Override public void run() { a.br.scanMedia(minPx); } }); }
 
@@ -404,6 +421,51 @@ public class Bridge {
             }
         } catch (Throwable t) { /* ignore */ }
         return out.toString();
+    }
+    /** 可以開這個網址的 App（view: true）＋手機桌面上所有的 App（給使用者自己指定） */
+    @JavascriptInterface public String viewApps(String url) {
+        JSONArray out = new JSONArray();
+        try {
+            android.content.pm.PackageManager pm = a.getPackageManager();
+            java.util.HashSet<String> seen = new java.util.HashSet<>();
+            android.content.Intent v = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).addCategory(android.content.Intent.CATEGORY_BROWSABLE);
+            int flag = android.os.Build.VERSION.SDK_INT >= 23 ? android.content.pm.PackageManager.MATCH_ALL : 0;
+            for (android.content.pm.ResolveInfo ri : pm.queryIntentActivities(v, flag)) addApp(out, seen, pm, ri, true);
+            android.content.Intent l = new android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_LAUNCHER);
+            for (android.content.pm.ResolveInfo ri : pm.queryIntentActivities(l, 0)) addApp(out, seen, pm, ri, false);
+        } catch (Throwable t) { /* ignore */ }
+        return out.toString();
+    }
+    private void addApp(JSONArray out, java.util.HashSet<String> seen, android.content.pm.PackageManager pm, android.content.pm.ResolveInfo ri, boolean view) throws Exception {
+        String pkg = ri.activityInfo.packageName;
+        if (pkg.equals(a.getPackageName()) || !seen.add(pkg)) return;
+        String icon = "";
+        try {
+            android.graphics.drawable.Drawable d = ri.loadIcon(pm);
+            android.graphics.Bitmap bm = android.graphics.Bitmap.createBitmap(72, 72, android.graphics.Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas c = new android.graphics.Canvas(bm);
+            d.setBounds(0, 0, 72, 72); d.draw(c);
+            java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+            bm.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, bo);
+            icon = "data:image/png;base64," + android.util.Base64.encodeToString(bo.toByteArray(), android.util.Base64.NO_WRAP);
+        } catch (Throwable t) { /* ignore */ }
+        out.put(new JSONObject().put("pkg", pkg).put("label", String.valueOf(pm.getApplicationLabel(ri.activityInfo.applicationInfo))).put("icon", icon).put("view", view));
+    }
+    /** 用指定的 App 開網址；那個 App 不接受網址就直接打開 App */
+    @JavascriptInterface public boolean openWith(final String pkg, final String url) {
+        try {
+            android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).setPackage(pkg).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (i.resolveActivity(a.getPackageManager()) != null) { a.startActivity(i); return true; }
+        } catch (Throwable t) { /* 改用直接開啟 */ }
+        try {
+            android.content.Intent l = a.getPackageManager().getLaunchIntentForPackage(pkg);
+            if (l == null) return false;
+            a.startActivity(l.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+            return true;
+        } catch (Throwable t) { return false; }
+    }
+    @JavascriptInterface public boolean pkgInstalled(String pkg) {
+        try { a.getPackageManager().getPackageInfo(pkg, 0); return true; } catch (Throwable t) { return false; }
     }
     @JavascriptInterface public void watchRemove(String uri) { Importer.removeDir(a, uri); MainActivity.emit("watchDirs", Importer.dirs(a).toString()); }
     @JavascriptInterface public void watchScan() { Importer.scan(a, true); }

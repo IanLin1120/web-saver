@@ -4,12 +4,19 @@
 /* ---------- 檔案庫的「分類」：內建（網頁、PDF、圖片、影片、音樂、字幕、Word、Excel、文字檔、壓縮檔、其他）＋自己建立的；
    每個檔案可以移到任何分類，分類的名稱與圖示都能改 ---------- */
 var AREA = lsGet('ws.area', null) || {custom: [], over: {}, map: {}};
-AREA.save = function(){ lsSet('ws.area', {custom: AREA.custom, over: AREA.over, map: AREA.map}); };
+AREA.order = AREA.order || [];
+AREA.save = function(){ lsSet('ws.area', {custom: AREA.custom, over: AREA.over, map: AREA.map, order: AREA.order}); };
 var CAT_BASE = JSON.parse(JSON.stringify(CAT));
 function areaApply(){
   Object.keys(CAT).forEach(function(k){ if(!CAT_BASE[k]) delete CAT[k]; });
   Object.keys(CAT_BASE).forEach(function(k){ CAT[k] = Object.assign({}, CAT_BASE[k], AREA.over[k] || {}); });
   AREA.custom.forEach(function(a){ CAT[a.k] = Object.assign({ic: 'folder', c: a.c || '#8a6d4f'}, a, AREA.over[a.k] || {}); });
+  /* 自訂排序（管理分類裡長按拖動） */
+  if(AREA.order && AREA.order.length){
+    var keys = Object.keys(CAT), tmp = {};
+    keys.forEach(function(k){ tmp[k] = CAT[k]; delete CAT[k]; });
+    AREA.order.filter(function(k){ return tmp[k]; }).concat(keys.filter(function(k){ return AREA.order.indexOf(k) < 0; })).forEach(function(k){ CAT[k] = tmp[k]; });
+  }
 }
 areaApply();
 function autoArea(it){
@@ -564,11 +571,13 @@ function manageAreas(){
   var s = openSheet({title: '管理分類', icon: 'layers', body: body, tall: true, foot: h('button', {class: 'btn pri', html: icon('plus', 'sm') + '新增分類', onclick: function(){ areaEdit(null); }})});
   function draw(){
     body.textContent = '';
-    body.appendChild(h('div', {class: 'sub', style: {marginBottom: '10px', lineHeight: '1.6'}, text: '可以改每個分類的名稱和圖示，或新增自己的分類。檔案要換分類：在檔案上長按選取 → 下方的「移到其他分類」。'}));
+    body.appendChild(h('div', {class: 'sub', style: {marginBottom: '10px', lineHeight: '1.6'}, text: '可以改每個分類的名稱和圖示，或新增自己的分類。長按任一列上下拖動可以排序。檔案要換分類：在檔案上長按選取 → 下方的「移到其他分類」。'}));
     var cnt = {}; Lib.items.forEach(function(it){ var a = areaOf(it); cnt[a] = (cnt[a] || 0) + 1; });
+    var list = h('div'); body.appendChild(list);
     Object.keys(CAT).forEach(function(k){
       var custom = AREA.custom.some(function(x){ return x.k === k; });
-      body.appendChild(h('div', {class: 'setRow'},
+      list.appendChild(h('div', {class: 'setRow areaRow'},
+        h('span', {class: 'dsGrip', html: icon('grip', 'sm'), title: '長按上下拖動排序'}),
         h('span', {class: 'ic', html: areaIcon(k)}),
         h('div', {class: 'grow'}, h('b', {text: areaName(k)}), h('div', {class: 'sub', text: (cnt[k] || 0) + ' 個檔案' + (custom ? '・自訂' : '')})),
         h('button', {class: 'ib', html: icon('edit'), title: '改名稱與圖示', onclick: function(){ areaEdit(k); }}),
@@ -581,6 +590,11 @@ function manageAreas(){
         }}) : null));
     });
     paintIcons(body);
+    /* 長按任一列上下拖動排序（震動＋提示線），檔案庫上方的分類順序跟著改 */
+    dragSort(list, function(from, to){
+      var ks = Object.keys(CAT), m = ks.splice(from, 1)[0]; ks.splice(to, 0, m);
+      AREA.order = ks; AREA.save(); areaApply(); renderLib(); draw();
+    });
   }
   draw();
   on('areasChanged', function(){ if(!s.closed) draw(); });

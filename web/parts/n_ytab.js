@@ -48,13 +48,8 @@ function ytCurId(){ return YT.idOf(YTB.url); }
 function renderYt(){
   var id = ytCurId(), mu = ytIsMusic(YTB.url);
   $('ytBack').disabled = !YTB.back;
-  if(mu){
-    $('ytT').textContent = id && YTB.title ? YTB.title.replace(/ - YouTube Music$/, '') : 'YouTube Music';
-    $('ytSub').textContent = '無廣告・背景播放・關螢幕也能聽';
-  } else {
-    $('ytT').textContent = id ? (YTB.title || 'YouTube').replace(/ - YouTube$/, '') : 'YouTube';
-    $('ytSub').textContent = id ? '點畫面顯示控制列・兩側雙擊快轉・長按 2 倍速' : '無廣告・背景播放・手勢播放器';
-  }
+  if(mu) $('ytT').textContent = id && YTB.title ? YTB.title.replace(/ - YouTube Music$/, '') : 'YouTube Music';
+  else $('ytT').textContent = id ? (YTB.title || 'YouTube').replace(/ - YouTube$/, '') : 'YouTube';
   ytModeUi();
   var bar = $('ytBar'), loading = YTB.progress < 100;
   bar.classList.toggle('on', loading); bar.firstChild.style.width = (loading ? Math.max(8, YTB.progress) : 100) + '%';
@@ -76,7 +71,10 @@ on('ytbr', function(d){
   var changed = d.url !== YTB.url;
   YTB.url = d.url || ''; YTB.title = d.title || ''; YTB.back = d.back; YTB.progress = d.progress; YTB.fs = !!d.fs;
   if(/^https?:\/\/[\w.]*youtube\.com/i.test(YTB.url)){
-    var isMu = ytIsMusic(YTB.url); YTB.modeMusic = isMu;
+    var isMu = ytIsMusic(YTB.url);
+    /* 剛按切換的幾秒內，舊頁面送來的狀態不能把按鈕切回去（之前會紅粉來回閃） */
+    if(YTB.modeHold && Date.now() - YTB.modeHold < 4000 && isMu !== YTB.modeMusic){ renderYt(); return; }
+    YTB.modeHold = 0; YTB.modeMusic = isMu;
     if(YTB.last[isMu ? 'music' : 'yt'] !== YTB.url){ YTB.last[isMu ? 'music' : 'yt'] = YTB.url; lsSet('ws.ytLast', YTB.last); }
   }
   if(changed && /^https?:/.test(YTB.url)) Hist.add(YTB.url, YTB.title, 'yt');
@@ -98,10 +96,13 @@ $('ytBack').addEventListener('click', function(){ NAT.call('ytNav', 'back'); });
 $('ytHomeB').addEventListener('click', function(){ ytEnsure(ytIsMusic(YTB.url) ? YT_MUSIC : YT_HOME); });
 $('ytReload').addEventListener('click', function(){ NAT.call('ytNav', YTB.progress < 100 ? 'stop' : 'reload'); });
 $('ytModeB').addEventListener('click', function(){
-  var toMusic = !ytIsMusic(YTB.url);
-  YTB.modeMusic = toMusic; ytModeUi();
-  ytEnsure(toMusic ? (YTB.last.music || YT_MUSIC) : (YTB.last.yt || YT_HOME));
-  toast(toMusic ? '♪ YouTube Music' : '▶ YouTube');
+  var toMusic = !(YTB.modeMusic != null ? YTB.modeMusic : ytIsMusic(YTB.url));
+  YTB.modeMusic = toMusic; YTB.modeHold = Date.now(); ytModeUi();
+  if(isApp && NAT.has('buzz')) NAT.call('buzz', 12);
+  var url = toMusic ? (YTB.last.music || YT_MUSIC) : (YTB.last.yt || YT_HOME);
+  /* APK：YouTube 與 YouTube Music 各用一個瀏覽器，切換只是換顯示，不重新載入 */
+  if(isApp && NAT.has('ytSwitch')){ YTB.started = true; NAT.call('ytSwitch', toMusic, url); ytUpdateVisible(); }
+  else ytEnsure(url);
 });
 $('ytMore').addEventListener('click', function(){
   var id = ytCurId();
@@ -109,6 +110,7 @@ $('ytMore').addEventListener('click', function(){
     ['download', '下載這部影片', function(){ if(id) openYt(id); else toast('先打開一部影片', true); }, false, id ? '' : '目前不在影片頁'],
     ['sparkle', 'AI 摘要這部影片', function(){ if(id){ NAT.call('ytNav', 'pause'); aiOpenVideo(id, {auto: true}); } else showView('ai'); }, false, id ? '摘要、章節、針對影片提問' : '目前不在影片頁'],
     ['gear', 'YouTube 播放器設定', function(){ openYtSettings(); }, false, '去廣告、背景播放、手勢、SponsorBlock、畫質…'],
+    ['open', '開啟應用程式設定', function(){ openYtAppSettings(); }, false, (YT_APP.yt || YT_APP.music) ? '已指定：' + [YT_APP.yt && YT_APP.yt.label, YT_APP.music && YT_APP.music.label].filter(Boolean).join('、') : '「開啟應用程式」要用哪個 App'],
     ['search', '貼上 YouTube 網址', async function(){
       var t = '';
       try{ t = (await navigator.clipboard.readText() || '').trim(); }catch(e){}
@@ -121,6 +123,80 @@ $('ytMore').addEventListener('click', function(){
   ]);
 });
 on('ytOpen', function(u){ ytOpen(String(u)); });
+
+/* ---------- YouTube 網頁上的「開啟應用程式」：選要用哪個 App 開（可以記住，之後在設定裡修改） ---------- */
+var YT_APP = lsGet('ws.ytApp', {});   /* {yt: {pkg, label}, music: {pkg, label}} */
+var YT_KIND = {yt: 'YouTube', music: 'YouTube Music'};
+on('ytOpenApp', function(d){
+  if(typeof d === 'string') d = {url: d};
+  d = d || {};
+  var kind = d.music ? 'music' : 'yt', url = d.url || (kind === 'music' ? YT_MUSIC : YT_HOME), sv = YT_APP[kind];
+  if(sv && sv.pkg){
+    if(NAT.call('openWith', sv.pkg, url)){ toast('用「' + sv.label + '」開啟', false, ['換 App', function(){ pickYtApp(kind, url); }]); return; }
+    toast('「' + sv.label + '」好像已經移除了，請重新選擇', true);
+    delete YT_APP[kind]; lsSet('ws.ytApp', YT_APP);
+  }
+  pickYtApp(kind, url);
+});
+/* url 為空：只是在設定裡指定，不馬上開啟 */
+function pickYtApp(kind, url){
+  if(!isApp || !NAT.has('viewApps')){ toast('需要 APK 版', true); return; }
+  var probe = url || (kind === 'music' ? 'https://music.youtube.com/watch?v=dQw4w9WgXcQ' : 'https://m.youtube.com/watch?v=dQw4w9WgXcQ');
+  var apps = []; try{ apps = JSON.parse(NAT.call('viewApps', probe) || '[]'); }catch(e){}
+  var sv = YT_APP[kind] || {}, body = h('div'), remember = !!sv.pkg || !url;
+  var q = h('input', {type: 'search', placeholder: '搜尋 App…', style: {width: '100%', marginBottom: '8px'}});
+  var chk = h('input', {type: 'checkbox', checked: remember, onchange: function(){ remember = this.checked; }});
+  var listBox = h('div');
+  var s = openSheet({title: '用哪個 App 開啟 ' + YT_KIND[kind] + '？', icon: 'open', body: body, tall: true,
+    foot: url ? h('label', {class: 'opt', style: {margin: 0, flex: 1}}, chk, h('div', {class: 'grow'}, h('b', {text: '記住我的選擇'}), h('div', {class: 'sub', text: '之後直接開，不再詢問（可在「⋯ → 開啟應用程式設定」修改）'}))) : null});
+  function row(a){
+    var cur = sv.pkg === a.pkg;
+    return h('div', {class: 'setRow', onclick: function(){
+      if(remember || !url){ YT_APP[kind] = {pkg: a.pkg, label: a.label}; lsSet('ws.ytApp', YT_APP); }
+      s.close();
+      if(url){ if(!NAT.call('openWith', a.pkg, url)) toast('無法用「' + a.label + '」開啟', true); }
+      else toast('之後「開啟應用程式」會用「' + a.label + '」');
+    }},
+      a.icon ? h('img', {src: a.icon, style: {width: '38px', height: '38px', borderRadius: '10px', flex: 'none'}}) : h('span', {class: 'ic', html: icon('open')}),
+      h('div', {class: 'grow', style: {minWidth: 0}}, h('b', {class: 'ell', style: {display: 'block'}, text: a.label}), h('div', {class: 'sub ell', text: cur ? '✓ 目前指定' : a.pkg})),
+      h('span', {class: 'chev', text: '›'}));
+  }
+  function draw(){
+    var t = q.value.trim().toLowerCase();
+    var L = apps.filter(function(a){ return !t || (a.label + ' ' + a.pkg).toLowerCase().indexOf(t) >= 0; });
+    var yt = L.filter(function(a){ return /youtube|morphe|revanced|vanced|music/i.test(a.label + a.pkg); });
+    var view = L.filter(function(a){ return a.view && yt.indexOf(a) < 0; });
+    var rest = L.filter(function(a){ return !a.view && yt.indexOf(a) < 0; }).sort(function(x, y){ return x.label.localeCompare(y.label, 'zh-Hant'); });
+    listBox.textContent = '';
+    if(yt.length){ listBox.appendChild(h('div', {class: 'ydSect', text: 'YouTube 相關'})); yt.forEach(function(a){ listBox.appendChild(row(a)); }); }
+    if(view.length){ listBox.appendChild(h('div', {class: 'ydSect', text: '可以開這個網址'})); view.forEach(function(a){ listBox.appendChild(row(a)); }); }
+    if(rest.length){ listBox.appendChild(h('div', {class: 'ydSect', text: '其他 App（直接打開 App）'})); rest.forEach(function(a){ listBox.appendChild(row(a)); }); }
+    if(!L.length) listBox.appendChild(h('div', {class: 'empty', text: '找不到 App'}));
+    paintIcons(listBox);
+  }
+  q.addEventListener('input', draw);
+  body.appendChild(q);
+  if(sv.pkg) body.appendChild(h('div', {class: 'btn-row', style: {marginBottom: '6px'}}, h('button', {class: 'btn sm ghost', html: icon('x', 'sm') + '取消記住（下次再問）', onclick: function(){ delete YT_APP[kind]; lsSet('ws.ytApp', YT_APP); s.close(); toast('已取消，下次會再詢問'); }})));
+  body.appendChild(listBox);
+  draw();
+}
+function openYtAppSettings(){
+  var body = h('div');
+  var s = openSheet({title: '開啟應用程式', icon: 'open', body: body});
+  function draw(){
+    body.textContent = '';
+    body.appendChild(h('div', {class: 'sub', style: {lineHeight: '1.7', marginBottom: '10px'}, text: 'YouTube／YouTube Music 網頁上的「開啟應用程式」按鈕要用哪個 App 開。沒有指定時，每次都會詢問。'}));
+    ['yt', 'music'].forEach(function(k){
+      var sv = YT_APP[k];
+      body.appendChild(h('div', {class: 'setRow', onclick: function(){ s.close(); pickYtApp(k, ''); }},
+        h('span', {class: 'ic', html: icon(k === 'music' ? 'audio' : 'ytplay')}),
+        h('div', {class: 'grow'}, h('b', {text: YT_KIND[k]}), h('div', {class: 'sub', text: sv ? '用「' + sv.label + '」開啟' : '每次詢問'})),
+        sv ? h('button', {class: 'btn sm ghost', text: '每次詢問', onclick: function(e){ e.stopPropagation(); delete YT_APP[k]; lsSet('ws.ytApp', YT_APP); draw(); }}) : h('span', {class: 'chev', text: '›'})));
+    });
+    paintIcons(body);
+  }
+  draw();
+}
 
 /* 手機轉橫向時自動全螢幕播放，轉回直向自動離開（像 YouTube App） */
 var YT_AUTOFS = false;
@@ -204,26 +280,41 @@ function openFabMenu(ytId){
 function watchDirs(){ try{ return isApp && NAT.has('watchDirs') ? JSON.parse(NAT.call('watchDirs') || '[]') : []; }catch(e){ return []; } }
 var SHARE_APPS = null;
 function shareApps(){ if(!SHARE_APPS){ try{ SHARE_APPS = JSON.parse(NAT.call('shareApps') || '[]'); }catch(e){ SHARE_APPS = []; } } return SHARE_APPS; }
+/* 剛裝好 Snaptube 等 App 回來：清掉快取重新讀取已安裝的 App，畫面上的按鈕跟著更新 */
+function shareAppsReset(){ SHARE_APPS = null; fire('shareApps'); }
+on('resume', shareAppsReset);
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) shareAppsReset(); });
 var DL_APPS = [['com.snaptube.premium', 'Snaptube'], ['com.snaptube.premium.lite', 'Snaptube'], ['com.quetta.browser', 'Quetta']];
 function appDir(pkg){ return watchDirs().filter(function(d){ return d.pkg === pkg; })[0] || null; }
 /* 下載面板上的「交給 App」按鈕：已設定資料夾的 App、已安裝的常見下載工具各自一顆，最後是「其他 App…」 */
 function handOffButtons(url, before){
   if(!isApp || !NAT.has('shareApps')) return null;
-  var apps = shareApps(), list = [], seen = {};
-  watchDirs().forEach(function(d){ if(d.pkg && !seen[d.pkg]){ var a = apps.filter(function(x){ return x.pkg === d.pkg; })[0]; if(a){ seen[d.pkg] = 1; list.push(a); } } });
-  DL_APPS.forEach(function(k){ var a = apps.filter(function(x){ return x.pkg === k[0] || x.label === k[1]; })[0]; if(a && !seen[a.pkg]){ seen[a.pkg] = 1; list.push(a); } });
   var row = h('div', {class: 'hoRow'});
-  list.forEach(function(a){
-    row.appendChild(h('button', {class: 'hoBtn', onclick: function(){ if(before) before(); handOff(url, a.pkg, a.label); }},
-      a.icon ? h('img', {src: a.icon, alt: ''}) : h('span', {html: icon('download')}), h('span', {class: 'ell', text: a.label})));
-  });
-  /* 沒裝 Snaptube：提供 Snaptube 官方放在 OneDrive 的安裝檔連結 */
-  var SNAPTUBE_DL = 'https://1drv.ms/u/c/bbba28619ef92f91/IQBFJF1V6wAhR6rHaAh_t_npAdQPGLvLd9SI3AagEVw1qC0';
-  if(!list.some(function(a){ return /snaptube/i.test(a.pkg + ' ' + a.label); }))
-    row.appendChild(h('button', {class: 'hoBtn', onclick: function(){
-      dialog('還沒安裝 Snaptube', '要用 Snaptube 下載，請先下載安裝 Snaptube（Google Play 沒有上架）。下載完打開安裝檔，Android 會詢問是否允許安裝未知來源的 App，選允許。<br><br>裝好後回來，這裡就會出現 Snaptube 按鈕。', [['下載 Snaptube', function(){ openExternal(SNAPTUBE_DL); }], ['取消', null, '']]);
-    }}, h('span', {class: 'more', html: icon('download')}), h('span', {class: 'ell', text: '取得 Snaptube'})));
-  row.appendChild(h('button', {class: 'hoBtn', onclick: function(){ if(before) before(); pickShareApp(url); }}, h('span', {class: 'more', html: icon('more')}), h('span', {text: '其他 App…'})));
+  function fill(){
+    var apps = shareApps(), list = [], seen = {};
+    row.textContent = '';
+    watchDirs().forEach(function(d){ if(d.pkg && !seen[d.pkg]){ var a = apps.filter(function(x){ return x.pkg === d.pkg; })[0]; if(a){ seen[d.pkg] = 1; list.push(a); } } });
+    DL_APPS.forEach(function(k){
+      var a = apps.filter(function(x){ return x.pkg === k[0] || x.label === k[1]; })[0];
+      /* 有裝但沒出現在分享清單（舊版 Android 的套件可見性）：仍然提供按鈕 */
+      if(!a && NAT.has('pkgInstalled') && NAT.call('pkgInstalled', k[0])) a = {pkg: k[0], label: k[1], icon: ''};
+      if(a && !seen[a.pkg]){ seen[a.pkg] = 1; list.push(a); }
+    });
+    list.forEach(function(a){
+      row.appendChild(h('button', {class: 'hoBtn', onclick: function(){ if(before) before(); handOff(url, a.pkg, a.label); }},
+        a.icon ? h('img', {src: a.icon, alt: ''}) : h('span', {html: icon('download')}), h('span', {class: 'ell', text: a.label})));
+    });
+    /* 沒裝 Snaptube：提供 Snaptube 官方放在 OneDrive 的安裝檔連結 */
+    var SNAPTUBE_DL = 'https://1drv.ms/u/c/bbba28619ef92f91/IQBFJF1V6wAhR6rHaAh_t_npAdQPGLvLd9SI3AagEVw1qC0';
+    if(!list.some(function(a){ return /snaptube/i.test(a.pkg + ' ' + a.label); }))
+      row.appendChild(h('button', {class: 'hoBtn', onclick: function(){
+        dialog('還沒安裝 Snaptube', '要用 Snaptube 下載，請先下載安裝 Snaptube（Google Play 沒有上架）。下載完打開安裝檔，Android 會詢問是否允許安裝未知來源的 App，選允許。<br><br>裝好後回來，這裡就會自動換成 Snaptube 按鈕。', [['下載 Snaptube', function(){ openExternal(SNAPTUBE_DL); }], ['取消', null, '']]);
+      }}, h('span', {class: 'more', html: icon('download')}), h('span', {class: 'ell', text: '取得 Snaptube'})));
+    row.appendChild(h('button', {class: 'hoBtn', onclick: function(){ if(before) before(); pickShareApp(url); }}, h('span', {class: 'more', html: icon('more')}), h('span', {text: '其他 App…'})));
+  }
+  fill();
+  var live = function(){ if(row.isConnected) fill(); else BUS.shareApps = (BUS.shareApps || []).filter(function(f){ return f !== live; }); };
+  on('shareApps', live);
   return h('div', null, h('div', {class: 'ydSect', text: '交給其他 App 下載（下載完自動搬回、刪除原檔）'}), row);
 }
 function pickShareApp(url, then){

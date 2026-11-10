@@ -125,6 +125,29 @@ final class Browser {
         return true;
     }
 
+    /** YouTube 網頁上的「開啟應用程式」（intent://、Play 商店連結）：不跳 Play 商店，交給介面讓使用者選要用哪個 App 開 */
+    static final java.util.regex.Pattern YT_PKG = java.util.regex.Pattern.compile("com\\.google\\.android\\.(youtube|apps\\.youtube\\.music)\\b");
+    private boolean ytOpenApp(String url, boolean isPopup) {
+        if (!"yt".equals(tag) || url == null) return false;
+        String lo = url.toLowerCase();
+        boolean store = (lo.startsWith("market:") || lo.matches("^https?://play\\.google\\.com/store/apps/.*")) && YT_PKG.matcher(lo).find();
+        boolean intent = lo.startsWith("intent:") && (YT_PKG.matcher(lo).find() || lo.contains("youtube.com"));
+        boolean vnd = lo.startsWith("vnd.youtube") || lo.startsWith("youtubemusic:");
+        if (!store && !intent && !vnd) return false;
+        String target = curUrl;
+        if (intent) {
+            try {
+                Intent it = Intent.parseUri(url, Intent.URI_INTENT_SCHEME);
+                Uri d = it.getData();
+                if (d != null && d.getScheme() != null && d.getScheme().startsWith("http") && isYt(d.getHost())) target = d.toString();
+            } catch (Throwable t) { /* ignore */ }
+        }
+        if (target == null || !target.startsWith("http")) target = lo.contains("music") ? "https://music.youtube.com/" : "https://m.youtube.com/";
+        if (isPopup) Util.MAIN.post(new Runnable() { @Override public void run() { closePopupView(); MainActivity.emit("popup", "{\"open\":false}"); } });
+        try { MainActivity.emit("ytOpenApp", new JSONObject().put("url", target).put("music", lo.contains("music") || target.contains("music.youtube.com")).toString()); } catch (Throwable t) { /* ignore */ }
+        return true;
+    }
+
     static boolean isYt(String host) {
         if (host == null) return false;
         String h = host.toLowerCase();
@@ -197,7 +220,9 @@ final class Browser {
     final int tabId = ++tabSeq;
 
     /** 背景分頁（不是目前顯示的瀏覽分頁）：不要把狀態送給介面 */
-    boolean bgTab() { return "br".equals(tag) && a.br != null && a.br != this; }
+    boolean bgTab() { return ("br".equals(tag) && a.br != null && a.br != this) || ("yt".equals(tag) && a.yt != null && a.yt != this); }
+    /** 第一次切到 YouTube Music：等畫面畫出來才換上來（不會先看到一片白） */
+    Runnable onCommit;
 
     void pauseMedia() { try { wv.evaluateJavascript("(function(){try{[].forEach.call(document.querySelectorAll('video,audio'),function(m){m.pause()})}catch(e){}})()", null); } catch (Throwable t) { /* ignore */ } }
 
@@ -314,6 +339,7 @@ final class Browser {
             Uri u = r.getUrl();
             String s = u.getScheme() == null ? "" : u.getScheme().toLowerCase();
             String url = u.toString();
+            if (ytOpenApp(url, isPopup)) return true;
             if (s.equals("http") || s.equals("https")) {
                 if (ads && r.isForMainFrame() && !r.hasGesture() && AdBlock.match(u.getHost()) && !AdBlock.allowed(curHost)) {
                     MainActivity.toast("已阻擋廣告轉址");
@@ -341,6 +367,7 @@ final class Browser {
         }
 
         @Override public void onPageStarted(WebView v, String url, Bitmap fav) {
+            if (isPopup && ytOpenApp(url, true)) { v.stopLoading(); return; }
             if (isPopup) {
                 /* 新視窗直接開 YouTube（例如 IG 個人檔案的連結）：不開視窗，直接切到 YouTube 分頁 */
                 if (handOffYt(Uri.parse(url), true)) { v.stopLoading(); return; }
@@ -358,7 +385,7 @@ final class Browser {
             emitMediaCount();
         }
 
-        @Override public void onPageCommitVisible(WebView v, String url) { if (!isPopup) inject(v, ytAds && isYt(hostOf(url)) ? injectYt : null); else if (url != null && !url.startsWith("about:")) revealPopup(); }
+        @Override public void onPageCommitVisible(WebView v, String url) { if (!isPopup && onCommit != null) { Runnable r = onCommit; onCommit = null; r.run(); } if (!isPopup) inject(v, ytAds && isYt(hostOf(url)) ? injectYt : null); else if (url != null && !url.startsWith("about:")) revealPopup(); }
 
         @Override public void onPageFinished(WebView v, String url) {
             if (isPopup) return;

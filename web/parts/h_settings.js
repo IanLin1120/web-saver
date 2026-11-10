@@ -181,7 +181,8 @@ function openYtSettings(){
     swRow('隱藏 Shorts', '首頁與搜尋結果不顯示 Shorts', 'yt.noShorts'),
     selRow('預設畫質', [['max', '最高畫質'], ['1080', '1080p'], ['720', '720p'], ['480', '480p（省流量）'], ['auto', '讓 YouTube 自動決定']], 'yt.q'),
     selRow('影片編碼', [['vp9', '高畫質優先（最高 4K、WebM）'], ['h264', '相容優先（最高 1080p、MP4）']], 'yt.codec'),
-    swRow('懸浮下載按鈕', '可拖曳的 ⬇ 按鈕', 'fab'));
+    swRow('懸浮下載按鈕', '可拖曳的 ⬇ 按鈕', 'fab'),
+    h('div', {class: 'setRow', onclick: function(){ openYtAppSettings(); }}, h('div', {class: 'grow'}, h('b', {text: '「開啟應用程式」用哪個 App'}), h('div', {class: 'sub', text: '指定或修改 YouTube／YouTube Music 要開的 App'})), h('span', {class: 'chev', text: '›'})));
   openSheet({title: 'YouTube 播放器設定', icon: 'gear', body: body, tall: true, onClose: function(){ if(isApp) NAT.call('ytNav', 'reload'); },
     foot: h('div', {class: 'sub', text: '關閉這個面板後會重新整理 YouTube 讓設定生效'})});
 }

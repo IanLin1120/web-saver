@@ -238,6 +238,47 @@ public class MainActivity extends Activity {
         try { root.removeView(b.wv); b.wv.stopLoading(); b.wv.destroy(); } catch (Throwable t) { /* ignore */ }
     }
 
+    /* ---------- YouTube ⇄ YouTube Music：兩個各自保留狀態的瀏覽器，切換只是換顯示（不重新載入、不閃白） ---------- */
+    Browser ytYt, ytMu;
+    final java.util.Map<String, String> injOverride = new java.util.HashMap<>();
+    float[] ytRectV = null;
+    java.util.List<Browser> ytAll() {
+        java.util.List<Browser> l = new java.util.ArrayList<>();
+        if (yt != null) l.add(yt);
+        if (ytYt != null && !l.contains(ytYt)) l.add(ytYt);
+        if (ytMu != null && !l.contains(ytMu)) l.add(ytMu);
+        return l;
+    }
+    Browser ytFor(boolean music) {
+        Browser b = music ? ytMu : ytYt;
+        if (b != null) return b;
+        if (yt != ytYt && yt != ytMu) b = yt;          /* 一開始的瀏覽器還沒指定是哪一種 */
+        else {
+            b = new Browser(this, "yt");
+            root.removeView(b.wv);
+            root.addView(b.wv, root.indexOfChild(yt.wv) + 1, new FrameLayout.LayoutParams((FrameLayout.LayoutParams) yt.wv.getLayoutParams()));
+            for (java.util.Map.Entry<String, String> e : injOverride.entrySet()) b.setInject(e.getKey(), e.getValue());
+            if (ytRectV != null) b.setRect(ytRectV[0], ytRectV[1], ytRectV[2], ytRectV[3]);
+        }
+        if (music) { ytMu = b; b.wv.setBackgroundColor(0xFF030303); } else ytYt = b;
+        return b;
+    }
+    boolean ytLoaded(Browser b) { return b.curUrl != null && b.curUrl.startsWith("http"); }
+    void ytActivate(Browser b) {
+        if (b == null || b == yt) return;
+        Browser old = yt;
+        boolean vis = old.shown;
+        old.pauseMedia();
+        old.show(false);
+        /* 藏起來的那一個暫停畫面更新，把效能留給正在用的（點擊比較靈敏） */
+        final Browser o = old;
+        Util.MAIN.postDelayed(new Runnable() { @Override public void run() { if (o != yt && !o.shown) try { o.wv.onPause(); } catch (Throwable t) { /* ignore */ } } }, 400);
+        yt = b;
+        b.show(vis);
+        b.emitState();
+        if (fab != null) fab.refresh();
+    }
+
     Browser act() { return yt != null && (yt.isShown() || yt.fs || yt.inPip) ? yt : br; }
 
     /* ---------- 子母畫面的控制按鈕：倒退 10 秒、播放／暫停、快轉 10 秒 ---------- */
@@ -485,7 +526,7 @@ public class MainActivity extends Activity {
         boolean pip = Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode();
         if (pip || pipPending) return;
         if (br != null) br.onPause();
-        if (yt != null) yt.onPause();
+        for (Browser b : ytAll()) b.onPause();
     }
 
     /** 正在進入子母畫面（onUserLeaveHint 之後、模式切換完成之前） */

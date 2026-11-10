@@ -303,16 +303,15 @@ function manageFolders(after){
   function draw(){
     list.textContent = '';
     BM.folders.forEach(function(f, i){
-      list.appendChild(h('div', {class: 'bmItem'},
+      list.appendChild(h('div', {class: 'bmItem bmFold'},
         h('span', {class: 'dsGrip', html: icon('grip', 'sm'), title: '長按上下拖動排序'}),
-        h('div', {class: 'fav sm', text: f.icon, style: {fontSize: '20px'}, onclick: function(){ iconPicker('「' + f.name + '」的圖示', f.icon, function(ic){ f.icon = ic; BM.save(); draw(); }); }}),
+        h('div', {class: 'fav sm', text: f.icon, title: '點一下換圖示', style: {fontSize: '20px'}, onclick: function(){ iconPicker('「' + f.name + '」的圖示', f.icon, function(ic){ f.icon = ic; BM.save(); draw(); }); }}),
         h('div', {class: 't'}, h('b', {text: f.name}), h('div', {class: 'sub', text: BM.count(f.id) + ' 個網頁'})),
         h('button', {class: 'ib', html: icon(f.lock ? 'lock' : 'key'), title: f.lock ? '解除上鎖' : '上鎖', style: f.lock ? {color: 'var(--accent)'} : null, onclick: async function(){
           if(!SEC.has()){ dialog('還沒有設定密碼', '要先設定一組密碼，才能把收藏夾鎖起來。', [['設定密碼', function(){ setPinFlow(); }], ['取消', null, '']]); return; }
           if(!(await (f.lock ? SEC.verify('解除「' + f.name + '」的上鎖') : SEC.need('上鎖「' + f.name + '」')))) return;
           f.lock = !f.lock; BM.save(); toast(f.lock ? '🔒 已上鎖「' + f.name + '」' : '已解除上鎖'); draw();
         }}),
-        h('button', {class: 'ib', html: icon('palette'), title: '換圖示', onclick: function(){ iconPicker('「' + f.name + '」的圖示', f.icon, function(ic){ f.icon = ic; BM.save(); draw(); }); }}),
         h('button', {class: 'ib', html: icon('edit'), title: '重新命名', onclick: async function(){ var n = await promptDlg('重新命名收藏夾', f.name); if(n){ f.name = n.slice(0, 30); BM.save(); draw(); } }}),
         BM.folders.length > 1 ? h('button', {class: 'ib', html: icon('trash'), style: {color: 'var(--danger)'}, onclick: async function(){
           var n = BM.count(f.id);

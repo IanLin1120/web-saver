@@ -97,7 +97,13 @@
     if (b) b.click();
     skipped++;
   }
-  setInterval(skipNow, 120);
+  /* YouTube Music：取消雙擊縮放的等待（點歌更靈敏），檢查廣告的頻率放慢一點 */
+  var isMusic = /^music\./.test(location.hostname);
+  if (isMusic) {
+    var tm = document.createElement('style'); tm.textContent = 'html,body{touch-action:manipulation!important}*{-webkit-tap-highlight-color:transparent}';
+    (document.head || document.documentElement).appendChild(tm);
+  }
+  setInterval(skipNow, isMusic ? 300 : 120);
   var moAd = new MutationObserver(function () { if (document.querySelector('.ad-showing, .ad-interrupting')) skipNow(); });
   function watchPlayer() { var pl = document.querySelector('.html5-video-player, #movie_player'); if (pl && !pl.__wsObs) { pl.__wsObs = 1; moAd.observe(pl, {attributes: true, attributeFilter: ['class']}); } }
   setInterval(watchPlayer, 500);

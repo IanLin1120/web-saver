@@ -440,7 +440,7 @@ input[type=range]{width:100%;accent-color:var(--accent);padding:0;border:0;backg
 /* ===== YouTube 分頁 ===== */
 #ytTop{position:absolute;left:6px;right:6px;top:calc(env(safe-area-inset-top) + 6px);z-index:5;border-radius:22px;padding:6px;display:flex;align-items:center;gap:4px}
 #ytTop .ytTitle{flex:1;min-width:0;display:flex;flex-direction:column;padding:0 4px}
-#ytTop .ytTitle b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#ytTop .ytTitle b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #ytTop .ytTitle small{font-size:11px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #ytTop .chip{flex:none}
 #ytBar{position:absolute;left:24px;right:24px;top:calc(env(safe-area-inset-top) + 62px);height:3px;border-radius:3px;overflow:hidden;opacity:0;transition:opacity .3s;z-index:6}
@@ -747,8 +747,15 @@ input[type=range].hrArmed::-webkit-slider-thumb{transform:scale(1.35);box-shadow
 input[type=range].hrArmed{filter:drop-shadow(0 0 5px color-mix(in srgb,var(--accent) 70%,transparent))}
 /* YouTube ⇄ YouTube Music 切換鈕 */
 .ytMode{position:relative;display:flex;align-items:center;gap:0;border:1.5px solid var(--border-soft);background:var(--surface-3);border-radius:999px;padding:3px;cursor:pointer;flex:none}
-.ytMode>span{width:38px;height:32px;border-radius:999px;display:grid;place-items:center;color:var(--text-muted);position:relative;z-index:1;transition:color .2s}
-.ytMode::before{content:'';position:absolute;top:3px;left:3px;width:38px;height:32px;border-radius:999px;background:#e5322d;transition:transform .22s cubic-bezier(.3,.7,.3,1),background .2s;box-shadow:0 2px 6px var(--sh)}
+.ytMode>span{width:52px;height:40px;border-radius:999px;display:grid;place-items:center;color:var(--text-muted);position:relative;z-index:1;transition:color .2s}
+.ytMode::before{content:'';position:absolute;top:3px;left:3px;width:52px;height:40px;border-radius:999px;background:#e5322d;transition:transform .22s cubic-bezier(.3,.7,.3,1),background .2s;box-shadow:0 2px 6px var(--sh)}
 .ytMode .m-yt{color:#fff}
-.ytMode.music::before{transform:translateX(38px);background:linear-gradient(135deg,#ff2d55,#c71585)}
+.ytMode.music::before{transform:translateX(52px);background:linear-gradient(135deg,#ff2d55,#c71585)}
 .ytMode.music .m-yt{color:var(--text-muted)}.ytMode.music .m-mu{color:#fff}
+
+.ytMode>span svg.i{width:22px;height:22px}
+.bmFold{gap:6px}
+.bmFold .ib{width:34px;height:34px}
+.bmFold .t b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.3;word-break:break-all}
+.bmFold .fav{cursor:pointer}
+.areaRow{gap:10px}
