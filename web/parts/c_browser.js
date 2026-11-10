@@ -341,12 +341,13 @@ function renderStart(){
   var sp = $('startPage'); sp.textContent = '';
   var sects = h('div', {class: 'sects'});
   sp.appendChild(h('div', {class: 'hero'}, h('div', {class: 'mark', text: '擷'}), h('h1', {text: '網頁擷取'}), h('p', {text: '瀏覽 → 去廣告 → 存成離線 HTML／PDF，圖片影片一鍵打包'})));
-  sp.appendChild(h('div', {class: 'searchBig glass', onclick: function(){ urlIn.focus(); }}, h('span', {class: 'ell', html: icon('search', 'sm') + ' 貼上網址或輸入關鍵字'}),
-    h('button', {class: 'btn pri sm', html: icon('copy', 'sm') + '貼上', onclick: async function(e){
-      e.stopPropagation();
-      try{ var t = (await navigator.clipboard.readText() || '').trim(); var m = t.match(/https?:\/\/\S+/); if(m) navigate(m[0]); else if(t){ urlIn.value = t; urlIn.focus(); } else toast('剪貼簿是空的', true); }
-      catch(err){ urlIn.focus(); toast('請長按網址列貼上'); }
-    }})));
+  /* 首頁的大搜尋框：直接在這裡輸入文字或貼上網址，按「搜尋」或鍵盤的 Enter 就開啟 */
+  var bigIn = h('input', {type: 'search', id: 'startIn', enterkeyhint: 'search', autocomplete: 'off', placeholder: '貼上網址或輸入關鍵字',
+    onkeydown: function(e){ if(e.key === 'Enter'){ e.preventDefault(); go(); } },
+    onpaste: function(){ var me = this; setTimeout(function(){ var v = me.value.trim(); if(/^https?:\/\/\S+$/.test(v)){ me.blur(); navigate(v); } }, 10); }});
+  function go(){ var v = bigIn.value.trim(); if(!v){ bigIn.focus(); return; } var u = toUrl(v); bigIn.blur(); if(u){ bigIn.value = ''; navigate(u); } }
+  sp.appendChild(h('div', {class: 'searchBig glass', onclick: function(e){ if(e.target === this) bigIn.focus(); }}, h('span', {class: 'sbIc', html: icon('search', 'sm')}), bigIn,
+    h('button', {class: 'btn pri sm', html: icon('search', 'sm') + '搜尋', onclick: function(e){ e.stopPropagation(); go(); }})));
   if(!isApp) sects.appendChild(h('div', {class: 'note', html: '🌐 <b>網頁版</b>：瀏覽器的安全限制讓網頁無法直接開啟其他網站，這裡會透過「代理伺服器」讀取網頁內容（不執行網頁程式、無法登入）。完整的瀏覽、登入、廣告阻擋與影片偵測請使用 <b>APK 版</b>。代理伺服器可在「設定 → 網頁版代理」修改。'}));
 
   /* 收藏與瀏覽記錄（只放入口按鈕，畫面保持清爽） */

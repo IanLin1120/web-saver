@@ -422,7 +422,7 @@
     var host = document.getElementById('__ws_skin');
     var p = playerEl();
     /* Shorts 用 YouTube 自己的介面（愛心、留言、分享、訂閱都要能按），不蓋上 App 的播放控制 */
-    var shorts = /^\/shorts\//.test(location.pathname);
+    var shorts = /^\/shorts\//.test(location.pathname) || /^music\./.test(location.hostname);   /* YouTube Music 也用它自己的播放介面 */
     if (O.skin === false || !videoId() || !p || shorts) {
       if (host) host.style.display = 'none';
       document.documentElement.classList.remove('__wsskin');

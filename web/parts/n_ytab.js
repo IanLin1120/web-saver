@@ -4,6 +4,16 @@
    ============================================================ */
 var YTB = {url: '', title: '', back: false, progress: 100, started: false, fs: false};
 var YT_HOME = 'https://m.youtube.com/';
+var YT_MUSIC = 'https://music.youtube.com/';
+/* YouTube ⇄ YouTube Music：同一個分頁切換，各自記住上次看到的頁面 */
+YTB.last = lsGet('ws.ytLast', {yt: '', music: ''});
+function ytIsMusic(u){ return /^https?:\/\/music\.youtube\.com/i.test(u || ''); }
+function ytModeUi(){
+  var mu = YTB.modeMusic != null ? YTB.modeMusic : ytIsMusic(YTB.url);
+  var b = $('ytModeB'); if(!b) return;
+  b.classList.toggle('music', !!mu);
+  b.title = mu ? '目前是 YouTube Music，點一下切回 YouTube' : '目前是 YouTube，點一下切換到 YouTube Music';
+}
 
 function ytSyncLayout(){
   if(!isApp) return;
@@ -30,15 +40,22 @@ function ytEnsure(url){
 }
 function ytOpen(url){
   if(curView !== 'yt') showView('yt');
+  if(url) YTB.modeMusic = ytIsMusic(url);
   ytEnsure(url || YT_HOME);
+  ytModeUi();
 }
 function ytCurId(){ return YT.idOf(YTB.url); }
 function renderYt(){
-  var id = ytCurId();
-  $('ytDlB').disabled = !id;
+  var id = ytCurId(), mu = ytIsMusic(YTB.url);
   $('ytBack').disabled = !YTB.back;
-  $('ytT').textContent = id ? (YTB.title || 'YouTube').replace(/ - YouTube$/, '') : 'YouTube';
-  $('ytSub').textContent = id ? '點畫面顯示控制列・兩側雙擊快轉・長按 2 倍速' : '無廣告・背景播放・手勢播放器';
+  if(mu){
+    $('ytT').textContent = id && YTB.title ? YTB.title.replace(/ - YouTube Music$/, '') : 'YouTube Music';
+    $('ytSub').textContent = '無廣告・背景播放・關螢幕也能聽';
+  } else {
+    $('ytT').textContent = id ? (YTB.title || 'YouTube').replace(/ - YouTube$/, '') : 'YouTube';
+    $('ytSub').textContent = id ? '點畫面顯示控制列・兩側雙擊快轉・長按 2 倍速' : '無廣告・背景播放・手勢播放器';
+  }
+  ytModeUi();
   var bar = $('ytBar'), loading = YTB.progress < 100;
   bar.classList.toggle('on', loading); bar.firstChild.style.width = (loading ? Math.max(8, YTB.progress) : 100) + '%';
   $('ytReload').innerHTML = icon(loading ? 'stop' : 'reload');
@@ -58,6 +75,10 @@ on('ytbr', function(d){
   if(!d) return;
   var changed = d.url !== YTB.url;
   YTB.url = d.url || ''; YTB.title = d.title || ''; YTB.back = d.back; YTB.progress = d.progress; YTB.fs = !!d.fs;
+  if(/^https?:\/\/[\w.]*youtube\.com/i.test(YTB.url)){
+    var isMu = ytIsMusic(YTB.url); YTB.modeMusic = isMu;
+    if(YTB.last[isMu ? 'music' : 'yt'] !== YTB.url){ YTB.last[isMu ? 'music' : 'yt'] = YTB.url; lsSet('ws.ytLast', YTB.last); }
+  }
   if(changed && /^https?:/.test(YTB.url)) Hist.add(YTB.url, YTB.title, 'yt');
   else if(YTB.title) Hist.title(YTB.url, YTB.title);
   renderYt(); fabSync();
@@ -74,9 +95,14 @@ on('view', function(e){
 on('layout', ytSyncLayout);
 window.addEventListener('resize', function(){ clearTimeout(ytSyncLayout.t); ytSyncLayout.t = setTimeout(ytSyncLayout, 60); });
 $('ytBack').addEventListener('click', function(){ NAT.call('ytNav', 'back'); });
-$('ytHomeB').addEventListener('click', function(){ ytEnsure(YT_HOME); });
+$('ytHomeB').addEventListener('click', function(){ ytEnsure(ytIsMusic(YTB.url) ? YT_MUSIC : YT_HOME); });
 $('ytReload').addEventListener('click', function(){ NAT.call('ytNav', YTB.progress < 100 ? 'stop' : 'reload'); });
-$('ytDlB').addEventListener('click', function(){ var id = ytCurId(); if(id) openYt(id); });
+$('ytModeB').addEventListener('click', function(){
+  var toMusic = !ytIsMusic(YTB.url);
+  YTB.modeMusic = toMusic; ytModeUi();
+  ytEnsure(toMusic ? (YTB.last.music || YT_MUSIC) : (YTB.last.yt || YT_HOME));
+  toast(toMusic ? '♪ YouTube Music' : '▶ YouTube');
+});
 $('ytMore').addEventListener('click', function(){
   var id = ytCurId();
   menu('YouTube', [
@@ -272,11 +298,12 @@ function openWatchSettings(){
 /* 瀏覽分頁裡點到 YouTube 連結：不開新視窗、不播切換動畫，直接到 YouTube 分頁打開 */
 on('brToYt', function(u){
   u = String(u || '');
-  var id = YT.idOf(u);
-  var url = id ? 'https://m.youtube.com/watch?v=' + id + ((u.match(/[?&#]t=(\d+)/) || [])[1] ? '&t=' + u.match(/[?&#]t=(\d+)/)[1] + 's' : '') : u.replace(/^https?:\/\/(www\.)?youtube\.com/, 'https://m.youtube.com');
+  var id = ytIsMusic(u) ? '' : YT.idOf(u);
+  var url = ytIsMusic(u) ? u : id ? 'https://m.youtube.com/watch?v=' + id + ((u.match(/[?&#]t=(\d+)/) || [])[1] ? '&t=' + u.match(/[?&#]t=(\d+)/)[1] + 's' : '') : u.replace(/^https?:\/\/(www\.)?youtube\.com/, 'https://m.youtube.com');
   var de = document.documentElement;
   de.classList.add('no-motion');
   showView('yt');
+  YTB.modeMusic = ytIsMusic(url); ytModeUi();
   ytEnsure(url);
   setTimeout(function(){ de.classList.remove('no-motion'); }, 400);
 });

@@ -113,7 +113,7 @@ final class Browser {
         if (h == null) return false;
         h = h.toLowerCase();
         if (h.equals("youtu.be")) return true;
-        if (!isYt(h) || h.startsWith("accounts.") || h.startsWith("studio.") || h.startsWith("music.")) return false;
+        if (!isYt(h) || h.startsWith("accounts.") || h.startsWith("studio.")) return false;
         String path = u.getPath() == null ? "" : u.getPath();
         return !path.startsWith("/embed/") && !path.startsWith("/iframe_api") && !path.startsWith("/s/");
     }
