@@ -4,7 +4,7 @@
 <script>/* 線上更新開機程式：手機上若已下載比 APK 內建更新的介面版本，就改用新版（存在 IndexedDB）。
    新版連續兩次沒有正常開啟 → 自動退回 APK 內建版本。網址加上 #builtin 也會強制使用內建版本。 */
 (function () {
-  var B = '1.9.20'; if (!window.__OTA) window.APP_BUILTIN = B;
+  var B = '1.9.21'; if (!window.__OTA) window.APP_BUILTIN = B;
   if (window.__OTA || location.hash.indexOf('builtin') >= 0) return;
   var v = null; try { v = JSON.parse(localStorage.getItem('ws.ota') || 'null'); } catch (e) {}
   function gt(a, b) { a = String(a).split('.').map(Number); b = String(b).split('.').map(Number); for (var i = 0; i < Math.max(a.length, b.length); i++) { var p = a[i] || 0, q = b[i] || 0; if (p !== q) return p > q; } return false; }
@@ -2072,7 +2072,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 /* ============================================================
    核心：工具函式、圖示、主題、面板（sheet）、提示、原生橋接、頁面切換
    ============================================================ */
-const APP_VERSION = '1.9.20';
+const APP_VERSION = '1.9.21';
 var GH = {user: 'IanLin1120', repo: 'web-saver',
   get pages(){ return 'https://' + this.user.toLowerCase() + '.github.io/' + this.repo + '/'; },
   get web(){ return 'https://github.com/' + this.user + '/' + this.repo; }};
@@ -6390,12 +6390,25 @@ function sMime(s){ try{ return decodeURIComponent(s.mime || ''); }catch(e){ retu
 
 /* 讓 App 內的播放器載入這部影片並回報資訊；影片沒開著就先在 YouTube 分頁打開 */
 async function ytPageData(id, onStep){
+  /* 從 YouTube Music 按下載：影片資訊要靠 YouTube 那邊的播放器讀，讀完自動切回 YouTube Music（不出聲、不留在 YouTube 畫面） */
+  var fromMusic = typeof ytIsMusic === 'function' && ytIsMusic(YTB.url) && isApp && NAT.has('ytSwitch');
+  var muUrl = YTB.url;
+  try{ return await ytPageData0(id, onStep, fromMusic); }
+  finally{
+    if(fromMusic && !ytIsMusic(YTB.url)){
+      NAT.call('ytNav', 'pause');
+      NAT.call('ytSwitch', true, (YTB.last && YTB.last.music) || muUrl || YT_MUSIC);
+      setTimeout(function(){ if(typeof ytUpdateVisible === 'function') ytUpdateVisible(); if(typeof ytModeUi === 'function') ytModeUi(); }, 300);
+    }
+  }
+}
+async function ytPageData0(id, onStep, quiet){
   if(!isApp || !NAT.has('ytInfoReq')) return null;
   var where = NAT.call('ytInfoReq', id), bg = false;
   /* 在別的分頁（例如 AI 摘要）背景讀取時：YouTube 畫面不顯示、影片不出聲 */
-  var hush = function(){ if(bg && curView !== 'yt') NAT.call('ytNav', 'pause'); };
+  var hush = function(){ if(bg && (quiet || curView !== 'yt')) NAT.call('ytNav', 'pause'); };
   if(!where){
-    bg = curView !== 'yt';
+    bg = quiet || curView !== 'yt';
     if(onStep) onStep('在 YouTube 分頁開啟影片…');
     YTB.started = true; NAT.call('ytLoad', 'https://m.youtube.com/watch?v=' + id);
     for(var k = 0; k < 40 && !where; k++){ await sleep(500); hush(); where = NAT.call('ytInfoReq', id); }
@@ -7238,8 +7251,9 @@ Lyrics.save = function(it, lrc, src){
   else IDB.tx(['meta'], 'readwrite', function(t){ t.objectStore('meta').put(it); });
   var li = Lib.byId(it.id); if(li && li !== it){ li.lrc = lrc; li.lrcSrc = src; delete li.__lines; }
 };
-Lyrics.auto = async function(it){
-  if(Lyrics.of(it)) return Lyrics.of(it);
+Lyrics.auto = async function(it, needSynced){
+  /* needSynced：已經有純文字歌詞（例如 YouTube Music 內建的），還是要找有時間軸的來換 */
+  if(Lyrics.of(it) && !(needSynced && !Lyrics.isSynced(Lyrics.of(it)))) return Lyrics.of(it);
   if(it.lrcOff) return '';
   var q = it.title && it.title !== it.name ? it.title : it.name;
   var L = await Lyrics.search(q, it.artist || '', it.dur || 0);
@@ -7251,7 +7265,8 @@ Lyrics.auto = async function(it){
     var durOk = !(it.dur && x.dur) || Math.abs(x.dur - it.dur) <= 5;
     return nameOk && durOk;
   };
-  var best = L.filter(function(x){ return x.lrc && ok(x); })[0] || L.filter(ok)[0];
+  var best = L.filter(function(x){ return x.lrc && ok(x); })[0] || (needSynced && Lyrics.of(it) ? null : L.filter(ok)[0]);
+  if(needSynced && best && !Lyrics.isSynced(best.lrc || '')) best = null;
   if(best){ var l = best.lrc || best.plain; Lyrics.save(it, l, best.src + '：' + best.name + ' - ' + best.artist); return l; }
   return '';
 };
@@ -10144,6 +10159,18 @@ YTMU.time = function(){
   var t = s.cur + (s.playing ? (Date.now() - this.t0) / 1000 : 0);
   return s.dur ? Math.min(t, s.dur) : t;
 };
+YTMU.syncTry = function(it, delay){
+  if(it.__syncTried) return; 
+  var n = 0;
+  (function go(){
+    setTimeout(function(){
+      if(YTMU.it !== it || it.__syncTried) return;
+      if(!it.dur && n++ < 6){ var s = YTMU.st; if(s && s.vid === it.vid && s.dur) it.dur = s.dur; else return go(); }
+      it.__syncTried = true;
+      Lyrics.auto(it, true).then(function(l){ if(l && Lyrics.isSynced(l) && YTMU.it === it){ CFG.lyr.ytView = CFG.lyr.ytView || 'lyrics'; YTMU.draw(true); } }).catch(function(){});
+    }, delay);
+  })();
+};
 YTMU.active = function(){ var s = this.st; return !!(s && !s.off && s.title); };
 /* 給歌詞用的「假檔案」：同一首歌（影片 ID）共用，歌詞存在快取 */
 YTMU.item = function(){
@@ -10154,10 +10181,8 @@ YTMU.item = function(){
   var it = this.it;
   /* 先拿 YouTube Music 自己的歌詞；同時找有時間軸的同步歌詞（找到就用同步的，歌詞會跟著捲動） */
   if(!it.lrc && !it.lrcOff) this.cmd('lyrics', s.vid);
-  if(!it.lrc && !it.lrcOff && CFG.lyr && CFG.lyr.auto) setTimeout(function(){
-    if(YTMU.it !== it || !it.dur) return;
-    Lyrics.auto(it).then(function(l){ if(l && YTMU.it === it) YTMU.draw(true); }).catch(function(){});
-  }, 1200);
+  /* 沒有歌詞，或只有不會動的純文字歌詞（YouTube Music 內建的）：找有時間軸的同步歌詞來換，找到就會跟著唱到哪句移動 */
+  if(!it.lrcOff && !Lyrics.isSynced(it.lrc || '') && (!it.lrc || /^YouTube Music/.test(it.lrcSrc || ''))) YTMU.syncTry(it, 1500);
   return it;
 };
 

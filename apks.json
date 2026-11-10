@@ -1,5 +1,12 @@
 [
  {
+  "v": "1.9.21",
+  "file": "網頁擷取_v1.9.21.apk",
+  "date": "2026-11-10",
+  "size": 1486532,
+  "notes": "YouTube Music 歌詞會跟著唱：YouTube Music 內建的歌詞沒有時間，所以不會動；現在會自動再找有時間軸的同步歌詞來換（歌名與長度要吻合才套用），找到就會跟著移動、目前這句反色；找不到才顯示內建的純文字歌詞\n在 YouTube Music 按下載不再被切到 YouTube：影片資訊在背景讀取（不出聲），讀完自動回到 YouTube Music；在 YouTube 按下載則維持在 YouTube"
+ },
+ {
   "v": "1.9.20",
   "file": "網頁擷取_v1.9.20.apk",
   "date": "2026-11-10",
@@ -75,12 +82,5 @@
   "date": "2026-11-10",
   "size": 1476724,
   "notes": "YouTube Music：點歌名、歌手文字或縮圖都能馬上播放（模擬手指點縮圖，沒反應再自動補按一次）\nYouTube Music：YouTube Music 原本的播放器完全不顯示，只用跟離線音樂一樣的播放面板；下方小播放列與播放面板只更新內容不重建，不再一閃一閃\nYouTube Music：在其他分頁按 ✕ 關閉音樂後回到 YouTube Music，畫面正常顯示；重新整理也不會自己又開始播放\nYouTube Music：「Recap」「每日探索」等大張卡片的縮圖自動補上"
- },
- {
-  "v": "1.9.9",
-  "file": "網頁擷取_v1.9.9.apk",
-  "date": "2026-11-10",
-  "size": 1472856,
-  "notes": "修正「＋ 匯入」選完檔案卻跳出「螢幕錄影失敗」：跟螢幕錄影的系統代碼衝突，已分開\n匯入支援更多格式並正確分類：Word（doc/docx/odt/rtf）、Excel（xls/xlsx/xlsm/xlsb/csv/ods）、PPT（ppt/pptx/ppsx/odp）、文字檔、字幕、圖片（含 HEIC/TIFF）、影片（含 AVI/WMV/FLV/MPG）、音樂（含 WMA/AMR/AIFF/APE）、壓縮檔（zip/rar/7z/gz）\nYouTube Music：歌曲整列都可以點（不用剛好點到縮圖），點下去 App 的播放面板立刻打開，不會再看到換頁閃爍\nYouTube Music：修正捲動清單時，正在播放的縮圖浮在畫面上跟著移動\nYouTube Music：修正「每日探索」等大張卡片的縮圖不見、只剩播放鍵"
  }
 ]
