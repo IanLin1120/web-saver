@@ -26,7 +26,7 @@ import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     static MainActivity cur;
-    static final int REQ_FILE = 1001, REQ_TREE = 1002, REQ_NOTIF = 1003, REQ_WATCH = 1004, REQ_PICK = 1005;
+    static final int REQ_FILE = 1001, REQ_TREE = 1002, REQ_NOTIF = 1003, REQ_WATCH = 1004, REQ_PICK = 1011;
 
     FrameLayout root;
     WebView ui;

@@ -54,6 +54,13 @@ final class Lib {
 
     static String catOf(String mime, String ext) {
         String m = mime == null ? "" : mime;
+        ext = ext == null ? "" : ext.toLowerCase();
+        /* 文件、文字、字幕：交給檔案庫依副檔名分到 Word／Excel／PPT／文字檔／字幕（有些手機會把 Office 檔標成 zip） */
+        if (ext.matches("docx?|docm|dotx|odt|rtf|xlsx?|xlsm|xlsb|xltx|xltm|csv|ods|pptx?|pptm|ppsx?|potx|odp|txt|md|log|srt|vtt|ass|ssa|lrc|sub|epub|apk")) return "other";
+        if (ext.matches("jpe?g|jfif|png|gif|webp|avif|bmp|svg|heic|heif|tiff?|ico")) return "image";
+        if (ext.matches("mp4|m4v|webm|mov|mkv|3gp|avi|wmv|flv|mpe?g|m2ts|mts")) return "video";
+        if (ext.matches("mp3|m4a|m4b|aac|ogg|oga|opus|wav|flac|wma|amr|aiff?|midi?|ape")) return "audio";
+        if (ext.matches("zip|rar|7z|gz|tgz|tar")) return "zip";
         if (m.startsWith("text/html") || ext.equals("html") || ext.equals("htm") || ext.equals("mhtml")) return "html";
         if (m.equals("application/pdf") || ext.equals("pdf")) return "pdf";
         if (m.startsWith("image/")) return "image";

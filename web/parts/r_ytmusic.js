@@ -29,7 +29,20 @@ YTMU.item = function(){
 on('muState', function(d){
   if(typeof d === 'string') try{ d = JSON.parse(d); }catch(e){ return; }
   if(!d) return;
+  /* 在 YouTube Music 點了一首歌：馬上打開播放面板（先用清單上的歌名、封面），等真的開始播再更新 */
+  if(d.tap){
+    if(!ytmuOn()) return;
+    var base = YTMU.st || {};
+    YTMU.st = Object.assign({}, base, {off: false, vid: base.vid || '', title: d.title || base.title || '載入中…', artist: d.artist || '', art: d.art || base.art || '', cur: 0, dur: 0, playing: true, pend: Date.now()});
+    YTMU.t0 = Date.now();
+    if(!Music.el.paused) Music.el.pause();
+    YTMU.mini();
+    if(curView === 'yt' && !Sheets.stack.length) YTMU.openPlayer(); else YTMU.draw();
+    return;
+  }
   var prev = YTMU.st || {};
+  /* 剛點歌還在載入：舊歌的回報不要蓋掉新歌的畫面 */
+  if(prev.pend && Date.now() - prev.pend < 6000 && d.vid === prev.vid && !d.open && d.title !== prev.title){ if(d.queue) YTMU.queue = d.queue; return; }
   if(d.queue) YTMU.queue = d.queue;
   YTMU.st = d; YTMU.t0 = Date.now();
   /* YouTube Music 開始播放：離線音樂先停 */
@@ -37,8 +50,6 @@ on('muState', function(d){
   var big = !prev.title || prev.vid !== d.vid || prev.playing !== d.playing || prev.off !== d.off || prev.like !== d.like || prev.repeat !== d.repeat || prev.shuffle !== d.shuffle || prev.art !== d.art || !!d.queue;
   if(big){ YTMU.mini(); YTMU.draw(); } else YTMU.progress();
   if(d.vid !== prev.vid && typeof fabSync === 'function'){ fabSync.k = null; fabSync(); }
-  /* 在 YouTube Music 點了一首歌：自動打開播放面板（跟離線音樂一樣） */
-  if(d.open && !d.off && curView === 'yt' && ytmuOn() && !Sheets.stack.length) setTimeout(function(){ YTMU.openPlayer(); }, 120);
 });
 /* 離線音樂開始播放：YouTube Music 暫停 */
 Music.el.addEventListener('play', function(){ if(YTMU.st && YTMU.st.playing){ YTMU.cmd('pause'); YTMU.st.playing = false; YTMU.mini(); } });
