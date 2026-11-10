@@ -21,7 +21,7 @@ YTMU.item = function(){
   var it = this.it;
   if(!it.lrc && !it.lrcOff && CFG.lyr && CFG.lyr.auto) setTimeout(function(){
     if(YTMU.it !== it || !it.dur) return;
-    Lyrics.auto(it).then(function(l){ if(l && YTMU.it === it) YTMU.draw(); }).catch(function(){});
+    Lyrics.auto(it).then(function(l){ if(l && YTMU.it === it) YTMU.draw(true); }).catch(function(){});
   }, 1200);
   return it;
 };
@@ -48,7 +48,7 @@ on('muState', function(d){
   /* YouTube Music 開始播放：離線音樂先停 */
   if(d.playing && !Music.el.paused) Music.el.pause();
   var big = !prev.title || prev.vid !== d.vid || prev.playing !== d.playing || prev.off !== d.off || prev.like !== d.like || prev.repeat !== d.repeat || prev.shuffle !== d.shuffle || prev.art !== d.art || !!d.queue;
-  if(big){ YTMU.mini(); YTMU.draw(); } else YTMU.progress();
+  if(big){ YTMU.mini(); YTMU.draw(prev.like !== d.like || prev.repeat !== d.repeat || prev.shuffle !== d.shuffle); } else YTMU.progress();
   if(d.vid !== prev.vid && typeof fabSync === 'function'){ fabSync.k = null; fabSync(); }
 });
 /* 離線音樂開始播放：YouTube Music 暫停 */
@@ -59,7 +59,7 @@ YTMU.toggle = function(){
   var s = this.st; if(!s) return;
   s.cur = this.time(); this.t0 = Date.now(); s.playing = !s.playing;
   this.cmd(s.playing ? 'play' : 'pause'); buzz(8);
-  this.mini(); this.draw();
+  this.mini(); this.soft();
 };
 YTMU.next = function(){ this.cmd('next'); buzz(8); };
 YTMU.prev = function(){ this.cmd('prev'); buzz(8); };
@@ -73,16 +73,28 @@ YTMU.stop = function(){
 
 var YM_PAUSE = '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>';
 YTMU.mini = function(){
-  if(!ytmuOn() || !this.active()){ if(Dock.cards.ytmu){ Dock.remove('ytmu'); document.body.classList.remove('ytmuDock'); } return; }
-  var s = this.st, self = this;
-  Dock.set('ytmu', h('div', {class: 'dockCard glass ytmuCard', style: {padding: '6px 8px', position: 'relative', overflow: 'hidden'}, onclick: function(){ self.openPlayer(); }},
-    h('div', {class: 'lrow', style: {padding: 0, border: 0, background: 'none', flex: 1, minWidth: 0}},
-      h('div', {class: 'th', style: Object.assign({width: '40px', height: '40px', borderRadius: '10px'}, s.art ? {backgroundImage: 'url("' + s.art + '")'} : {background: 'var(--c-audio)'}), html: s.art ? '' : icon('audio')}),
-      h('div', {class: 't'}, h('b', {text: s.title}), h('div', {class: 'sub ell', id: 'ymMiniSub', text: s.artist || 'YouTube Music'}))),
-    h('button', {class: 'ib', html: '<svg class="i fill" viewBox="0 0 24 24">' + (s.playing ? YM_PAUSE : IC.play) + '</svg>', onclick: function(e){ e.stopPropagation(); self.toggle(); }}),
+  if(!ytmuOn() || !this.active()){ if(Dock.cards.ytmu){ Dock.remove('ytmu'); document.body.classList.remove('ytmuDock'); } this.miniEl = null; return; }
+  var s = this.st, self = this, m = this.miniEl;
+  /* 已經有播放列：只更新內容，不重建（重建會閃一下，也會讓 YouTube 畫面重新排版） */
+  if(m && Dock.cards.ytmu === m){
+    if(m.__art !== s.art){ m.__art = s.art; m.__th.style.backgroundImage = s.art ? 'url("' + s.art + '")' : ''; m.__th.innerHTML = s.art ? '' : icon('audio'); }
+    if(m.__title.textContent !== s.title) m.__title.textContent = s.title;
+    var pi = '<svg class="i fill" viewBox="0 0 24 24">' + (s.playing ? YM_PAUSE : IC.play) + '</svg>';
+    if(m.__pi !== pi){ m.__pi = pi; m.__play.innerHTML = pi; }
+    this.progress(); return;
+  }
+  var th = h('div', {class: 'th', style: Object.assign({width: '40px', height: '40px', borderRadius: '10px'}, s.art ? {backgroundImage: 'url("' + s.art + '")'} : {background: 'var(--c-audio)'}), html: s.art ? '' : icon('audio')});
+  var title = h('b', {text: s.title});
+  var play = h('button', {class: 'ib', html: '<svg class="i fill" viewBox="0 0 24 24">' + (s.playing ? YM_PAUSE : IC.play) + '</svg>', onclick: function(e){ e.stopPropagation(); self.toggle(); }});
+  m = h('div', {class: 'dockCard glass ytmuCard', style: {padding: '6px 8px', position: 'relative', overflow: 'hidden'}, onclick: function(){ self.openPlayer(); }},
+    h('div', {class: 'lrow', style: {padding: 0, border: 0, background: 'none', flex: 1, minWidth: 0}}, th, h('div', {class: 't'}, title, h('div', {class: 'sub ell', id: 'ymMiniSub', text: s.artist || 'YouTube Music'}))),
+    play,
     h('button', {class: 'ib', html: icon('fwd'), onclick: function(e){ e.stopPropagation(); self.next(); }}),
     h('button', {class: 'ib', title: '停止播放', html: icon('x', 'sm'), onclick: function(e){ e.stopPropagation(); self.stop(); }}),
-    h('div', {style: {position: 'absolute', left: 0, bottom: 0, height: '3px', background: 'var(--accent)', width: '0%'}, id: 'ymMiniBar'})));
+    h('div', {style: {position: 'absolute', left: 0, bottom: 0, height: '3px', background: 'var(--accent)', width: '0%'}, id: 'ymMiniBar'}));
+  m.__th = th; m.__title = title; m.__play = play; m.__art = s.art; m.__pi = play.innerHTML;
+  this.miniEl = m;
+  Dock.set('ytmu', m);
   document.body.classList.add('ytmuDock');
   this.progress();
 };
@@ -111,17 +123,22 @@ YTMU.openPlayer = function(){
   this.sheet = openSheet({title: 'YouTube Music', icon: 'audio', body: body, tall: true, onClose: function(){ YTMU.sheet = null; }});
   this.draw();
 };
-YTMU.draw = function(){
+YTMU.draw = function(force){
   var body = $('ymBody'); if(!body || !this.sheet || this.sheet.closed) return;
   var s = this.st, self = this;
+  /* 只有換歌、換封面、佇列或歌詞改變才整個重畫；播放／暫停等只更新按鈕（畫面不閃） */
+  var Q0 = this.queue || [], it0 = this.active() ? this.item() : null;
+  var key = [this.active(), s && s.vid, s && s.title, s && s.art, Q0.length, Q0.length && Q0[0].t, Q0.map(function(q){ return q.on ? 1 : 0; }).join(''), it0 && Lyrics.of(it0).length, it0 && it0.lrcOff, CFG.lyr.view].join('|');
+  if(!force && key === this.drawKey && body.firstChild){ this.soft(); return; }
+  this.drawKey = key;
   var keep = body.querySelector('.list'), sc = keep ? keep.scrollTop : 0;
   body.textContent = '';
   if(!this.active()){ body.appendChild(h('div', {class: 'empty', text: '沒有播放中的歌曲'})); return; }
   var it = this.item();
   var showLyr = CFG.lyr.show !== false && CFG.lyr.view !== 'cover' && !(it && it.lrcOff);
   var stage = h('div', {class: 'mpStage'});
-  if(showLyr && it) LyrView.mount(stage, it, {time: function(){ return YTMU.time(); }, seek: function(t){ YTMU.seek(t); if(!YTMU.st.playing) YTMU.toggle(); }, redraw: function(){ YTMU.draw(); }});
-  else stage.appendChild(h('div', {class: 'art', style: s.art ? {backgroundImage: 'url("' + s.art + '")'} : null, html: s.art ? '' : icon('audio', 'lg'), onclick: function(){ CFG.lyr.view = 'lyrics'; saveCfg(); self.draw(); }}));
+  if(showLyr && it) LyrView.mount(stage, it, {time: function(){ return YTMU.time(); }, seek: function(t){ YTMU.seek(t); if(!YTMU.st.playing) YTMU.toggle(); }, redraw: function(){ YTMU.draw(true); }});
+  else stage.appendChild(h('div', {class: 'art', style: s.art ? {backgroundImage: 'url("' + s.art + '")'} : null, html: s.art ? '' : icon('audio', 'lg'), onclick: function(){ CFG.lyr.view = 'lyrics'; saveCfg(); self.draw(true); }}));
   body.appendChild(stage);
   body.appendChild(h('div', {class: 'row', style: {gap: '10px', marginTop: '10px'}},
     h('div', {class: 'th', style: Object.assign({width: '46px', height: '46px', borderRadius: '12px', flex: 'none', backgroundSize: 'cover'}, s.art ? {backgroundImage: 'url("' + s.art + '")'} : {background: 'var(--c-audio)'})}),
@@ -129,12 +146,12 @@ YTMU.draw = function(){
       h('div', {class: 'sub ell', text: [s.artist, s.album].filter(Boolean).join('・') + (it && it.lrcSrc ? '・歌詞：' + it.lrcSrc.split('：')[0] : '')})),
     h('button', {class: 'ib' + (s.like === 'LIKE' ? ' on' : ''), title: '喜歡', style: s.like === 'LIKE' ? {color: 'var(--accent)'} : null,
       html: '<svg class="i' + (s.like === 'LIKE' ? ' fill' : '') + '" viewBox="0 0 24 24"><path d="M7 10v11H3V10zM7 10l4-8a3 3 0 0 1 3 3v4h5.5a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 18.1 21H7"/></svg>',
-      onclick: function(){ self.cmd('like'); s.like = s.like === 'LIKE' ? 'INDIFFERENT' : 'LIKE'; buzz(10); self.draw(); }})));
+      onclick: function(){ self.cmd('like'); s.like = s.like === 'LIKE' ? 'INDIFFERENT' : 'LIKE'; buzz(10); self.draw(true); }})));
   var tb = h('div', {class: 'mpTools'});
   var tbtn = function(ic, label, fn){ tb.appendChild(h('button', {class: 'chip', style: {background: 'var(--surface-3)', color: 'var(--text)', border: '1px solid var(--border-soft)'}, html: icon(ic, 'sm') + label, onclick: fn})); };
-  tbtn(showLyr ? 'image' : 'type', showLyr ? '封面' : '歌詞', function(){ CFG.lyr.view = showLyr ? 'cover' : 'lyrics'; saveCfg(); self.draw(); });
-  if(it) tbtn('search', '找歌詞', function(){ it.lrcOff = false; lyricsSearchSheet(it, function(){ self.draw(); }); });
-  if(it && Lyrics.of(it)) tbtn('trash', '移除歌詞', function(){ it.lrcOff = true; Lyrics.save(it, '', ''); toast('已移除歌詞'); self.draw(); });
+  tbtn(showLyr ? 'image' : 'type', showLyr ? '封面' : '歌詞', function(){ CFG.lyr.view = showLyr ? 'cover' : 'lyrics'; saveCfg(); self.draw(true); });
+  if(it) tbtn('search', '找歌詞', function(){ it.lrcOff = false; lyricsSearchSheet(it, function(){ self.draw(true); }); });
+  if(it && Lyrics.of(it)) tbtn('trash', '移除歌詞', function(){ it.lrcOff = true; Lyrics.save(it, '', ''); toast('已移除歌詞'); self.draw(true); });
   tbtn('palette', '樣式', function(){ lyricsStyleSheet(function(){ if(LyrView.el) LyrView.el.setAttribute('style', lyrStyle()); }); });
   if(it && Lyrics.isSynced(Lyrics.of(it))){
     var shift = function(d){ it.lrcOffset = Math.round(((it.lrcOffset || 0) + d) * 10) / 10; var c = lsGet('ws.ytmLrc', {}); if(c[it.vid]){ c[it.vid].offset = it.lrcOffset; lsSet('ws.ytmLrc', c); } toast('歌詞時間 ' + (it.lrcOffset > 0 ? '+' : '') + it.lrcOffset + ' 秒'); LyrView.idx = -2; };
@@ -149,13 +166,13 @@ YTMU.draw = function(){
   body.appendChild(h('div', {style: {margin: '14px 6px 0'}}, prog, h('div', {class: 'row', style: {justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)'}}, h('span', {id: 'ymT1', text: fmtDur(this.time())}), h('span', {id: 'ymT2', text: fmtDur(s.dur || 0)}))));
   var big = function(svg, fn, on){ return h('button', {class: 'ib' + (on ? ' on' : ''), html: svg, onclick: fn}); };
   body.appendChild(h('div', {class: 'row', style: {justifyContent: 'center', gap: '14px', margin: '6px 0 14px'}},
-    big('<svg class="i" viewBox="0 0 24 24"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>', function(){ s.shuffle = !s.shuffle; self.cmd('shuffle'); toast(s.shuffle ? '隨機播放' : '依序播放'); self.draw(); }, s.shuffle),
+    big('<svg class="i" viewBox="0 0 24 24"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>', function(){ s.shuffle = !s.shuffle; self.cmd('shuffle'); toast(s.shuffle ? '隨機播放' : '依序播放'); self.draw(true); }, s.shuffle),
     big(icon('back', 'lg'), function(){ self.prev(); }),
-    h('button', {class: 'btn pri', style: {width: '64px', height: '64px', borderRadius: '50%', padding: 0}, html: '<svg class="i fill lg" viewBox="0 0 24 24">' + (s.playing ? YM_PAUSE : IC.play) + '</svg>', onclick: function(){ self.toggle(); }}),
+    h('button', {class: 'btn pri', id: 'ymPlay', style: {width: '64px', height: '64px', borderRadius: '50%', padding: 0}, html: '<svg class="i fill lg" viewBox="0 0 24 24">' + (s.playing ? YM_PAUSE : IC.play) + '</svg>', onclick: function(){ self.toggle(); }}),
     big(icon('fwd', 'lg'), function(){ self.next(); }),
     big('<svg class="i" viewBox="0 0 24 24"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>' + (s.repeat === 'one' ? '<text x="10" y="15" font-size="8" fill="currentColor" stroke="none">1</text>' : '') + '</svg>', function(){
       s.repeat = s.repeat === 'off' ? 'all' : s.repeat === 'all' ? 'one' : 'off'; self.cmd('repeat');
-      toast({all: '全部循環', one: '單曲循環', off: '不循環'}[s.repeat]); self.draw(); }, s.repeat !== 'off')));
+      toast({all: '全部循環', one: '單曲循環', off: '不循環'}[s.repeat]); self.draw(true); }, s.repeat !== 'off')));
   var Q = this.queue || [];
   body.appendChild(h('div', {class: 'sect-h', style: {margin: '6px 2px'}}, h('span', {text: Q.length ? '播放佇列 ' + Q.length + ' 首' : '播放佇列'})));
   var list = h('div', {class: 'list'});
@@ -171,4 +188,9 @@ YTMU.draw = function(){
   if(sc) list.scrollTop = sc;
 };
 /* 設定：切換「App 的播放介面」與 YouTube Music 原本的介面 */
+YTMU.soft = function(){
+  var s = this.st; if(!s) return;
+  var p = $('ymPlay'); if(p){ var html = '<svg class="i fill lg" viewBox="0 0 24 24">' + (s.playing ? YM_PAUSE : IC.play) + '</svg>'; if(p.__h !== html){ p.__h = html; p.innerHTML = html; } }
+  this.progress();
+};
 YTMU.setOwn = function(on){ YTMU.own = !!on; lsSet('ws.ytmuOwn', YTMU.own); YTMU.cmd('own', on ? '1' : '0'); YTMU.mini(); };

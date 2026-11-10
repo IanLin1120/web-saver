@@ -966,7 +966,7 @@
 (function () {
   'use strict';
   if (!/^music\./.test(location.hostname)) return;
-  var VER = 6;
+  var VER = 7;
   if (window.__wsMu === VER) return;
   if (window.__wsMuT) clearInterval(window.__wsMuT);
   window.__wsMu = VER;
@@ -1064,11 +1064,21 @@
     X + '[style*="color: rgb(255, 255, 255)"]:not(img):not(a.yt-spec-button-shape-next--filled){color:' + C.fg + '!important}',
     /* 使用網頁擷取的播放介面：藏起 YouTube Music 自己的播放列與播放頁（按鈕還在，由 App 控制） */
     'html.wsMuOwn ytmusic-player-bar,html.wsMuOwn #player-bar-background{position:fixed!important;left:-200vw!important;bottom:0!important;opacity:0!important;pointer-events:none!important}',
+    /* YouTube Music 自己的播放頁：完全看不到、點不到（音樂照常由它播放，畫面由 App 的播放面板負責）；清單內容保持顯示、可以捲動 */
+    'html.wsMuOwn ytmusic-player-page,html.wsMuOwn ytmusic-player-page *{visibility:hidden!important;pointer-events:none!important}',
+    'html.wsMuOwn body{overflow:visible!important}',
+    'html.wsMuOwn #content,html.wsMuOwn ytmusic-app-layout #content,html.wsMuOwn ytmusic-nav-bar,html.wsMuOwn #nav-bar-background,html.wsMuOwn ytmusic-app-layout > [slot],html.wsMuOwn #guide-wrapper{visibility:visible!important}',
+    'html.wsMuOwn ytmusic-app-layout[player-ui-state="PLAYER_PAGE_OPEN"] #content,html.wsMuOwn ytmusic-app-layout[player-page-open] #content{display:block!important;opacity:1!important;transform:none!important}',
+    /* 大張卡片的縮圖一定顯示 */
+    X + 'ytmusic-two-row-item-renderer ytmusic-thumbnail-renderer img,' + X + 'ytmusic-two-row-item-renderer .image img,' + X + 'ytmusic-two-row-item-renderer yt-img-shadow img,' + X + 'ytmusic-two-row-item-renderer img.wsMuImg{opacity:1!important;visibility:visible!important}',
+    X + 'img.wsMuImg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:10px;z-index:0}',
     'html.wsMuOwn ytmusic-app-layout{--ytmusic-player-bar-height:0px!important}',
     /* 小播放器的影片縮圖（YouTube Music 會讓它浮在畫面上跟著捲動）：用 App 的播放列，所以藏起來 */
     'html.wsMuOwn ytmusic-player#player,html.wsMuOwn #player.ytmusic-player-page,html.wsMuOwn ytmusic-app-layout > #player{opacity:0!important;pointer-events:none!important}',
     'html.wsMuOwn #wsMuX{display:none!important}',
-    'html.wsMuOff ytmusic-player-bar,html.wsMuOff #player-bar-background,html.wsMuOff ytmusic-player-page{display:none!important}',
+    'html.wsMuOff ytmusic-player-bar,html.wsMuOff #player-bar-background,html.wsMuOff ytmusic-player-page,html.wsMuOff ytmusic-player-page *{visibility:hidden!important;pointer-events:none!important}',
+    'html.wsMuOff body{overflow:visible!important}',
+    'html.wsMuOff #content,html.wsMuOff ytmusic-nav-bar{visibility:visible!important}',
     'html.wsMuOff ytmusic-app-layout{--ytmusic-player-bar-height:0px!important}'
   ].join('\n');
   function addCss() {
@@ -1084,20 +1094,33 @@
   document.addEventListener('DOMContentLoaded', addCss);
 
   var offAt = 0;
+  function collapsePage0() { try { if (window.__wsMuCollapse) window.__wsMuCollapse(); } catch (e) {} }
   function stop() {
     try { var mp = document.getElementById('movie_player'); if (mp && mp.stopVideo) mp.stopVideo(); } catch (e) {}
     try { var v = document.querySelector('video'); if (v) v.pause(); } catch (e) {}
     offAt = Date.now();
     document.documentElement.classList.add('wsMuOff');
+    try { localStorage.setItem('__wsMuStopped', '1'); } catch (e) {}
+    collapsePage0();
     try { if (window.WSPage && WSPage.video) WSPage.video(false, 0, 0); } catch (e) {}
     try { if (navigator.mediaSession) { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; } } catch (e) {}
     place();
   }
   window.__wsMuStop = stop;
-  if (!window.__wsMuEv) {
-    window.__wsMuEv = 1;
-    document.addEventListener('playing', function () { if (Date.now() - offAt > 800) { document.documentElement.classList.remove('wsMuOff'); } }, true);
-  }
+  var loadAt = Date.now(), lastPlayAt = 0;
+  /* 關掉音樂後重新整理頁面：YouTube Music 會自己接著播，這裡擋下來（你點歌才播） */
+  if (window.__wsMuPlayFn) document.removeEventListener('play', window.__wsMuPlayFn, true);
+  window.__wsMuPlayFn = function (e) {
+    if (!e.target || e.target.tagName !== 'VIDEO') return;
+    lastPlayAt = Date.now();
+    var stopped = false; try { stopped = localStorage.getItem('__wsMuStopped') === '1'; } catch (x) {}
+    if (stopped && Date.now() - tapAt > 4000) { try { e.target.pause(); } catch (x) {} document.documentElement.classList.add('wsMuOff'); }
+  };
+  document.addEventListener('play', window.__wsMuPlayFn, true);
+  if (window.__wsMuPlayingFn) document.removeEventListener('playing', window.__wsMuPlayingFn, true);
+  window.__wsMuPlayingFn = function () { var st = false; try { st = localStorage.getItem('__wsMuStopped') === '1'; } catch (e) {} if (Date.now() - offAt > 800 && !st) { document.documentElement.classList.remove('wsMuOff'); } };
+  document.addEventListener('playing', window.__wsMuPlayingFn, true);
+
 
   /* 找下方播放列：先用 YouTube Music 的元件名稱，找不到就找「貼在畫面最下面、跟螢幕一樣寬、裡面有圖片」的元素 */
   function findBar() {
@@ -1208,23 +1231,27 @@
   /* 點歌後 YouTube Music 會自動打開它自己的播放頁：改由 App 的播放面板顯示，所以把它收起來 */
   var collapseAt = 0;
   function pageOpen() {
+    var lay = q('ytmusic-app-layout');
+    if (lay) {
+      var st = lay.getAttribute('player-ui-state') || lay.getAttribute('player-ui-state_') || '';
+      if (st) return /PAGE_OPEN|FULLSCREEN/i.test(st);
+      if (lay.hasAttribute('player-page-open') || lay.hasAttribute('player-page-open_')) return true;
+    }
     var pp = q('ytmusic-player-page'); if (!pp) return false;
     var r = pp.getBoundingClientRect();
-    return r.height > innerHeight * 0.5 && r.top < innerHeight * 0.3 && r.bottom > innerHeight * 0.6 && getComputedStyle(pp).visibility !== 'hidden' && getComputedStyle(pp).display !== 'none';
+    return r.height > innerHeight * 0.5 && r.top < innerHeight * 0.3 && r.bottom > innerHeight * 0.6;
   }
   function collapsePage() {
-    if (!pageOpen() || Date.now() - collapseAt < 1500) return;
+    if (!pageOpen() || Date.now() - collapseAt < 800) return;
     collapseAt = Date.now();
-    var b = findByLabel(/收合|最小化|關閉播放器|縮小|minimi|collapse|close player/i) || q('ytmusic-player-page .collapse-button, ytmusic-player-page tp-yt-paper-icon-button.minimize, ytmusic-player-bar .toggle-player-page-button');
+    var b = q('ytmusic-player-bar .toggle-player-page-button, .toggle-player-page-button') || findByLabel(/收合|最小化|關閉播放器|縮小|minimi|collapse|close player/i) || q('ytmusic-player-page .collapse-button, ytmusic-player-page tp-yt-paper-icon-button.minimize');
     if (b) { try { b.click(); } catch (e) {} }
-    /* 還開著：網址是 /watch 而且是剛剛從清單點進來的，就按「上一頁」關掉 */
-    setTimeout(function () {
-      if (pageOpen() && /\/watch/.test(location.pathname) && Date.now() - tapAt < 8000 && history.length > 1) { tapAt = 0; history.back(); }
-    }, 450);
   }
+  window.__wsMuCollapse = function () { collapseAt = 0; collapsePage(); };
   function click(el) { if (!el) return false; try { el.click(); return true; } catch (e) { return false; } }
   window.__wsMuCmd = function (c, a) {
     var v = q('video');
+    if (/^(play|toggle|next|prev|q)$/.test(c)) { try { localStorage.removeItem('__wsMuStopped'); } catch (e) {} tapAt = Date.now(); document.documentElement.classList.remove('wsMuOff'); }
     if (c === 'own') { try { localStorage.setItem('__wsMuOwn', a === '0' ? '0' : '1'); } catch (e) {} document.documentElement.classList.toggle('wsMuOwn', a !== '0'); state(true); return; }
     if (c === 'toggle' || c === 'play' || c === 'pause') {
       if (!v) return;
@@ -1246,6 +1273,27 @@
   /* 點歌：記下來（新歌開始時 App 自動打開播放介面）；點了沒反應時再補按一次播放 */
   /* 點歌：整列都可以點（不用剛好點到縮圖），按下去 App 立刻打開播放面板，蓋住 YouTube Music 換頁的閃爍 */
   var synth = false;
+  /* 模擬手指點縮圖（YouTube Music 只對點縮圖有反應）：送出完整的觸控＋滑鼠事件到縮圖中間那一點 */
+  function fakeTap(el, pb, row) {
+    var r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    var tgt = document.elementFromPoint(x, y) || el;
+    if (!el.contains(tgt) && !(pb && pb.contains(tgt))) tgt = pb && (pb.querySelector('#play-button, .content-wrapper, yt-icon') || pb) || el;
+    synth = true;
+    try {
+      var o = {bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, screenX: x, screenY: y, view: window, button: 0, buttons: 1, pointerId: 1, pointerType: 'touch', isPrimary: true};
+      try { var t = new Touch({identifier: Date.now(), target: tgt, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x + scrollX, pageY: y + scrollY}); tgt.dispatchEvent(new TouchEvent('touchstart', {bubbles: true, cancelable: true, composed: true, touches: [t], targetTouches: [t], changedTouches: [t]})); tgt.dispatchEvent(new TouchEvent('touchend', {bubbles: true, cancelable: true, composed: true, touches: [], targetTouches: [], changedTouches: [t]})); } catch (x1) {}
+      tgt.dispatchEvent(new PointerEvent('pointerdown', o));
+      tgt.dispatchEvent(new MouseEvent('mousedown', o));
+      o.buttons = 0;
+      tgt.dispatchEvent(new PointerEvent('pointerup', o));
+      tgt.dispatchEvent(new MouseEvent('mouseup', o));
+      tgt.dispatchEvent(new MouseEvent('click', o));
+    } catch (x2) { try { tgt.click(); } catch (x3) {} }
+    synth = false;
+    /* 還是沒開始播：直接按它的播放鍵 */
+    var before = vidNow(), t0 = Date.now();
+    setTimeout(function () { var st = (row && row.getAttribute('play-button-state')) || ''; if (vidNow() === before && lastPlayAt < t0 && !/playing|loading|paused/i.test(st)) { synth = true; try { (pb.querySelector('#play-button, .content-wrapper') || pb).click(); } catch (x4) {} synth = false; } }, 700);
+  }
   function upArt(u) { return String(u || '').replace(/=w\d+-h\d+[^&]*$/, '=w544-h544-l90-rj'); }
   function onTap(e) {
     if (synth) return;
@@ -1269,10 +1317,10 @@
       try { B.muState(JSON.stringify({tap: 1, title: txt(q('.title', box)), artist: txt(q('.secondary-flex-columns, .subtitle', box)).split('•')[0].trim(), art: upArt(im && im.getAttribute('src'))})); } catch (x) {}
     }
     if (own()) { setTimeout(collapsePage, 450); setTimeout(collapsePage, 2000); }
+    try { localStorage.removeItem('__wsMuStopped'); } catch (x) {}
     if (song && !onPlayBtn && pb) {
       e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-      var inner = pb.querySelector('#play-button, .content-wrapper, yt-icon, button') || pb;
-      synth = true; try { inner.click(); } catch (x) {} synth = false;
+      fakeTap(song.querySelector('ytmusic-item-thumbnail-overlay-renderer, .left-items, ytmusic-thumbnail-renderer, img') || pb, pb, song);
     }
   }
   if (window.__wsMuTap) document.removeEventListener('click', window.__wsMuTap, true);
@@ -1282,8 +1330,32 @@
     window.__wsMuVEv = 1;
     ['play', 'pause', 'loadedmetadata', 'durationchange', 'ended', 'emptied', 'seeked'].forEach(function (ev) { document.addEventListener(ev, function (e) { if (e.target && e.target.tagName === 'VIDEO' && window.__wsMuState) setTimeout(function () { window.__wsMuState(ev === 'loadedmetadata'); }, ev === 'loadedmetadata' ? 600 : 30); }, true); });
   }
+  /* 大張卡片沒有縮圖：從 YouTube Music 的資料取出圖片網址補上 */
+  function findThumbs(o, d) {
+    if (!o || typeof o !== 'object' || d > 6) return null;
+    if (Array.isArray(o.thumbnails) && o.thumbnails.length && o.thumbnails[0].url) return o.thumbnails;
+    for (var k in o) { if (!Object.prototype.hasOwnProperty.call(o, k)) continue; var r = findThumbs(o[k], d + 1); if (r) return r; }
+    return null;
+  }
+  function fixThumbs() {
+    qa('ytmusic-two-row-item-renderer').forEach(function (el) {
+      if (el.__wsThumb) return;
+      var r = el.getBoundingClientRect(); if (r.bottom < -200 || r.top > innerHeight + 400) return;
+      var box = q('ytmusic-thumbnail-renderer, .image-wrapper, a.image-wrapper', el) || q('.thumbnail', el); if (!box) return;
+      var img = q('img', box);
+      if (img && img.complete && img.naturalWidth > 2 && getComputedStyle(img).opacity !== '0' && getComputedStyle(img).visibility !== 'hidden') { el.__wsThumb = 1; return; }
+      var d = el.data || (el.__data && el.__data.data) || null, th = d && findThumbs(d.thumbnailRenderer || d, 0);
+      if (!th) return;
+      var u = th[th.length - 1].url; if (/^\/\//.test(u)) u = 'https:' + u;
+      var mine = q('img.wsMuImg', box);
+      if (!mine) { mine = document.createElement('img'); mine.className = 'wsMuImg'; mine.alt = ''; if (getComputedStyle(box).position === 'static') box.style.position = 'relative'; box.insertBefore(mine, box.firstChild); }
+      if (mine.getAttribute('src') !== u) mine.src = u;
+      el.__wsThumb = 1;
+    });
+  }
   function tick() {
     var o = own();
+    try { fixThumbs(); } catch (e) {}
     document.documentElement.classList.toggle('wsMuOwn', o);
     if (document.hidden && !(q('video') && !q('video').paused)) return;
     addCss(); if (!o) place(); hidePromos();
