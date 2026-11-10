@@ -1,5 +1,12 @@
 [
  {
+  "v": "1.9.12",
+  "file": "網頁擷取_v1.9.12.apk",
+  "date": "2026-11-10",
+  "size": 1479804,
+  "notes": "修正 YouTube Music 一打開就空白、要按上方 ✕ 才出現：自動收起 YouTube Music 播放頁的檢查之前在背景時不會執行，現在一直會執行\n修正 YouTube Music 明明沒播放卻顯示正在播放：剛打開時 YouTube Music 載入上次的歌但沒在播，不再顯示播放列\n修正按 ✕ 關閉後點歌無法播放：關閉時不再把 YouTube Music 的播放器整個停掉，只暫停\n新增「YouTube 播放器設定 → YouTube Music 診斷資訊」：有問題時打開截圖，方便找出原因"
+ },
+ {
   "v": "1.9.11",
   "file": "網頁擷取_v1.9.11.apk",
   "date": "2026-11-10",
@@ -75,12 +82,5 @@
   "date": "2026-11-10",
   "size": 1073248,
   "notes": "沒裝 Snaptube 時的「取得 Snaptube」改成開啟 Snaptube 官方放在 OneDrive 的安裝檔連結"
- },
- {
-  "v": "1.9.0",
-  "file": "網頁擷取_v1.9.0.apk",
-  "date": "2026-11-10",
-  "size": 1073164,
-  "notes": "YouTube 分頁新增 YouTube Music：右上角原本的「下載」按鈕改成「YouTube ⇄ Music」切換鈕，點一下切換，各自記住上次看的頁面（下載請用懸浮下載按鈕）\n在瀏覽器點到 YouTube Music 的連結（例如別人傳來的歌），會直接切到 YouTube 分頁的 Music 介面，切換鈕也會跟著變成 Music\n瀏覽首頁的大搜尋框可以直接輸入文字或貼上網址，右邊按鈕改成「搜尋」"
  }
 ]
