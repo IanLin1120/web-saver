@@ -508,19 +508,22 @@ final class Browser {
         float d = a.getResources().getDisplayMetrics().density;
         /* 全螢幕中：只記下來，離開全螢幕時才套用（之前轉橫向時介面重新排版，會把全螢幕蓋回去） */
         FrameLayout.LayoutParams lp = fs && fsLp != null ? fsLp : (FrameLayout.LayoutParams) wv.getLayoutParams();
-        lp.topMargin = Math.round(top * d);
-        lp.bottomMargin = Math.round(bottom * d);
-        lp.leftMargin = Math.round(left * d);
-        lp.rightMargin = Math.round(right * d);
+        int t = Math.round(top * d), b = Math.round(bottom * d), l = Math.round(left * d), r = Math.round(right * d);
+        boolean same = lp.topMargin == t && lp.bottomMargin == b && lp.leftMargin == l && lp.rightMargin == r;
+        lp.topMargin = t; lp.bottomMargin = b; lp.leftMargin = l; lp.rightMargin = r;
         if (fs) return;
+        /* 位置沒變就不要重新排版（YouTube Music 的動畫會因為一直重排而卡頓） */
+        if (same) return;
         wv.setLayoutParams(lp);
     }
 
     void show(boolean on) {
+        boolean was = shown && wv.getVisibility() == View.VISIBLE;
         shown = on;
         if (!on && fs) fullscreen(false, false);
-        wv.setVisibility(on && !covered ? View.VISIBLE : View.GONE);
-        if (on) wv.onResume();
+        int vis = on && !covered ? View.VISIBLE : View.GONE;
+        if (wv.getVisibility() != vis) wv.setVisibility(vis);
+        if (on && !was) wv.onResume();
     }
 
     boolean isShown() { return shown && !covered && wv.getVisibility() == View.VISIBLE; }
@@ -795,10 +798,10 @@ final class Browser {
         popupHost.setAlpha(0f);
         popupShown = false;
         /* 瀏覽分頁：先等網址出來再顯示視窗（如果是 YouTube 連結就不開視窗，直接切到 YouTube 分頁） */
-        if ("br".equals(tag)) {
+        {   /* 所有分頁的新視窗都等內容真的出現才顯示（「開啟應用程式」這類只是轉去別的 App 的視窗，就不會閃一下） */
             final FrameLayout ph = popupHost;
             Util.MAIN.postDelayed(new Runnable() { @Override public void run() { if (popupHost == ph) revealPopup(); } }, 2500);
-        } else revealPopup();
+        }
         WebView.WebViewTransport t = (WebView.WebViewTransport) msg.obj;
         t.setWebView(popup);
         msg.sendToTarget();

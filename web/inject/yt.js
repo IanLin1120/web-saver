@@ -144,12 +144,15 @@
     ['play', 'playing', 'pause', 'ended', 'loadedmetadata'].forEach(function (ev) {
       v.addEventListener(ev, function () {
         try { if (B && B.video) B.video(!v.paused && !v.ended && !document.querySelector('.ad-showing'), v.videoWidth || 0, v.videoHeight || 0); } catch (e) {}
-        if (ev === 'loadedmetadata') { applySpeed(); setQuality(); loadSB(); }
+        if (ev === 'loadedmetadata' && !MUSIC()) { applySpeed(); setQuality(); loadSB(); }
       });
     });
+    /* YouTube Music：不強制最高畫質、不改速度、不跳 SponsorBlock 片段（之前強制最高畫質讓 Music 播放卡頓） */
+    if (MUSIC()) return;
     v.addEventListener('timeupdate', sbCheck);
     applySpeed(); setQuality(); loadSB();
   }
+  function MUSIC() { return /^music\./.test(location.hostname); }
   function getSpeed() { try { return +localStorage.getItem('__wsSpeed') || 1; } catch (e) { return 1; } }
   function setSpeed(n) { try { localStorage.setItem('__wsSpeed', n); } catch (e) {} applySpeed(); }
   function applySpeed() { var v = vid(); if (v && !document.querySelector('.ad-showing') && !W.hold) { var sp = getSpeed(); if (v.playbackRate !== sp) v.playbackRate = sp; } }

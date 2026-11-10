@@ -13,6 +13,7 @@ function ytModeUi(){
   var b = $('ytModeB'); if(!b) return;
   b.classList.toggle('music', !!mu);
   b.title = mu ? '目前是 YouTube Music，點一下切回 YouTube' : '目前是 YouTube，點一下切換到 YouTube Music';
+  var sb = $('ytStopB'); if(sb) sb.classList.toggle('hide', !mu);
 }
 
 function ytSyncLayout(){
@@ -78,7 +79,8 @@ on('ytbr', function(d){
     if(YTB.last[isMu ? 'music' : 'yt'] !== YTB.url){ YTB.last[isMu ? 'music' : 'yt'] = YTB.url; lsSet('ws.ytLast', YTB.last); }
   }
   if(changed && /^https?:/.test(YTB.url)) Hist.add(YTB.url, YTB.title, 'yt');
-  else if(YTB.title) Hist.title(YTB.url, YTB.title);
+  else if(YTB.title && YTB.title !== YTB.lastTitle) Hist.title(YTB.url, YTB.title);
+  YTB.lastTitle = YTB.title;
   renderYt(); fabSync();
 });
 /* 離開網頁（回首頁）或切換分頁時，清空懸浮按鈕上殘留的偵測結果 */
@@ -86,7 +88,7 @@ function fabClear(){ if(isApp) NAT.call('brMediaClear'); BR.mediaN = 0; fabSync(
 on('view', function(e){
   if(e.prev === 'browse' && e.v !== 'browse') fabClear();
   if(e.v === 'yt'){ ytEnsure(); if(!YTB.started) renderYtStart(); }
-  ytSyncLayout(); ytUpdateVisible(); fabSync();
+  ytSyncLayout(); ytUpdateVisible(); fabSync.k = null; fabSync();
   clearTimeout(ytSyncLayout.v); ytSyncLayout.v = setTimeout(ytSyncLayout, 300);
   if(e.prev === 'yt' && e.v !== 'yt' && isApp) NAT.call('ytNav', 'fsOff');
 });
@@ -95,6 +97,13 @@ window.addEventListener('resize', function(){ clearTimeout(ytSyncLayout.t); ytSy
 $('ytBack').addEventListener('click', function(){ NAT.call('ytNav', 'back'); });
 $('ytHomeB').addEventListener('click', function(){ ytEnsure(ytIsMusic(YTB.url) ? YT_MUSIC : YT_HOME); });
 $('ytReload').addEventListener('click', function(){ NAT.call('ytNav', YTB.progress < 100 ? 'stop' : 'reload'); });
+/* YouTube Music 沒有關閉播放的按鈕：停止播放並重新開啟 Music 首頁（下方播放列跟著消失） */
+$('ytStopB').addEventListener('click', function(){
+  if(isApp) NAT.call('ytNav', 'pause');
+  YTB.last.music = YT_MUSIC; lsSet('ws.ytLast', YTB.last);
+  ytEnsure(YT_MUSIC);
+  toast('已停止播放');
+});
 $('ytModeB').addEventListener('click', function(){
   var toMusic = !(YTB.modeMusic != null ? YTB.modeMusic : ytIsMusic(YTB.url));
   YTB.modeMusic = toMusic; YTB.modeHold = Date.now(); ytModeUi();
@@ -229,6 +238,8 @@ function fabSync(){
     if(curView === 'yt') on = !!ytCurId() && !YTB.fs;
     else if(curView === 'browse'){ on = (!BR.home && BR.loaded && !!BR.url && !/^(about|data):/.test(BR.url)) || document.body.classList.contains('brFull'); label = on && BR.mediaN ? String(BR.mediaN > 99 ? '99+' : BR.mediaN) : ''; }
   }
+  /* 狀態沒變就不呼叫原生（YouTube Music 換歌、播放時事件很多） */
+  var k = on + '|' + label; if(fabSync.k === k) return; fabSync.k = k;
   NAT.call('fab', on, label);
 }
 on('br', fabSync); on('mediaCount', fabSync); on('cfg', function(p){ if(p === 'fab') fabSync(); });
