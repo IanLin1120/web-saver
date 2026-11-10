@@ -966,7 +966,7 @@
 (function () {
   'use strict';
   if (!/^music\./.test(location.hostname)) return;
-  var VER = 14;
+  var VER = 15;
   if (window.__wsMu === VER) return;
   if (window.__wsMuT) clearInterval(window.__wsMuT);
   window.__wsMu = VER;
@@ -1064,6 +1064,9 @@
     X + '[style*="color: rgb(255, 255, 255)"]:not(img):not(a.yt-spec-button-shape-next--filled){color:' + C.fg + '!important}',
     /* 使用網頁擷取的播放介面：藏起 YouTube Music 自己的播放列與播放頁（按鈕還在，由 App 控制） */
     'html.wsMuOwn ytmusic-player-bar,html.wsMuOwn #player-bar-background{position:fixed!important;left:-200vw!important;bottom:0!important;opacity:0!important;pointer-events:none!important}',
+    /* YouTube Music 播放頁的展開／收合不要動畫（瞬間完成），收合的那一小段時間整頁透明（最多 2.5 秒，時間到一定恢復） */
+    'html.wsMuOwn ytmusic-player-page,html.wsMuOwn ytmusic-player-page *,html.wsMuOwn ytmusic-player,html.wsMuOwn ytmusic-player-bar{transition:none!important;animation:none!important}',
+    'html.wsMuOwn.wsMuCol ytmusic-player-page,html.wsMuOwn.wsMuCol ytmusic-player#player{opacity:0!important}',
     /* 大張卡片的縮圖一定顯示 */
     X + 'ytmusic-two-row-item-renderer ytmusic-thumbnail-renderer img,' + X + 'ytmusic-two-row-item-renderer .image img,' + X + 'ytmusic-two-row-item-renderer yt-img-shadow img,' + X + 'ytmusic-two-row-item-renderer img.wsMuImg{opacity:1!important;visibility:visible!important}',
     X + 'img.wsMuImg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:10px;z-index:0}',
@@ -1280,15 +1283,23 @@
   }
   /* 點歌後：YouTube Music 一打開它的播放頁就按「⌄」收起來（這時 App 的播放面板蓋在上面，看不到過程） */
   var colT = 0;
+  var colHideT = 0, colRunning = false;
+  function colHide() {
+    document.documentElement.classList.add('wsMuCol');
+    clearTimeout(colHideT);
+    colHideT = setTimeout(function () { document.documentElement.classList.remove('wsMuCol'); }, 2500);
+  }
   function collapseSoon() {
     clearInterval(colT);
+    colHide();
     var t0 = Date.now(), tries = 0;
+    colRunning = true;
     colT = setInterval(function () {
-      if (Date.now() - t0 > 6000 || tries > 6) { clearInterval(colT); return; }
+      if (Date.now() - t0 > 6000 || tries > 6) { clearInterval(colT); colRunning = false; return; }
       var b = pageChevron() || q('.toggle-player-page-button');
       if (b && pageOpen()) { tries++; dlog('collapse ' + (tries % 2 ? 'click ' : 'tap ') + (b.tagName || '') + ' try ' + tries); if (tries % 2) click(b); else fakeTap(b, null, null); }
-      else if (tries && !pageOpen()) { dlog('collapsed'); clearInterval(colT); }
-    }, 250);
+      else if (tries && !pageOpen()) { dlog('collapsed'); clearInterval(colT); colRunning = false; setTimeout(function () { document.documentElement.classList.remove('wsMuCol'); }, 150); }
+    }, 120);
   }
   function collapsePage() { collapseSoon(); }
   window.__wsMuCollapse = function () { collapseAt = 0; collapsePage(); };
@@ -1493,6 +1504,8 @@
     addCss(); if (!o) place(); hidePromos();
     if (o) state(false);
     document.documentElement.classList.remove('wsMuShowPage');
+    /* 保險：播放頁不知為何又開著（自動換歌、點佇列…）而且真的看得到「⌄」：再收一次。只按收合鍵，不換頁。 */
+    if (o && !colRunning) { try { var v9 = q('video'); if (v9 && v9.src && pageChevron() && pageOpen()) { dlog('watchdog collapse'); collapseSoon(); } } catch (e) {} }
   }
   window.__wsMuT = setInterval(tick, 1000);
   addEventListener('resize', function () { setTimeout(place, 120); });
