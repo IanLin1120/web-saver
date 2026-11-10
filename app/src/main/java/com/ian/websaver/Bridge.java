@@ -156,6 +156,7 @@ public class Bridge {
                     case "stop": y.wv.stopLoading(); break;
                     case "fsOff": y.fullscreen(false, false); a.br.fullscreen(false, false); break;
                     case "fsOn": if (YtSniff.vidOf(y.curUrl).length() > 0) y.fullscreen(true, false); break;
+                    case "muStop": { Browser m = a.ytMu != null ? a.ytMu : y; m.wv.evaluateJavascript("(function(){if(window.__wsMuStop)__wsMuStop();else{var v=document.querySelector('video');if(v)v.pause()}})()", null); break; }
                     case "pause": y.wv.evaluateJavascript("(function(){var v=document.querySelector('video');if(v)v.pause()})()", null); break;
                     default: break;
                 }

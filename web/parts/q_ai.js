@@ -20,16 +20,15 @@ var AI_GMODELS = [
   ['gemini-3.5-flash-lite', '最快、最省額度'],
   ['gemini-3.1-flash-lite', '輕量'],
   ['gemini-3-flash-preview', '預覽版'],
-  ['gemini-2.5-pro', '較慢但推理強'],
-  ['gemini-2.5-flash', '舊版，相容性最好'],
-  ['gemini-2.5-flash-lite', '舊版輕量'],
   ['gemini-3.1-pro-preview', '最強 Pro', true],
   ['gemini-4-argon', '最新旗艦', true]
 ];
+var AI_GFALLBACK = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];
 function aiGPaid(id){ var k = AI_GMODELS.filter(function(x){ return x[0] === id; })[0]; if(k) return !!k[2]; return /argon|gemini-3(\.\d)?-pro|image|computer-use|customtools|-tts/.test(id); }
 function aiGModels(){
   var live = lsGet('ws.aiGList', null), out = AI_GMODELS.map(function(x){ return {id: x[0], note: x[1], paid: !!x[2]}; });
   if(live && live.list) live.list.forEach(function(m){ if(!out.some(function(x){ return x.id === m.id; })) out.push({id: m.id, note: m.name || '', paid: aiGPaid(m.id)}); });
+  var dead = lsGet('ws.aiGDead', {}); out = out.filter(function(x){ return !dead[x.id] || x.id === AICFG.gmodel; });
   if(live && live.list && live.list.length) out = out.filter(function(x){ return live.list.some(function(m){ return m.id === x.id; }) || x.id === AICFG.gmodel; });
   return out;
 }
@@ -135,12 +134,15 @@ function aiBusyStatus(st){ return st === 429 || st === 500 || st === 502 || st =
 async function aiAskGemini(prompt, opt){
   opt = opt || {};
   if(!AICFG.gkey) throw aiErr('nogkey', '還沒設定 Gemini API 金鑰。');
+  /* 已停用（Google 回「no longer available」）的模型記下來，以後直接跳過 */
+  var dead = lsGet('ws.aiGDead', {});
   var chain = [AICFG.gmodel || 'gemini-3.8-flash'];
-  if(AICFG.gfallback !== false) ['gemini-3.5-flash', 'gemini-2.5-flash'].forEach(function(m){ if(chain.indexOf(m) < 0) chain.push(m); });
-  var lastMsg = '', lastSt = 0;
+  if(AICFG.gfallback !== false) AI_GFALLBACK.forEach(function(m){ if(chain.indexOf(m) < 0) chain.push(m); });
+  chain = chain.filter(function(m, i){ return i === 0 || !dead[m]; });
+  var lastMsg = '', lastSt = 0, errs = [];
   for(var k = 0; k < chain.length; k++){
     var model = chain[k];
-    if(k > 0 && opt.step) opt.step(chain[k - 1] + ' 忙碌中，改用 ' + model + '…');
+    if(k > 0 && opt.step) opt.step(chain[k - 1] + ' 無法使用，改用 ' + model + '…');
     var parts = [];
     if(opt.video){
       var vm = {};
@@ -154,6 +156,7 @@ async function aiAskGemini(prompt, opt){
     var gc = {responseMimeType: 'application/json', maxOutputTokens: 65536};
     if(opt.video) gc.mediaResolution = 'MEDIA_RESOLUTION_LOW';
     var think = AICFG.gfast !== false && /^gemini-([3-9]|\d\d)/.test(model);
+    var stripped = false;
     for(var pass = 0; pass < 2; pass++){
       if(think) gc.thinkingConfig = {thinkingLevel: 'low'}; else delete gc.thinkingConfig;
       var r = await aiPost('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent',
@@ -168,9 +171,18 @@ async function aiAskGemini(prompt, opt){
         return v;
       }
       lastMsg = (j.error && j.error.message) || r.body || ('HTTP ' + r.status);
-      /* 這個模型不支援「思考程度」設定：拿掉再送一次 */
+      /* 這個模型不支援「思考程度」或影片參數：拿掉再送一次 */
       if(r.status === 400 && think && /think/i.test(lastMsg)){ think = false; continue; }
+      if(r.status === 400 && /media_?resolution|fps|video_?metadata/i.test(lastMsg) && !stripped && opt.video){ stripped = true; delete gc.mediaResolution; if(parts[0].file_data && parts[0].file_data.video_metadata) delete parts[0].file_data.video_metadata.fps; pass--; continue; }
       break;
+    }
+    errs.push(model + '：' + String(lastMsg).slice(0, 160));
+    /* 模型已停用：記下來，並改用 Google 建議的新模型 */
+    if(/no longer available|deprecated|has been (retired|shut ?down)|not found for API version/i.test(lastMsg)){
+      dead[model] = Date.now(); lsSet('ws.aiGDead', dead);
+      if(model === AICFG.gmodel){ var sug = (String(lastMsg).match(/models\/(gemini-[\w.-]+)/g) || []).map(function(x){ return x.replace('models/', ''); }).filter(function(x){ return x !== model; })[0]; if(sug){ AICFG.gmodel = sug; aiSaveCfg(); try{ aiEngPill(); }catch(e){} } }
+      var sg = String(lastMsg).match(/use models\/(gemini-[\w.-]+)/); if(sg && chain.indexOf(sg[1]) < 0) chain.splice(k + 1, 0, sg[1]);
+      continue;
     }
     if(lastSt === 400 && /API key/i.test(lastMsg)) throw aiErr('nogkey', 'Gemini API 金鑰不正確：' + lastMsg);
     if(lastSt === 403 || lastSt === 401) throw aiErr('nogkey', 'Gemini 金鑰沒有權限：' + lastMsg);
@@ -178,8 +190,10 @@ async function aiAskGemini(prompt, opt){
     if(aiBusyStatus(lastSt) || lastSt === 404 || (lastSt === 400 && /not found|not supported|paid|billing/i.test(lastMsg))) continue;
     break;
   }
-  if(lastSt === 429) throw aiErr('rate', 'Gemini 免費額度用完或太頻繁了，請稍後再試（' + lastMsg + '）');
-  throw aiErr('fail', 'Gemini：' + lastMsg);
+  var detail = errs.length > 1 ? '\n' + errs.map(function(e){ return '・' + e; }).join('\n') : '';
+  if(lastSt === 429 || errs.some(function(e){ return /quota|RESOURCE_EXHAUSTED|rate/i.test(e); })) throw aiErr('rate', 'Gemini 免費額度用完或太頻繁了，請稍後再試。' + (detail || '（' + lastMsg + '）'));
+  /* 只顯示最有用的那個錯誤：優先你選的模型，不要讓備援模型的「已停用」蓋掉真正原因 */
+  throw aiErr('fail', 'Gemini：' + (errs.length > 1 ? '所有模型都失敗了' + detail : lastMsg));
 }
 async function aiAskApi(prompt){
   if(!AICFG.key) throw aiErr('nokey', '還沒設定 Anthropic API 金鑰。');
@@ -483,8 +497,28 @@ async function aiSend(q){
 }
 
 /* ---------- 文字格式（時間碼可點） ---------- */
+/* 數學公式：AI 常用 LaTeX（$…$、$$…$$、\(…\)、\[…\]），用 KaTeX 排成真正的公式 */
+function aiTex(tex, disp){
+  if(!window.katex) return esc(tex);
+  try{ return katex.renderToString(tex.trim(), {displayMode: !!disp, throwOnError: false, strict: 'ignore', output: 'html'}); }catch(e){ return esc(tex); }
+}
+function aiMathHtml(t){
+  /* 先把公式挖出來換成記號，其他文字照常跳脫，最後再放回排好的公式 */
+  var M = [], s = String(t == null ? '' : t);
+  function keep(html, disp){ M.push(disp ? '<div class="aiMath">' + html + '</div>' : html); return '\u0000' + (M.length - 1) + '\u0000'; }
+  s = s.replace(/\$\$([\s\S]+?)\$\$/g, function(m, a){ return keep(aiTex(a, true), true); })
+       .replace(/\\\[([\s\S]+?)\\\]/g, function(m, a){ return keep(aiTex(a, true), true); })
+       .replace(/\\\(([\s\S]+?)\\\)/g, function(m, a){ return keep(aiTex(a, false)); })
+       .replace(/\$([^\s$](?:[^$\n]*?[^\s$])?)\$(?!\d)/g, function(m, a){
+         /* 避免把金額（$5 到 $10）當公式：要有 LaTeX 的樣子 */
+         if(!/[\\^_{}=+\-*\/<>|]|^[A-Za-z]$|^[A-Za-z]\w?$/.test(a) || /^\d+([.,]\d+)?$/.test(a)) return m;
+         return keep(aiTex(a, false));
+       });
+  s = esc(s);
+  return s.replace(/\u0000(\d+)\u0000/g, function(m, i){ return M[+i]; });
+}
 function aiFmt(t){
-  var s = esc(t);
+  var s = aiMathHtml(t);
   s = s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
   s = s.replace(/\[((?:\d{1,2}:)?\d{1,2}:\d{2})(?:\s*[-–~]\s*(?:\d{1,2}:)?\d{1,2}:\d{2})?\]/g, function(m, a){ return '<a class="aiTs" data-t="' + aiParseTs(a) + '">' + m.slice(1, -1) + '</a>'; });
   return s.split(/\n/).map(function(l){ return /^\s*[-•・]\s+/.test(l) ? '<div class="aiLi">' + l.replace(/^\s*[-•・]\s+/, '') + '</div>' : (l.trim() ? '<p>' + l + '</p>' : ''); }).join('');
@@ -653,7 +687,7 @@ function aiPaneTr(p, f){
   p.appendChild(bar);
   var list = h('div', {class: 'aiTr', id: 'aiTr'});
   AI.cues.forEach(function(c, i){
-    list.appendChild(h('div', {class: 'aiLine', 'data-i': i, onclick: function(){ aiSeek(c.s); }}, h('span', {class: 'aiLt', text: aiTs(c.s)}), h('span', {text: c.t})));
+    list.appendChild(h('div', {class: 'aiLine', 'data-i': i, onclick: function(){ aiSeek(c.s); }}, h('span', {class: 'aiLt', text: aiTs(c.s)}), h('span', {html: aiMathHtml(c.t)})));
   });
   p.appendChild(list);
   aiCta(f);
@@ -698,7 +732,7 @@ function aiPaneChap(p, f){
     var card = h('div', {class: 'aiCh', 'data-s': c.start, 'data-e': end},
       h('div', {class: 'aiChTop', onclick: function(){ aiSeek(c.start); }},
         h('div', {class: 'aiChTh', html: aiThumb(c.start, 104) + '<span class="aiChPlay">' + icon('play', 'sm') + '</span>'}),
-        h('div', {class: 'grow'}, h('b', {text: c.title}), h('div', {class: 'aiChT', text: aiTs(c.start) + ' - ' + aiTs(end)}))),
+        h('div', {class: 'grow'}, h('b', {html: aiMathHtml(c.title)}), h('div', {class: 'aiChT', text: aiTs(c.start) + ' - ' + aiTs(end)}))),
       c.summary ? h('div', {class: 'aiChSum', html: aiFmt(c.summary)}) : null,
       more,
       (c.points && c.points.length) ? h('button', {class: 'aiChBtn', text: '查看更多…', onclick: function(){ var hid = more.classList.toggle('hide'); this.textContent = hid ? '查看更多…' : '收合'; }}) : null);
@@ -1014,7 +1048,7 @@ function aiSettings(){
     var fc = h('input', {type: 'checkbox', checked: AICFG.gfast !== false, onchange: function(){ AICFG.gfast = this.checked; aiSaveCfg(); }});
     body.appendChild(h('label', {class: 'setRow aiSw', style: {marginTop: '10px'}}, h('div', {class: 'grow'}, h('b', {text: '速度優先'}), h('div', {class: 'sub', text: 'Gemini 少「思考」一點、影片用低解析度與較少畫面，快很多，品質通常差不多'})), fc));
     var fb = h('input', {type: 'checkbox', checked: AICFG.gfallback !== false, onchange: function(){ AICFG.gfallback = this.checked; aiSaveCfg(); }});
-    body.appendChild(h('label', {class: 'setRow aiSw', style: {marginTop: '8px'}}, h('div', {class: 'grow'}, h('b', {text: '模型忙碌時自動換備援模型'}), h('div', {class: 'sub', text: '遇到「high demand」會先自動重試，還是不行就改用 gemini-3.5-flash／2.5-flash'})), fb));
+    body.appendChild(h('label', {class: 'setRow aiSw', style: {marginTop: '8px'}}, h('div', {class: 'grow'}, h('b', {text: '模型忙碌時自動換備援模型'}), h('div', {class: 'sub', text: '遇到「high demand」會先自動重試，還是不行就改用 gemini-3.8-flash／3.5-flash／3.5-flash-lite'})), fb));
     var lc = h('input', {type: 'checkbox', checked: AICFG.listen !== false, onchange: function(){ AICFG.listen = this.checked; aiSaveCfg(); }});
     body.appendChild(h('label', {class: 'setRow aiSw', style: {marginTop: '10px'}}, h('div', {class: 'grow'}, h('b', {text: '沒有字幕時自動用 AI 聽寫'}), h('div', {class: 'sub', text: '讀不到字幕就讓 Gemini 看影片產生完整逐字稿（有設定金鑰才會）'})), lc));
     var ac = h('input', {type: 'checkbox', checked: AICFG.auto !== false, onchange: function(){ AICFG.auto = this.checked; aiSaveCfg(); }});

@@ -824,3 +824,6 @@ input[type=range].hrArmed{filter:drop-shadow(0 0 5px color-mix(in srgb,var(--acc
 .vbaMod summary{cursor:pointer}
 .vbaMod small{color:var(--text-muted)}
 .vbaCode{font:12px/1.5 ui-monospace,monospace;background:var(--surface-3);border-radius:8px;padding:10px;overflow:auto;max-height:55vh;white-space:pre;margin:8px 0}
+.aiMath{overflow-x:auto;overflow-y:hidden;margin:6px 0;padding:2px 0}
+.aiMath .katex-display{margin:0}
+.katex{font-size:1.08em}
