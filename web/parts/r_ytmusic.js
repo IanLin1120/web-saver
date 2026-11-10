@@ -65,13 +65,12 @@ YTMU.mini = function(){
   if(!ytmuOn() || !this.active()){ if(Dock.cards.ytmu){ Dock.remove('ytmu'); document.body.classList.remove('ytmuDock'); } return; }
   var s = this.st, self = this;
   Dock.set('ytmu', h('div', {class: 'dockCard glass ytmuCard', style: {padding: '6px 8px', position: 'relative', overflow: 'hidden'}, onclick: function(){ self.openPlayer(); }},
-    /* ✕ 在最左邊：停止音樂並收起 */
-    h('button', {class: 'ib ytmuX', title: '停止播放', html: icon('x', 'sm'), onclick: function(e){ e.stopPropagation(); self.stop(); }}),
     h('div', {class: 'lrow', style: {padding: 0, border: 0, background: 'none', flex: 1, minWidth: 0}},
       h('div', {class: 'th', style: Object.assign({width: '40px', height: '40px', borderRadius: '10px'}, s.art ? {backgroundImage: 'url("' + s.art + '")'} : {background: 'var(--c-audio)'}), html: s.art ? '' : icon('audio')}),
       h('div', {class: 't'}, h('b', {text: s.title}), h('div', {class: 'sub ell', id: 'ymMiniSub', text: s.artist || 'YouTube Music'}))),
     h('button', {class: 'ib', html: '<svg class="i fill" viewBox="0 0 24 24">' + (s.playing ? YM_PAUSE : IC.play) + '</svg>', onclick: function(e){ e.stopPropagation(); self.toggle(); }}),
     h('button', {class: 'ib', html: icon('fwd'), onclick: function(e){ e.stopPropagation(); self.next(); }}),
+    h('button', {class: 'ib', title: '停止播放', html: icon('x', 'sm'), onclick: function(e){ e.stopPropagation(); self.stop(); }}),
     h('div', {style: {position: 'absolute', left: 0, bottom: 0, height: '3px', background: 'var(--accent)', width: '0%'}, id: 'ymMiniBar'})));
   document.body.classList.add('ytmuDock');
   this.progress();

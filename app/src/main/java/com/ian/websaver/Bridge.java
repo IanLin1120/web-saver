@@ -476,6 +476,7 @@ public class Bridge {
         try { a.getPackageManager().getPackageInfo(pkg, 0); return true; } catch (Throwable t) { return false; }
     }
     @JavascriptInterface public void watchRemove(String uri) { Importer.removeDir(a, uri); MainActivity.emit("watchDirs", Importer.dirs(a).toString()); }
+    @JavascriptInterface public void pickFiles() { ui(new Runnable() { @Override public void run() { a.pickFiles(); } }); }
     @JavascriptInterface public void watchScan() { Importer.scan(a, true); }
     @JavascriptInterface public void importDel(boolean on) { a.prefs.edit().putBoolean("importDel", on).apply(); }
     @JavascriptInterface public boolean importDelGet() { return a.prefs.getBoolean("importDel", true); }

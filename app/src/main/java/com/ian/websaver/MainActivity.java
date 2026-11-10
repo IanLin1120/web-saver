@@ -26,7 +26,7 @@ import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     static MainActivity cur;
-    static final int REQ_FILE = 1001, REQ_TREE = 1002, REQ_NOTIF = 1003, REQ_WATCH = 1004;
+    static final int REQ_FILE = 1001, REQ_TREE = 1002, REQ_NOTIF = 1003, REQ_WATCH = 1004, REQ_PICK = 1005;
 
     FrameLayout root;
     WebView ui;
@@ -434,6 +434,49 @@ public class MainActivity extends Activity {
     String watchPkg = "", watchLabel = "";
     void pickWatch(String pkg, String label) { watchPkg = pkg == null ? "" : pkg; watchLabel = label == null ? "" : label; pickWatch(); }
 
+    /* 從手機的檔案（下載、雲端硬碟…）選檔案匯入檔案庫：可以一次選多個 */
+    void pickFiles() {
+        try {
+            Intent it = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            it.addCategory(Intent.CATEGORY_OPENABLE);
+            it.setType("*/*");
+            it.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+            startActivityForResult(it, REQ_PICK);
+        } catch (Throwable t) { toast("無法開啟檔案選擇器"); }
+    }
+
+    void importPicked(final java.util.List<Uri> uris) {
+        new Thread(new Runnable() { @Override public void run() {
+            org.json.JSONArray saved = new org.json.JSONArray();
+            StringBuilder errs = new StringBuilder();
+            Lib lib = Lib.get(MainActivity.this);
+            android.content.ContentResolver cr = getContentResolver();
+            int n = 0;
+            for (Uri u : uris) {
+                n++;
+                String name = "file", mime = null;
+                try {
+                    android.database.Cursor c = cr.query(u, new String[]{android.provider.OpenableColumns.DISPLAY_NAME}, null, null, null);
+                    if (c != null) { try { if (c.moveToFirst() && c.getString(0) != null) name = c.getString(0); } finally { c.close(); } }
+                    mime = cr.getType(u);
+                    try { emit("pickProg", new org.json.JSONObject().put("i", n).put("n", uris.size()).put("name", name).toString()); } catch (Throwable t) { /* ignore */ }
+                    String ext = Util.extOf(name);
+                    java.io.File t = lib.tmpFile(ext);
+                    java.io.InputStream in = cr.openInputStream(u);
+                    if (in == null) throw new Exception("無法開啟");
+                    java.io.FileOutputStream os = new java.io.FileOutputStream(t);
+                    byte[] buf = new byte[1 << 16]; int r;
+                    try { while ((r = in.read(buf)) > 0) os.write(buf, 0, r); } finally { in.close(); os.close(); }
+                    if (mime == null || mime.isEmpty() || mime.equals("application/octet-stream")) mime = Util.mimeOfExt(ext);
+                    int dot = name.lastIndexOf('.');
+                    saved.put(lib.add(t, name, mime, "", dot > 0 ? name.substring(0, dot) : name, null));
+                } catch (Throwable e) { errs.append(name).append("：").append(e.getMessage()).append('\n'); }
+            }
+            try { emit("picked", new org.json.JSONObject().put("items", saved).put("err", errs.toString().trim()).toString()); } catch (Throwable t) { /* ignore */ }
+            emit("lib", "");
+        } }).start();
+    }
+
     void pickWatch() {
         try {
             Intent it = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
@@ -481,6 +524,13 @@ public class MainActivity extends Activity {
             }
         } else if (req == ScreenRec.REQ) {
             ScreenRec.onResult(this, res, data);
+        } else if (req == REQ_PICK) {
+            java.util.List<Uri> L = new java.util.ArrayList<>();
+            if (res == RESULT_OK && data != null) {
+                if (data.getClipData() != null) for (int i = 0; i < data.getClipData().getItemCount(); i++) L.add(data.getClipData().getItemAt(i).getUri());
+                else if (data.getData() != null) L.add(data.getData());
+            }
+            if (L.isEmpty()) emit("picked", "{\"items\":[],\"cancel\":true}"); else importPicked(L);
         } else if (req == REQ_WATCH) {
             if (res == RESULT_OK && data != null && data.getData() != null) {
                 Uri tree = data.getData();

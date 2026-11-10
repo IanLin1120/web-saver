@@ -636,3 +636,34 @@ async function openTrash(){
   }
   draw();
 }
+
+/* ---------- 從手機匯入檔案：可多選，依副檔名自動分到各類別（放在類別的最外層，之後再自己移到資料夾） ---------- */
+$('bLibAdd').addEventListener('click', function(){
+  buzz(8);
+  if(isApp && NAT.has('pickFiles')){ NAT.call('pickFiles'); return; }
+  var inp = h('input', {type: 'file', multiple: true, style: {display: 'none'}});
+  inp.onchange = async function(){
+    var fs = Array.prototype.slice.call(inp.files || []), saved = [];
+    for(var i = 0; i < fs.length; i++){ toast('匯入中 ' + (i + 1) + '／' + fs.length + '：' + fs[i].name); try{ var r = await Lib.addBlob(fs[i], fs[i].name, {}); if(r) saved.push(r); }catch(e){} }
+    fire('picked', {items: saved}); inp.remove();
+  };
+  document.body.appendChild(inp); inp.click();
+});
+on('pickProg', function(d){ if(typeof d === 'string') try{ d = JSON.parse(d); }catch(e){ return; } if(d && d.n > 1) toast('匯入中 ' + d.i + '／' + d.n + '：' + d.name); });
+on('picked', async function(d){
+  if(typeof d === 'string') try{ d = JSON.parse(d); }catch(e){ d = {}; }
+  d = d || {};
+  if(d.cancel) return;
+  await Lib.refresh(); renderLib(); if(typeof renderStor === 'function') renderStor();
+  var items = (d.items || []).map(function(x){ return Lib.byId(x.id) || x; });
+  if(items.length){
+    var cnt = {};
+    items.forEach(function(it){ var a = areaOf(it); cnt[a] = (cnt[a] || 0) + 1; });
+    var parts = Object.keys(cnt).map(function(k){ return areaName(k) + ' ' + cnt[k]; });
+    var first = Object.keys(cnt)[0];
+    toast('✓ 已匯入 ' + items.length + ' 個檔案（' + parts.join('、') + '）', false, ['查看', function(){
+      showView('lib'); LV.open = true; setCfg('lib.cat', Object.keys(cnt).length === 1 ? first : 'all'); if(LV.folder) LV.folder[first] = ''; renderLib(); renderCats(); renderLibList();
+    }]);
+  }
+  if(d.err) toast('有檔案匯入失敗：' + d.err.split('\n')[0], true);
+});
