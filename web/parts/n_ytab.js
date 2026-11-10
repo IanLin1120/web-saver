@@ -123,7 +123,7 @@ $('ytModeB').addEventListener('click', function(){
 $('ytMore').addEventListener('click', function(){
   var id = ytCurId();
   menu('YouTube', [
-    ytIsMusic(YTB.url) ? ['info', 'YouTube Music 診斷資訊', function(){ if(isApp && NAT.has('muCmd')) NAT.call('muCmd', 'diag', ''); }, false, '有問題時截圖傳給 Claude（v' + APP_VER + '）'] : null,
+    ytIsMusic(YTB.url) ? ['info', 'YouTube Music 診斷資訊', function(){ if(isApp && NAT.has('muCmd')) NAT.call('muCmd', 'diag', ''); }, false, '有問題時截圖傳給 Claude（v' + APP_VERSION + '）'] : null,
     ['download', '下載這部影片', function(){ if(id) openYt(id); else toast('先打開一部影片', true); }, false, id ? '' : '目前不在影片頁'],
     ['sparkle', 'AI 摘要這部影片', function(){ if(id){ NAT.call('ytNav', 'pause'); aiOpenVideo(id, {auto: true}); } else showView('ai'); }, false, id ? '摘要、章節、針對影片提問' : '目前不在影片頁'],
     ['gear', 'YouTube 播放器設定', function(){ openYtSettings(); }, false, '去廣告、背景播放、手勢、SponsorBlock、畫質…'],

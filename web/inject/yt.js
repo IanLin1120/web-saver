@@ -966,7 +966,7 @@
 (function () {
   'use strict';
   if (!/^music\./.test(location.hostname)) return;
-  var VER = 11;
+  var VER = 12;
   if (window.__wsMu === VER) return;
   if (window.__wsMuT) clearInterval(window.__wsMuT);
   window.__wsMu = VER;
@@ -1064,21 +1064,14 @@
     X + '[style*="color: rgb(255, 255, 255)"]:not(img):not(a.yt-spec-button-shape-next--filled){color:' + C.fg + '!important}',
     /* 使用網頁擷取的播放介面：藏起 YouTube Music 自己的播放列與播放頁（按鈕還在，由 App 控制） */
     'html.wsMuOwn ytmusic-player-bar,html.wsMuOwn #player-bar-background{position:fixed!important;left:-200vw!important;bottom:0!important;opacity:0!important;pointer-events:none!important}',
-    /* YouTube Music 自己的播放頁：完全看不到、點不到（音樂照常由它播放，畫面由 App 的播放面板負責）；清單內容保持顯示、可以捲動 */
-    'html.wsMuOwn:not(.wsMuShowPage) ytmusic-player-page,html.wsMuOwn:not(.wsMuShowPage) ytmusic-player-page *{visibility:hidden!important;pointer-events:none!important}',
-    'html.wsMuOwn body{overflow:visible!important}',
-    'html.wsMuOwn #content,html.wsMuOwn ytmusic-app-layout #content,html.wsMuOwn ytmusic-nav-bar,html.wsMuOwn #nav-bar-background,html.wsMuOwn ytmusic-app-layout > [slot],html.wsMuOwn #guide-wrapper{visibility:visible!important}',
-    'html.wsMuOwn ytmusic-app-layout[player-ui-state="PLAYER_PAGE_OPEN"] #content,html.wsMuOwn ytmusic-app-layout[player-page-open] #content{display:block!important;opacity:1!important;transform:none!important}',
     /* 大張卡片的縮圖一定顯示 */
     X + 'ytmusic-two-row-item-renderer ytmusic-thumbnail-renderer img,' + X + 'ytmusic-two-row-item-renderer .image img,' + X + 'ytmusic-two-row-item-renderer yt-img-shadow img,' + X + 'ytmusic-two-row-item-renderer img.wsMuImg{opacity:1!important;visibility:visible!important}',
     X + 'img.wsMuImg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:10px;z-index:0}',
     'html.wsMuOwn ytmusic-app-layout{--ytmusic-player-bar-height:0px!important}',
     /* 小播放器的影片縮圖（YouTube Music 會讓它浮在畫面上跟著捲動）：用 App 的播放列，所以藏起來 */
-    'html.wsMuOwn:not(.wsMuShowPage) ytmusic-player#player,html.wsMuOwn:not(.wsMuShowPage) #player.ytmusic-player-page,html.wsMuOwn:not(.wsMuShowPage) ytmusic-app-layout > #player{opacity:0!important;pointer-events:none!important}',
+    'html.wsMuOwn ytmusic-app-layout:not([player-ui-state*="OPEN"]):not([player-ui-state*="FULL"]):not([player-page-open]) ytmusic-player#player{opacity:0!important;pointer-events:none!important}',
     'html.wsMuOwn #wsMuX{display:none!important}',
-    'html.wsMuOff ytmusic-player-bar,html.wsMuOff #player-bar-background,html.wsMuOff:not(.wsMuShowPage) ytmusic-player-page,html.wsMuOff:not(.wsMuShowPage) ytmusic-player-page *{visibility:hidden!important;pointer-events:none!important}',
-    'html.wsMuOff body{overflow:visible!important}',
-    'html.wsMuOff #content,html.wsMuOff ytmusic-nav-bar{visibility:visible!important}',
+    'html.wsMuOff ytmusic-player-bar,html.wsMuOff #player-bar-background{visibility:hidden!important;pointer-events:none!important}',
     'html.wsMuOff ytmusic-app-layout{--ytmusic-player-bar-height:0px!important}'
   ].join('\n');
   function addCss() {
@@ -1272,31 +1265,15 @@
     for (var k = 0; k < bs.length; k++) if (/收合|最小化|縮小|收起|關閉|向下|minimi|collapse|close|down/i.test(lbl(bs[k]))) return bs[k];
     return null;
   }
-  var step = 0, blankSince = 0;
-  /* 依序試不同方法把 YouTube Music 的播放頁收起來 */
+  /* 只溫和地試一次：按 YouTube Music 的「收合播放頁」鍵（不換頁、不重新整理，避免之前畫面空白的問題） */
   function collapsePage() {
-    if (Date.now() - collapseAt < 700) return;
-    var open = pageOpen(), shown = contentShown();
-    /* 停在沒有歌的空播放頁：直接回 YouTube Music 首頁 */
-    if (/^\/watch/.test(location.pathname) && !shown) { var v3 = q('video'); if (!(v3 && v3.src && !v3.paused) && Date.now() - tapAt > 6000 && Date.now() - loadAt > 1500) { collapseAt = Date.now(); dlog('empty player page -> home'); location.replace(location.origin + '/'); return; } }
-    if (!open && shown) { step = 0; blankSince = 0; document.documentElement.classList.remove('wsMuShowPage'); return; }
+    if (Date.now() - collapseAt < 1500) return;
+    var lay = q('ytmusic-app-layout'), st = lay ? (lay.getAttribute('player-ui-state') || '') : '';
+    if (!/OPEN|FULL/i.test(st) && !(lay && lay.hasAttribute('player-page-open'))) return;
     collapseAt = Date.now();
-    if (!blankSince) blankSince = Date.now();
-    var s = step++ % 4;
-    dlog('collapse step ' + s + ' open=' + open + ' shown=' + shown + ' path=' + location.pathname);
-    if (s === 0) click(q('ytmusic-player-bar .toggle-player-page-button, .toggle-player-page-button'));
-    else if (s === 1) click(chevron() || findByLabel(/收合|最小化|關閉播放器|縮小|minimi|collapse|close player/i));
-    else if (s === 2) {
-      if (/^\/watch/.test(location.pathname)) {
-        var v2 = q('video'), playing = v2 && !v2.paused && v2.src;
-        /* 沒在播的空播放頁（例如上次停在播放頁）：直接回首頁 */
-        if (!playing || history.length <= 1) { dlog('go home'); location.replace(location.origin + '/'); }
-        else history.back();
-      }
-    }
-    else { try { document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true})); } catch (e) {} }
-    /* 收不起來：與其讓畫面空白，不如先顯示 YouTube Music 原本的播放頁 */
-    if (!contentShown() && Date.now() - blankSince > 2500 && !document.documentElement.classList.contains('wsMuShowPage')) { document.documentElement.classList.add('wsMuShowPage'); dlog('fallback show page'); }
+    var b = q('.toggle-player-page-button');
+    dlog('collapse ui=' + st + ' btn=' + !!b);
+    if (b) click(b);
   }
   window.__wsMuCollapse = function () { collapseAt = 0; collapsePage(); };
   function click(el) { if (!el) return false; try { el.click(); return true; } catch (e) { return false; } }
@@ -1474,7 +1451,8 @@
     try { fixThumbs(); } catch (e) {}
     document.documentElement.classList.toggle('wsMuOwn', o);
     addCss(); if (!o) place(); hidePromos();
-    if (o) { try { collapsePage(); } catch (e) { dlog('collapse err ' + e.message); } state(false); }
+    if (o) state(false);
+    document.documentElement.classList.remove('wsMuShowPage');
   }
   window.__wsMuT = setInterval(tick, 1000);
   addEventListener('resize', function () { setTimeout(place, 120); });
