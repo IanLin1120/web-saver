@@ -101,7 +101,7 @@ final class Browser {
             case "capture": injectCapture = code; break;
             case "media": injectMedia = code; break;
             case "reader": injectReader = code; break;
-            case "yt": injectYt = code; break;
+            case "yt": injectYt = code; if (ytAds && curUrl != null && curUrl.contains("music.youtube.com") && wv != null) wv.evaluateJavascript(code, null); break;
             default: break;
         }
     }
