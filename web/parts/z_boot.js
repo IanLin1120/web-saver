@@ -9,6 +9,7 @@ on('tree', function(){});
 /* Android 返回鍵：回傳 true 表示介面已處理 */
 window.onNativeBack = function(){
   if(Sheets.stack.length){ Sheets.stack[Sheets.stack.length - 1].close(); return true; }
+  if(typeof Office !== 'undefined' && Office.back && Office.back()) return true;
   if(Viewer.isOpen()){ Viewer.close(); return true; }
   if(LV.selMode){ LV.selMode = false; LV.sel.clear(); renderLib(); return true; }
   if(BR.zap){ $('bZap').click(); return true; }

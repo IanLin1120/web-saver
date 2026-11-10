@@ -548,6 +548,31 @@ public class Bridge {
         } catch (Throwable t) { return err(t); }
     }
 
+    /** 分段寫入，最後一段把檔案庫裡「同一個檔案」整個換成新內容（文件編輯後存檔用；其他資訊不變） */
+    @JavascriptInterface public String libOverwriteChunk(String token, String b64, boolean last, String id) {
+        try {
+            File f;
+            synchronized (chunks) {
+                f = chunks.get(token);
+                if (f == null) { f = Lib.get(a).tmpFile("bin"); chunks.put(token, f); }
+            }
+            java.io.FileOutputStream os = new java.io.FileOutputStream(f, true);
+            os.write(Base64.decode(b64, Base64.DEFAULT));
+            os.close();
+            if (!last) return "{\"ok\":true}";
+            synchronized (chunks) { chunks.remove(token); }
+            File dst = Lib.get(a).fileOf(id);
+            if (dst == null) { f.delete(); return "{\"ok\":false,\"error\":\"找不到原檔\"}"; }
+            File bak = new File(dst.getPath() + ".bak");
+            if (dst.exists() && !dst.renameTo(bak)) { Util.copyFile(dst, bak); }
+            if (!f.renameTo(dst)) { Util.copyFile(f, dst); f.delete(); }
+            bak.delete();
+            Lib.get(a).touch(id, "size", dst.length());
+            Lib.get(a).touch(id, "time", System.currentTimeMillis());
+            return new JSONObject().put("ok", true).put("size", dst.length()).toString();
+        } catch (Throwable t) { return err(t); }
+    }
+
     @JavascriptInterface public void libMeta(String id, String json) {
         try {
             JSONObject m = new JSONObject(json);

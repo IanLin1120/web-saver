@@ -23,7 +23,8 @@ function autoArea(it){
   var e = (String(it.name || '').match(/\.([a-z0-9]+)$/i) || [, ''])[1].toLowerCase();
   if(/^(srt|vtt|ass|ssa|sub|lrc)$/.test(e)) return 'sub';
   if(/^(docx?|odt|rtf|pages)$/.test(e)) return 'word';
-  if(/^(xlsx?|xlsm|csv|ods|numbers)$/.test(e)) return 'excel';
+  if(/^(xlsx?|xlsm|xlsb|xltx|xltm|csv|ods|numbers)$/.test(e)) return 'excel';
+  if(/^(pptx?|pptm|ppsx?|potx|odp|key)$/.test(e)) return 'ppt';
   if(/^(txt|md|log|text)$/.test(e)) return 'txt';
   return it.cat;
 }
@@ -211,7 +212,7 @@ async function renderStor(){
       h('div', {class: 'row'}, h('span', {html: label}), h('span', {text: '本 App ' + (total / all * 100 < 0.1 ? '<0.1' : (total / all * 100).toFixed(1)) + '%'}))));
   }
   var mus = musicItems();
-  card.appendChild(h('div', {class: 'setRow', style: {borderTop: '1px solid var(--border-soft)', marginTop: '10px'}, onclick: function(){ setCfg('lib.cat', 'audio'); LV.folder.audio = ''; renderLib(); }},
+  card.appendChild(h('div', {class: 'setRow', style: {borderTop: '1px solid var(--border-soft)', marginTop: '10px'}, onclick: async function(){ if(SEC.has() && SEC.catLocked('audio') && !SEC.open() && !(await SEC.need('解鎖「音樂庫」'))) return; LV.open = true; setCfg('lib.cat', 'audio'); LV.folder.audio = ''; renderLib(); renderCats(); renderLibList(); var cb = $('catBar'); if(cb) setTimeout(function(){ cb.scrollIntoView({behavior: 'smooth', block: 'start'}); }, 50); }},
     h('span', {class: 'ic', html: icon('audio'), style: {background: 'color-mix(in srgb,var(--c-audio) 18%,var(--surface-3))', color: 'var(--c-audio)'}}),
     h('div', {class: 'grow'}, h('b', {text: '音樂庫'}), h('div', {class: 'sub', text: mus.length ? mus.length + ' 首・點這裡瀏覽與播放' : '從 YouTube 或網頁下載的音樂會放在這裡'})),
     mus.length ? h('button', {class: 'btn pri sm', html: '<svg class="i sm fill" viewBox="0 0 24 24">' + IC.play + '</svg>全部播放', onclick: function(e){ e.stopPropagation(); Music.playList(mus, 0); Music.openPlayer(); }}) : h('span', {class: 'chev', text: '›'})));
@@ -230,7 +231,8 @@ function renderCats(){
     if(!cnt[c[0]] && !AREA.custom.some(function(a){ return a.k === c[0]; })) return;
     var lk = c[0] !== 'all' && SEC.has() && SEC.catLocked(c[0]) && !SEC.open();
     bar.appendChild(h('button', {class: 'fchip' + (LV.open && CFG.lib.cat === c[0] ? ' on' : ''), html: (lk ? icon('lock', 'sm') : areaIcon(c[0], 'sm')) + areaName(c[0]) + ' <span class="c">' + (lk ? '🔒' : (cnt[c[0]] || 0)) + '</span>', onclick: async function(){
-      if(LV.open && CFG.lib.cat === c[0]){ LV.open = false; renderLibList(); renderCats(); return; }
+      /* 音樂庫：不管目前狀態，點了一定是打開音樂庫（不會因為再點一次就收起來） */
+      if(LV.open && CFG.lib.cat === c[0] && c[0] !== 'audio'){ LV.open = false; renderLibList(); renderCats(); return; }
       if(lk && !(await SEC.need('解鎖「' + (c[0] === 'audio' ? '音樂庫' : c[1]) + '」'))) return;
       /* 切換分類時一律從最上層（第一層資料夾）開始，不會停在上次看到的子資料夾裡 */
       LV.folder[c[0]] = '';

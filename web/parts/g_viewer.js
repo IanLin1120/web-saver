@@ -13,7 +13,7 @@ Viewer.open = async function(it, list){
   this.cur = it; this.list = list || [it];
   body.textContent = '';
   body.appendChild(h('img', {id: 'vwSnap', alt: ''}));
-  var c = CAT[it.cat] || CAT.other;
+  var c = CAT[typeof areaOf === 'function' ? areaOf(it) : it.cat] || CAT[it.cat] || CAT.other;
   var dark = it.cat === 'image' || it.cat === 'video';
   V.classList.toggle('dark', dark);
   V.classList.add('on');
@@ -28,6 +28,7 @@ Viewer.open = async function(it, list){
     else if(it.cat === 'audio') await viewAudio(it, body);
     else if(it.cat === 'pdf') await viewPdf(it, body);
     else if(it.cat === 'zip') await viewZip(it, body);
+    else if(typeof officeKind === 'function' && officeKind(it) && officeKind(it) !== 'old'){ this.cleanup = offCleanup; await Office.open(it, body); }
     else await viewOther(it, body);
   }catch(e){ body.appendChild(h('div', {class: 'empty', html: '<div class="big">⚠️</div>無法開啟這個檔案<br><span class="sub">' + esc(e.message) + '</span>'})); }
 };
