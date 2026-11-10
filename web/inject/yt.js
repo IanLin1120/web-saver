@@ -966,7 +966,7 @@
 (function () {
   'use strict';
   if (!/^music\./.test(location.hostname)) return;
-  var VER = 16;
+  var VER = 17;
   if (window.__wsMu === VER) return;
   if (window.__wsMuT) clearInterval(window.__wsMuT);
   window.__wsMu = VER;
@@ -1068,6 +1068,10 @@
     /* YouTube Music 自己認為播放頁「已收合」（player-ui-state 不是 PLAYER_PAGE_OPEN）時，播放頁一律不顯示：收合動畫、偶爾卡住沒消失的情況都看不到 */
     'html.wsMuOwn ytmusic-app-layout[player-ui-state]:not([player-ui-state*="PAGE_OPEN"]):not([player-ui-state*="FULLSCREEN"]) ytmusic-player-page{visibility:hidden!important;pointer-events:none!important}',
     'html.wsMuOwn.wsMuCol ytmusic-player-page,html.wsMuOwn.wsMuCol ytmusic-player#player{opacity:0!important}',
+    /* 大張卡片：蓋在縮圖上的那層（原本是半透明黑，被換色後變成不透明的奶油色，把縮圖整個蓋住）改回透明 */
+    X + 'ytmusic-two-row-item-renderer ytmusic-item-thumbnail-overlay-renderer,' + X + 'ytmusic-two-row-item-renderer ytmusic-item-thumbnail-overlay-renderer #background,' + X + 'ytmusic-two-row-item-renderer ytmusic-item-thumbnail-overlay-renderer #content,' + X + 'ytmusic-two-row-item-renderer .thumbnail-overlay,' + X + 'ytmusic-two-row-item-renderer ytmusic-thumbnail-renderer,' + X + 'ytmusic-two-row-item-renderer .image-wrapper,' + X + 'ytmusic-two-row-item-renderer yt-img-shadow{background:transparent!important;background-image:none!important}',
+    X + 'ytmusic-two-row-item-renderer ytmusic-item-thumbnail-overlay-renderer::before,' + X + 'ytmusic-two-row-item-renderer ytmusic-item-thumbnail-overlay-renderer::after,' + X + 'ytmusic-two-row-item-renderer .image-wrapper::before,' + X + 'ytmusic-two-row-item-renderer .image-wrapper::after{background:none!important}',
+    X + 'ytmusic-two-row-item-renderer ytmusic-item-thumbnail-overlay-renderer{opacity:1!important}',
     /* 大張卡片的縮圖一定顯示 */
     X + 'ytmusic-two-row-item-renderer ytmusic-thumbnail-renderer img,' + X + 'ytmusic-two-row-item-renderer .image img,' + X + 'ytmusic-two-row-item-renderer yt-img-shadow img,' + X + 'ytmusic-two-row-item-renderer img.wsMuImg{opacity:1!important;visibility:visible!important}',
     X + 'img.wsMuImg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:10px;z-index:0}',
@@ -1200,7 +1204,9 @@
       if (!it.getClientRects && !it.querySelector) return;
       var t = txt(q('.song-title', it)), by = txt(q('.byline', it)), im = q('img', it);
       if (!t) return;
-      out.push({i: i, t: t, a: by, img: im ? (im.getAttribute('src') || '') : '', d: txt(q('.duration', it)), on: it.hasAttribute('selected') || it.getAttribute('play-button-state') === 'playing' || it.getAttribute('play-button-state') === 'paused'});
+      var src = im ? (im.getAttribute('src') || '') : '';
+      if (!src || /^data:/.test(src)) { try { var th = findThumbs(rowData(it), 0); if (th) { src = th[0].url; if (/^\/\//.test(src)) src = 'https:' + src; } } catch (e) {} }
+      out.push({i: i, t: t, a: by, img: src, d: txt(q('.duration', it)), on: it.hasAttribute('selected') || it.getAttribute('play-button-state') === 'playing' || it.getAttribute('play-button-state') === 'paused'});
     });
     return out;
   }
@@ -1316,6 +1322,8 @@
         'pageOpen=' + pageOpen() + ' contentShown=' + contentShown(), 'toggleBtn=' + !!q('.toggle-player-page-button') + ' chevron=' + !!chevron(),
         'center=' + (function () { var e = document.elementFromPoint(innerWidth / 2, innerHeight / 2); return e ? e.tagName + '#' + e.id + '.' + String(e.className).slice(0, 40) : 'null'; })(),
         'video: ' + (v0 ? 'paused=' + v0.paused + ' t=' + Math.round(v0.currentTime) + ' src=' + !!v0.src : '無'), 'rows=' + qa('ytmusic-responsive-list-item-renderer').length + ' cards=' + qa('ytmusic-two-row-item-renderer').length + ' queue=' + qa('ytmusic-player-queue-item').length,
+        'card: ' + (function () { try { var c = q('ytmusic-two-row-item-renderer'); if (!c) return '無'; var im = q('img', c), ov = q('ytmusic-item-thumbnail-overlay-renderer', c), bg = ov && q('#background', ov);
+          return 'img=' + (im ? (im.complete ? 'ok' : 'loading') + ' ' + im.naturalWidth + ' op=' + getComputedStyle(im).opacity + ' src=' + String(im.getAttribute('src') || '').slice(0, 40) : '無') + ' | ov=' + (ov ? getComputedStyle(ov).backgroundColor + ' op=' + getComputedStyle(ov).opacity : '無') + ' | bg=' + (bg ? getComputedStyle(bg).backgroundColor + ' ' + getComputedStyle(bg).backgroundImage.slice(0, 40) : '無') + ' | mine=' + !!q('img.wsMuImg', c) + ' | kids=' + Array.prototype.map.call((q('ytmusic-thumbnail-renderer, .image-wrapper', c) || c).children, function (x) { return x.tagName.toLowerCase() + (x.id ? '#' + x.id : ''); }).join(','); } catch (e) { return 'err ' + e.message; } })(),
         'stopped=' + (function () { try { return localStorage.getItem('__wsMuStopped'); } catch (e) { return '?'; } })(), '--- log ---'].concat(DLOG.slice(-30)).join('\n');
       try { B.muState(JSON.stringify({diag: info})); } catch (e) {}
       return;
