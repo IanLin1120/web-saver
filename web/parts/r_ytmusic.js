@@ -19,6 +19,8 @@ YTMU.item = function(){
   var c = lsGet('ws.ytmLrc', {})[s.vid] || {};
   this.it = {ytm: true, vid: s.vid, id: 'ytm_' + s.vid, name: s.title, title: s.title, artist: s.artist, dur: s.dur, lrc: c.lrc || '', lrcSrc: c.src || '', lrcOff: !!c.off, lrcOffset: c.offset || 0};
   var it = this.it;
+  /* 先拿 YouTube Music 自己的歌詞；同時找有時間軸的同步歌詞（找到就用同步的，歌詞會跟著捲動） */
+  if(!it.lrc && !it.lrcOff) this.cmd('lyrics', s.vid);
   if(!it.lrc && !it.lrcOff && CFG.lyr && CFG.lyr.auto) setTimeout(function(){
     if(YTMU.it !== it || !it.dur) return;
     Lyrics.auto(it).then(function(l){ if(l && YTMU.it === it) YTMU.draw(true); }).catch(function(){});
@@ -29,6 +31,11 @@ YTMU.item = function(){
 on('muState', function(d){
   if(typeof d === 'string') try{ d = JSON.parse(d); }catch(e){ return; }
   if(!d) return;
+  if(d.lyrics){
+    var L = d.lyrics, it = YTMU.it;
+    if(it && it.vid === L.vid && L.text && !Lyrics.isSynced(it.lrc) && !it.lrcOff){ Lyrics.save(it, L.text, 'YouTube Music' + (L.src ? '：' + L.src.replace(/^(資料來源|Source)\s*[:：]\s*/i, '') : '')); YTMU.draw(true); }
+    return;
+  }
   if(d.diag){ var ta = h('textarea', {readOnly: true, class: 'sel-text', style: {width: '100%', minHeight: '50vh', font: '11px/1.4 ui-monospace,monospace'}}); ta.value = d.diag;
     openSheet({title: 'YouTube Music 診斷資訊', icon: 'info', body: h('div', null, h('div', {class: 'sub', style: {marginBottom: '8px'}, text: '請截圖或按「複製」傳給 Claude'}), ta, h('div', {class: 'btn-row'}, h('button', {class: 'btn pri sm', html: icon('copy', 'sm') + '複製', onclick: function(){ copyText(d.diag); }}))), tall: true}); return; }
   /* 在 YouTube Music 點了一首歌：馬上打開播放面板（先用清單上的歌名、封面），等真的開始播再更新 */

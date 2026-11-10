@@ -7,6 +7,7 @@ var YT_HOME = 'https://m.youtube.com/';
 var YT_MUSIC = 'https://music.youtube.com/';
 /* YouTube ⇄ YouTube Music：同一個分頁切換，各自記住上次看到的頁面 */
 YTB.last = lsGet('ws.ytLast', {yt: '', music: ''});
+if(/\/watch/.test(YTB.last.music || '')){ YTB.last.music = YT_MUSIC; lsSet('ws.ytLast', YTB.last); }
 function ytIsMusic(u){ return /^https?:\/\/music\.youtube\.com/i.test(u || ''); }
 function ytModeUi(){
   var mu = YTB.modeMusic != null ? YTB.modeMusic : ytIsMusic(YTB.url);
