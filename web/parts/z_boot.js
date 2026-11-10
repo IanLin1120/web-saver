@@ -17,6 +17,7 @@ window.onNativeBack = function(){
   /* YouTube 分頁：返回＝YouTube 的上一頁，不會跳到「瀏覽」分頁 */
   if(curView === 'yt'){
     if(YTB.back) return false;
+    if(ytIsMusic(YTB.url)){ if(!/^https:\/\/music\.youtube\.com\/?(\?|#|$)/.test(YTB.url)){ ytEnsure(YT_MUSIC); return true; } return false; }
     if(YTB.url && !/^https:\/\/m\.youtube\.com\/?(\?|#|$)/.test(YTB.url)){ ytEnsure(YT_HOME); return true; }
     return false;
   }
