@@ -966,7 +966,7 @@
 (function () {
   'use strict';
   if (!/^music\./.test(location.hostname)) return;
-  var VER = 15;
+  var VER = 16;
   if (window.__wsMu === VER) return;
   if (window.__wsMuT) clearInterval(window.__wsMuT);
   window.__wsMu = VER;
@@ -1065,7 +1065,8 @@
     /* 使用網頁擷取的播放介面：藏起 YouTube Music 自己的播放列與播放頁（按鈕還在，由 App 控制） */
     'html.wsMuOwn ytmusic-player-bar,html.wsMuOwn #player-bar-background{position:fixed!important;left:-200vw!important;bottom:0!important;opacity:0!important;pointer-events:none!important}',
     /* YouTube Music 播放頁的展開／收合不要動畫（瞬間完成），收合的那一小段時間整頁透明（最多 2.5 秒，時間到一定恢復） */
-    'html.wsMuOwn ytmusic-player-page,html.wsMuOwn ytmusic-player-page *,html.wsMuOwn ytmusic-player,html.wsMuOwn ytmusic-player-bar{transition:none!important;animation:none!important}',
+    /* YouTube Music 自己認為播放頁「已收合」（player-ui-state 不是 PLAYER_PAGE_OPEN）時，播放頁一律不顯示：收合動畫、偶爾卡住沒消失的情況都看不到 */
+    'html.wsMuOwn ytmusic-app-layout[player-ui-state]:not([player-ui-state*="PAGE_OPEN"]):not([player-ui-state*="FULLSCREEN"]) ytmusic-player-page{visibility:hidden!important;pointer-events:none!important}',
     'html.wsMuOwn.wsMuCol ytmusic-player-page,html.wsMuOwn.wsMuCol ytmusic-player#player{opacity:0!important}',
     /* 大張卡片的縮圖一定顯示 */
     X + 'ytmusic-two-row-item-renderer ytmusic-thumbnail-renderer img,' + X + 'ytmusic-two-row-item-renderer .image img,' + X + 'ytmusic-two-row-item-renderer yt-img-shadow img,' + X + 'ytmusic-two-row-item-renderer img.wsMuImg{opacity:1!important;visibility:visible!important}',
