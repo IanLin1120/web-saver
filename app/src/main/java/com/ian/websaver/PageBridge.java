@@ -29,6 +29,8 @@ public class PageBridge {
 
     @JavascriptInterface public void video(final boolean playing, final int w, final int h) { Util.ui(new Runnable() { @Override public void run() { b.videoState(playing, w, h); } }); }
 
+    @JavascriptInterface public void muState(String json) { MainActivity.emit("muState", json); }
+
     @JavascriptInterface public void ytDl(String id) { MainActivity.emit("ytdl", id); }
 
     /** 網頁上正在播放的影片（下載面板用來找出真正的影片） */

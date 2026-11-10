@@ -54,6 +54,8 @@ Lyrics.search = async function(title, artist, dur){
 Lyrics.of = function(it){ return it && (it.lrc || it.lyrics) || ''; };
 Lyrics.save = function(it, lrc, src){
   delete it.__lines; it.lrc = lrc; it.lrcSrc = src || '';
+  /* YouTube Music 的歌：歌詞存在 App 自己的快取（不是檔案庫裡的檔案） */
+  if(it.ytm){ var c = lsGet('ws.ytmLrc', {}); c[it.vid] = {lrc: lrc, src: src || '', off: it.lrcOff ? 1 : 0, t: Date.now()}; var ks = Object.keys(c); if(ks.length > 300){ ks.sort(function(a, b){ return c[a].t - c[b].t; }).slice(0, ks.length - 300).forEach(function(k){ delete c[k]; }); } lsSet('ws.ytmLrc', c); return; }
   if(isApp) NAT.call('libMeta', it.id, JSON.stringify({lrc: lrc, lrcSrc: src || ''}));
   else IDB.tx(['meta'], 'readwrite', function(t){ t.objectStore('meta').put(it); });
   var li = Lib.byId(it.id); if(li && li !== it){ li.lrc = lrc; li.lrcSrc = src; delete li.__lines; }
@@ -182,21 +184,26 @@ async function lyricsSearchSheet(it, after){
 
 /* ---------- 同步顯示 ---------- */
 var LyrView = {el: null, lines: [], idx: -1, raf: 0};
-LyrView.mount = function(container, it){
+LyrView.mount = function(container, it, opt){
   var lrc = Lyrics.of(it), self = this;
+  opt = opt || {};
+  /* 時間來源：離線音樂用 Music.el；YouTube Music 由 App 介面提供 */
+  this.time = opt.time || function(){ return Music.el.currentTime; };
+  var seek = opt.seek || function(t){ Music.el.currentTime = t; if(Music.el.paused) Music.el.play(); };
+  var redraw = opt.redraw || function(){ Music.drawPlayer(); };
   this.lines = Lyrics.isSynced(lrc) ? Lyrics.parse(lrc) : [];
   this.idx = -1;
   var v = h('div', {class: 'lyrView', style: lyrStyle()});
   if(this.lines.length){
     v.appendChild(h('div', {class: 'lyrPad'}));
-    this.lines.forEach(function(l, i){ v.appendChild(h('div', {class: 'lyrLine', text: l.text || '♪', onclick: function(){ Music.el.currentTime = l.t + (it.lrcOffset || 0); if(Music.el.paused) Music.el.play(); }})); });
+    this.lines.forEach(function(l, i){ v.appendChild(h('div', {class: 'lyrLine', text: l.text || '♪', onclick: function(){ seek(l.t + (it.lrcOffset || 0)); }})); });
     v.appendChild(h('div', {class: 'lyrPad'}));
   } else if(lrc){
     String(lrc).replace(/\[[^\]]*\]/g, '').split(/\n/).forEach(function(t){ v.appendChild(h('div', {class: 'lyrLine', text: t || ' '})); });
   } else {
     v.appendChild(h('div', {class: 'empty', html: '<div class="big">🎤</div>還沒有歌詞'}, h('div', {class: 'btn-row', style: {justifyContent: 'center'}}, h('button', {class: 'btn pri sm', html: icon('search', 'sm') + '自動尋找歌詞', onclick: async function(){
       this.disabled = true; this.textContent = '搜尋中…';
-      var l = await Lyrics.auto(it); if(l){ toast('✓ 找到歌詞'); Music.drawPlayer(); } else { toast('找不到相符的歌詞，可以手動搜尋', true); lyricsSearchSheet(it, function(){ Music.drawPlayer(); }); }
+      var l = await Lyrics.auto(it); if(l){ toast('✓ 找到歌詞'); redraw(); } else { toast('找不到相符的歌詞，可以手動搜尋', true); lyricsSearchSheet(it, function(){ redraw(); }); }
     }}))));
   }
   container.appendChild(v);
@@ -207,7 +214,7 @@ LyrView.mount = function(container, it){
 };
 LyrView.tick = function(){
   if(!this.el || !this.el.isConnected){ cancelAnimationFrame(this.raf); return; }
-  var t = Music.el.currentTime - ((this.it && this.it.lrcOffset) || 0), L = this.lines, i = -1;
+  var t = (this.time ? this.time() : Music.el.currentTime) - ((this.it && this.it.lrcOffset) || 0), L = this.lines, i = -1;
   for(var k = 0; k < L.length; k++){ if(L[k].t <= t + 0.15) i = k; else break; }
   if(i === this.idx) return;
   this.idx = i;

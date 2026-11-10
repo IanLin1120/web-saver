@@ -260,7 +260,7 @@ public class MainActivity extends Activity {
             for (java.util.Map.Entry<String, String> e : injOverride.entrySet()) b.setInject(e.getKey(), e.getValue());
             if (ytRectV != null) b.setRect(ytRectV[0], ytRectV[1], ytRectV[2], ytRectV[3]);
         }
-        if (music) { ytMu = b; b.wv.setBackgroundColor(0xFF030303); } else ytYt = b;
+        if (music) { ytMu = b; b.wv.setBackgroundColor(0xFFF7F0E5); } else ytYt = b;
         return b;
     }
     boolean ytLoaded(Browser b) { return b.curUrl != null && b.curUrl.startsWith("http"); }

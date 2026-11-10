@@ -827,3 +827,6 @@ input[type=range].hrArmed{filter:drop-shadow(0 0 5px color-mix(in srgb,var(--acc
 .aiMath{overflow-x:auto;overflow-y:hidden;margin:6px 0;padding:2px 0}
 .aiMath .katex-display{margin:0}
 .katex{font-size:1.08em}
+/* YouTube Music：App 的小播放列出現時，YouTube 畫面往上讓出位置 */
+body.ytmuDock #ytArea{bottom:calc(var(--dock) + 6px)}
+.ytmuCard .ytmuX{width:32px;height:32px;flex:none;margin-right:-2px;color:var(--text-muted)}

@@ -145,6 +145,13 @@ public class Bridge {
     } }); }
     @JavascriptInterface public boolean ytHas(boolean music) { Browser b = music ? a.ytMu : a.ytYt; return b != null && a.ytLoaded(b); }
 
+    @JavascriptInterface public void muCmd(final String c, final String arg) {
+        ui(new Runnable() { @Override public void run() {
+            Browser m = a.ytMu; if (m == null || m.wv == null) return;
+            m.wv.evaluateJavascript("window.__wsMuCmd&&__wsMuCmd(" + JSONObject.quote(c) + "," + JSONObject.quote(arg == null ? "" : arg) + ")", null);
+        } });
+    }
+
     @JavascriptInterface public void ytNav(final String what) {
         ui(new Runnable() {
             @Override public void run() {

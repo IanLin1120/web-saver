@@ -182,6 +182,8 @@ function openYtSettings(){
     selRow('預設畫質', [['max', '最高畫質'], ['1080', '1080p'], ['720', '720p'], ['480', '480p（省流量）'], ['auto', '讓 YouTube 自動決定']], 'yt.q'),
     selRow('影片編碼', [['vp9', '高畫質優先（最高 4K、WebM）'], ['h264', '相容優先（最高 1080p、MP4）']], 'yt.codec'),
     swRow('懸浮下載按鈕', '可拖曳的 ⬇ 按鈕', 'fab'),
+    (function(){ var inp = h('input', {type: 'checkbox'}); inp.checked = typeof YTMU === 'undefined' || YTMU.own; inp.onchange = function(){ if(typeof YTMU !== 'undefined') YTMU.setOwn(inp.checked); };
+      return h('label', {class: 'lab'}, h('span', null, 'YouTube Music 使用 App 的播放介面', h('span', {class: 'sub', text: '跟離線音樂一樣的播放列、正在播放面板與同步歌詞；關閉則使用 YouTube Music 原本的播放器'})), h('span', {class: 'sw'}, inp, h('span'))); })(),
     h('div', {class: 'setRow', onclick: function(){ openYtAppSettings(); }}, h('div', {class: 'grow'}, h('b', {text: '「開啟應用程式」用哪個 App'}), h('div', {class: 'sub', text: '指定或修改 YouTube／YouTube Music 要開的 App'})), h('span', {class: 'chev', text: '›'})));
   openSheet({title: 'YouTube 播放器設定', icon: 'gear', body: body, tall: true, onClose: function(){ if(isApp) NAT.call('ytNav', 'reload'); },
     foot: h('div', {class: 'sub', text: '關閉這個面板後會重新整理 YouTube 讓設定生效'})});

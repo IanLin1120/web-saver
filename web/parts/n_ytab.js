@@ -45,7 +45,12 @@ function ytOpen(url){
   ytEnsure(url || YT_HOME);
   ytModeUi();
 }
-function ytCurId(){ return YT.idOf(YTB.url); }
+function ytCurId(){
+  var id = YT.idOf(YTB.url); if(id) return id;
+  /* YouTube Music 播放器縮小後網址就沒有影片 ID：改用正在播放的歌（懸浮下載按鈕才不會消失） */
+  if(ytIsMusic(YTB.url) && typeof YTMU !== 'undefined' && YTMU.active()) return YTMU.st.vid || '';
+  return '';
+}
 function renderYt(){
   var id = ytCurId(), mu = ytIsMusic(YTB.url);
   $('ytBack').disabled = !YTB.back;

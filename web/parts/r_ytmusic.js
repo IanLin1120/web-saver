@@ -1,0 +1,164 @@
+/* ============================================================
+   YouTube Music 播放介面：跟「離線音樂」同一套（下方小播放列＋正在播放面板＋同步歌詞）
+   YouTube Music 網頁負責找歌、播放（沒有廣告）；播放控制、進度、佇列都在 App 介面，點擊立即反應。
+   ============================================================ */
+var YTMU = {st: null, t0: 0, sheet: null, queue: [], it: null, tmr: 0, own: lsGet('ws.ytmuOwn', true)};
+function ytmuOn(){ return isApp && YTMU.own && NAT.has('muCmd'); }
+YTMU.cmd = function(c, a){ if(isApp && NAT.has('muCmd')) NAT.call('muCmd', c, a == null ? '' : String(a)); };
+/* 目前播放秒數：用最後一次回報的時間往前推算（不用一直問網頁，介面才順） */
+YTMU.time = function(){
+  var s = this.st; if(!s) return 0;
+  var t = s.cur + (s.playing ? (Date.now() - this.t0) / 1000 : 0);
+  return s.dur ? Math.min(t, s.dur) : t;
+};
+YTMU.active = function(){ var s = this.st; return !!(s && !s.off && s.title); };
+/* 給歌詞用的「假檔案」：同一首歌（影片 ID）共用，歌詞存在快取 */
+YTMU.item = function(){
+  var s = this.st; if(!s || !s.vid) return null;
+  if(this.it && this.it.vid === s.vid){ this.it.title = s.title; this.it.name = s.title; this.it.artist = s.artist; if(s.dur) this.it.dur = s.dur; return this.it; }
+  var c = lsGet('ws.ytmLrc', {})[s.vid] || {};
+  this.it = {ytm: true, vid: s.vid, id: 'ytm_' + s.vid, name: s.title, title: s.title, artist: s.artist, dur: s.dur, lrc: c.lrc || '', lrcSrc: c.src || '', lrcOff: !!c.off, lrcOffset: c.offset || 0};
+  var it = this.it;
+  if(!it.lrc && !it.lrcOff && CFG.lyr && CFG.lyr.auto) setTimeout(function(){
+    if(YTMU.it !== it || !it.dur) return;
+    Lyrics.auto(it).then(function(l){ if(l && YTMU.it === it) YTMU.draw(); }).catch(function(){});
+  }, 1200);
+  return it;
+};
+
+on('muState', function(d){
+  if(typeof d === 'string') try{ d = JSON.parse(d); }catch(e){ return; }
+  if(!d) return;
+  var prev = YTMU.st || {};
+  if(d.queue) YTMU.queue = d.queue;
+  YTMU.st = d; YTMU.t0 = Date.now();
+  /* YouTube Music 開始播放：離線音樂先停 */
+  if(d.playing && !Music.el.paused) Music.el.pause();
+  var big = !prev.title || prev.vid !== d.vid || prev.playing !== d.playing || prev.off !== d.off || prev.like !== d.like || prev.repeat !== d.repeat || prev.shuffle !== d.shuffle || prev.art !== d.art || !!d.queue;
+  if(big){ YTMU.mini(); YTMU.draw(); } else YTMU.progress();
+  if(d.vid !== prev.vid && typeof fabSync === 'function'){ fabSync.k = null; fabSync(); }
+  /* 在 YouTube Music 點了一首歌：自動打開播放面板（跟離線音樂一樣） */
+  if(d.open && !d.off && curView === 'yt' && ytmuOn() && !Sheets.stack.length) setTimeout(function(){ YTMU.openPlayer(); }, 120);
+});
+/* 離線音樂開始播放：YouTube Music 暫停 */
+Music.el.addEventListener('play', function(){ if(YTMU.st && YTMU.st.playing){ YTMU.cmd('pause'); YTMU.st.playing = false; YTMU.mini(); } });
+
+/* 按下去立刻更新畫面（不等網頁回報），網頁回報後再校正 */
+YTMU.toggle = function(){
+  var s = this.st; if(!s) return;
+  s.cur = this.time(); this.t0 = Date.now(); s.playing = !s.playing;
+  this.cmd(s.playing ? 'play' : 'pause'); buzz(8);
+  this.mini(); this.draw();
+};
+YTMU.next = function(){ this.cmd('next'); buzz(8); };
+YTMU.prev = function(){ this.cmd('prev'); buzz(8); };
+YTMU.seek = function(t){ var s = this.st; if(!s) return; s.cur = t; this.t0 = Date.now(); this.cmd('seek', t); this.progress(); };
+YTMU.stop = function(){
+  this.cmd('stop'); buzz(12);
+  if(this.st){ this.st.off = true; this.st.playing = false; }
+  Dock.remove('ytmu'); document.body.classList.remove('ytmuDock');
+  if(this.sheet && !this.sheet.closed) this.sheet.close();
+};
+
+var YM_PAUSE = '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>';
+YTMU.mini = function(){
+  if(!ytmuOn() || !this.active()){ if(Dock.cards.ytmu){ Dock.remove('ytmu'); document.body.classList.remove('ytmuDock'); } return; }
+  var s = this.st, self = this;
+  Dock.set('ytmu', h('div', {class: 'dockCard glass ytmuCard', style: {padding: '6px 8px', position: 'relative', overflow: 'hidden'}, onclick: function(){ self.openPlayer(); }},
+    /* ✕ 在最左邊：停止音樂並收起 */
+    h('button', {class: 'ib ytmuX', title: '停止播放', html: icon('x', 'sm'), onclick: function(e){ e.stopPropagation(); self.stop(); }}),
+    h('div', {class: 'lrow', style: {padding: 0, border: 0, background: 'none', flex: 1, minWidth: 0}},
+      h('div', {class: 'th', style: Object.assign({width: '40px', height: '40px', borderRadius: '10px'}, s.art ? {backgroundImage: 'url("' + s.art + '")'} : {background: 'var(--c-audio)'}), html: s.art ? '' : icon('audio')}),
+      h('div', {class: 't'}, h('b', {text: s.title}), h('div', {class: 'sub ell', id: 'ymMiniSub', text: s.artist || 'YouTube Music'}))),
+    h('button', {class: 'ib', html: '<svg class="i fill" viewBox="0 0 24 24">' + (s.playing ? YM_PAUSE : IC.play) + '</svg>', onclick: function(e){ e.stopPropagation(); self.toggle(); }}),
+    h('button', {class: 'ib', html: icon('fwd'), onclick: function(e){ e.stopPropagation(); self.next(); }}),
+    h('div', {style: {position: 'absolute', left: 0, bottom: 0, height: '3px', background: 'var(--accent)', width: '0%'}, id: 'ymMiniBar'})));
+  document.body.classList.add('ytmuDock');
+  this.progress();
+};
+YTMU.progress = function(){
+  var s = this.st; if(!s) return;
+  var t = this.time(), d = s.dur || 0;
+  var mb = $('ymMiniBar'); if(mb) mb.style.width = (d ? 100 * t / d : 0) + '%';
+  var pb = $('ymProg'); if(pb && !pb.__drag){ pb.max = d || 1; pb.value = t; }
+  var a = $('ymT1'), b = $('ymT2'); if(a && !(pb && pb.__drag)) a.textContent = fmtDur(t); if(b) b.textContent = fmtDur(d);
+  var ms = $('ymMiniSub'); if(ms && this.it && this.it.vid === s.vid){ var cl = ytmuLyricNow(this.it); ms.textContent = cl || s.artist || 'YouTube Music'; }
+};
+function ytmuLyricNow(it){
+  var lrc = Lyrics.of(it); if(!Lyrics.isSynced(lrc)) return '';
+  if(!it.__lines) it.__lines = Lyrics.parse(lrc);
+  var t = YTMU.time() - (it.lrcOffset || 0), out = '';
+  for(var k = 0; k < it.__lines.length; k++){ if(it.__lines[k].t <= t + 0.15) out = it.__lines[k].text; else break; }
+  return out;
+}
+/* 播放中每 0.5 秒更新進度條（只改數字，不重畫） */
+setInterval(function(){ if(YTMU.st && YTMU.st.playing && !document.hidden) YTMU.progress(); }, 500);
+
+YTMU.openPlayer = function(){
+  if(!this.active()) return;
+  if(this.sheet && !this.sheet.closed) return;
+  var body = h('div', {id: 'ymBody'});
+  this.sheet = openSheet({title: 'YouTube Music', icon: 'audio', body: body, tall: true, onClose: function(){ YTMU.sheet = null; }});
+  this.draw();
+};
+YTMU.draw = function(){
+  var body = $('ymBody'); if(!body || !this.sheet || this.sheet.closed) return;
+  var s = this.st, self = this;
+  var keep = body.querySelector('.list'), sc = keep ? keep.scrollTop : 0;
+  body.textContent = '';
+  if(!this.active()){ body.appendChild(h('div', {class: 'empty', text: '沒有播放中的歌曲'})); return; }
+  var it = this.item();
+  var showLyr = CFG.lyr.show !== false && CFG.lyr.view !== 'cover' && !(it && it.lrcOff);
+  var stage = h('div', {class: 'mpStage'});
+  if(showLyr && it) LyrView.mount(stage, it, {time: function(){ return YTMU.time(); }, seek: function(t){ YTMU.seek(t); if(!YTMU.st.playing) YTMU.toggle(); }, redraw: function(){ YTMU.draw(); }});
+  else stage.appendChild(h('div', {class: 'art', style: s.art ? {backgroundImage: 'url("' + s.art + '")'} : null, html: s.art ? '' : icon('audio', 'lg'), onclick: function(){ CFG.lyr.view = 'lyrics'; saveCfg(); self.draw(); }}));
+  body.appendChild(stage);
+  body.appendChild(h('div', {class: 'row', style: {gap: '10px', marginTop: '10px'}},
+    h('div', {class: 'th', style: Object.assign({width: '46px', height: '46px', borderRadius: '12px', flex: 'none', backgroundSize: 'cover'}, s.art ? {backgroundImage: 'url("' + s.art + '")'} : {background: 'var(--c-audio)'})}),
+    h('div', {class: 'grow'}, h('b', {text: s.title, style: {fontSize: '17px', display: 'block'}, class: 'ell'}),
+      h('div', {class: 'sub ell', text: [s.artist, s.album].filter(Boolean).join('・') + (it && it.lrcSrc ? '・歌詞：' + it.lrcSrc.split('：')[0] : '')})),
+    h('button', {class: 'ib' + (s.like === 'LIKE' ? ' on' : ''), title: '喜歡', style: s.like === 'LIKE' ? {color: 'var(--accent)'} : null,
+      html: '<svg class="i' + (s.like === 'LIKE' ? ' fill' : '') + '" viewBox="0 0 24 24"><path d="M7 10v11H3V10zM7 10l4-8a3 3 0 0 1 3 3v4h5.5a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 18.1 21H7"/></svg>',
+      onclick: function(){ self.cmd('like'); s.like = s.like === 'LIKE' ? 'INDIFFERENT' : 'LIKE'; buzz(10); self.draw(); }})));
+  var tb = h('div', {class: 'mpTools'});
+  var tbtn = function(ic, label, fn){ tb.appendChild(h('button', {class: 'chip', style: {background: 'var(--surface-3)', color: 'var(--text)', border: '1px solid var(--border-soft)'}, html: icon(ic, 'sm') + label, onclick: fn})); };
+  tbtn(showLyr ? 'image' : 'type', showLyr ? '封面' : '歌詞', function(){ CFG.lyr.view = showLyr ? 'cover' : 'lyrics'; saveCfg(); self.draw(); });
+  if(it) tbtn('search', '找歌詞', function(){ it.lrcOff = false; lyricsSearchSheet(it, function(){ self.draw(); }); });
+  if(it && Lyrics.of(it)) tbtn('trash', '移除歌詞', function(){ it.lrcOff = true; Lyrics.save(it, '', ''); toast('已移除歌詞'); self.draw(); });
+  tbtn('palette', '樣式', function(){ lyricsStyleSheet(function(){ if(LyrView.el) LyrView.el.setAttribute('style', lyrStyle()); }); });
+  if(it && Lyrics.isSynced(Lyrics.of(it))){
+    var shift = function(d){ it.lrcOffset = Math.round(((it.lrcOffset || 0) + d) * 10) / 10; var c = lsGet('ws.ytmLrc', {}); if(c[it.vid]){ c[it.vid].offset = it.lrcOffset; lsSet('ws.ytmLrc', c); } toast('歌詞時間 ' + (it.lrcOffset > 0 ? '+' : '') + it.lrcOffset + ' 秒'); LyrView.idx = -2; };
+    tbtn('back', '早 0.5 秒', function(){ shift(-0.5); });
+    tbtn('fwd', '晚 0.5 秒', function(){ shift(0.5); });
+  }
+  if(s.vid) tbtn('download', '下載', function(){ self.sheet.close(); openYt(s.vid); });
+  body.appendChild(tb);
+  var prog = h('input', {type: 'range', id: 'ymProg', min: 0, max: s.dur || 1, step: .1, value: this.time()});
+  prog.addEventListener('input', function(){ prog.__drag = true; $('ymT1').textContent = fmtDur(prog.value); });
+  prog.addEventListener('change', function(){ prog.__drag = false; self.seek(+prog.value); });
+  body.appendChild(h('div', {style: {margin: '14px 6px 0'}}, prog, h('div', {class: 'row', style: {justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)'}}, h('span', {id: 'ymT1', text: fmtDur(this.time())}), h('span', {id: 'ymT2', text: fmtDur(s.dur || 0)}))));
+  var big = function(svg, fn, on){ return h('button', {class: 'ib' + (on ? ' on' : ''), html: svg, onclick: fn}); };
+  body.appendChild(h('div', {class: 'row', style: {justifyContent: 'center', gap: '14px', margin: '6px 0 14px'}},
+    big('<svg class="i" viewBox="0 0 24 24"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>', function(){ s.shuffle = !s.shuffle; self.cmd('shuffle'); toast(s.shuffle ? '隨機播放' : '依序播放'); self.draw(); }, s.shuffle),
+    big(icon('back', 'lg'), function(){ self.prev(); }),
+    h('button', {class: 'btn pri', style: {width: '64px', height: '64px', borderRadius: '50%', padding: 0}, html: '<svg class="i fill lg" viewBox="0 0 24 24">' + (s.playing ? YM_PAUSE : IC.play) + '</svg>', onclick: function(){ self.toggle(); }}),
+    big(icon('fwd', 'lg'), function(){ self.next(); }),
+    big('<svg class="i" viewBox="0 0 24 24"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>' + (s.repeat === 'one' ? '<text x="10" y="15" font-size="8" fill="currentColor" stroke="none">1</text>' : '') + '</svg>', function(){
+      s.repeat = s.repeat === 'off' ? 'all' : s.repeat === 'all' ? 'one' : 'off'; self.cmd('repeat');
+      toast({all: '全部循環', one: '單曲循環', off: '不循環'}[s.repeat]); self.draw(); }, s.repeat !== 'off')));
+  var Q = this.queue || [];
+  body.appendChild(h('div', {class: 'sect-h', style: {margin: '6px 2px'}}, h('span', {text: Q.length ? '播放佇列 ' + Q.length + ' 首' : '播放佇列'})));
+  var list = h('div', {class: 'list'});
+  if(!Q.length) list.appendChild(h('div', {class: 'sub', style: {padding: '8px 4px'}, text: '佇列載入中…（YouTube Music 會自動接著播放相關歌曲）'}));
+  Q.forEach(function(q){
+    var on = q.on || (q.t === s.title);
+    list.appendChild(h('div', {class: 'lrow' + (on ? ' on' : ''), onclick: function(){ self.cmd('q', q.i); buzz(8); }},
+      h('div', {class: 'th', style: q.img ? {backgroundImage: 'url("' + q.img + '")', width: '42px', height: '42px'} : {background: 'var(--c-audio)', width: '42px', height: '42px'}, html: q.img ? '' : icon('audio')}),
+      h('div', {class: 't'}, h('b', {text: q.t, style: on ? {color: 'var(--accent)'} : null}), h('div', {class: 'sub', text: (q.a || '') + (q.d ? '・' + q.d : '')}))));
+  });
+  body.appendChild(list);
+  paintIcons(body);
+  if(sc) list.scrollTop = sc;
+};
+/* 設定：切換「App 的播放介面」與 YouTube Music 原本的介面 */
+YTMU.setOwn = function(on){ YTMU.own = !!on; lsSet('ws.ytmuOwn', YTMU.own); YTMU.cmd('own', on ? '1' : '0'); YTMU.mini(); };
