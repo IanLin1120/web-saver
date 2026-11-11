@@ -159,6 +159,8 @@ var CAT = {
   ppt: {name: 'PPT', ic: 'ppt', c: '#c4512f'},
   txt: {name: '文字檔', ic: 'txt', c: '#7a6a55'},
   zip: {name: '壓縮檔', ic: 'zip', c: 'var(--c-zip)'},
+  apk: {name: 'APK', ic: 'other', emo: '🤖', c: '#5d8a3a'},
+  exe: {name: 'EXE', ic: 'other', emo: '🖥️', c: '#4a6fa5'},
   other: {name: '其他', ic: 'other', c: 'var(--c-other)'}
 };
 

@@ -21,6 +21,10 @@ function areaApply(){
 areaApply();
 function autoArea(it){
   var e = (String(it.name || '').match(/\.([a-z0-9]+)$/i) || [, ''])[1].toLowerCase();
+  /* 自訂分類設定了「自動收進來的副檔名」：優先於內建的分法 */
+  if(e) for(var i = 0; i < AREA.custom.length; i++){ var x = AREA.custom[i]; if(x.ext && x.ext.indexOf(e) >= 0 && CAT[x.k]) return x.k; }
+  if(/^(apk|xapk|apks|apkm)$/.test(e)) return 'apk';
+  if(/^(exe|msi)$/.test(e)) return 'exe';
   if(/^(srt|vtt|ass|ssa|sub|lrc)$/.test(e)) return 'sub';
   if(/^(docx?|odt|rtf|pages)$/.test(e)) return 'word';
   if(/^(xlsx?|xlsm|xlsb|xltx|xltm|csv|ods|numbers)$/.test(e)) return 'excel';
@@ -359,16 +363,17 @@ function renderSelBar(){
   if(allHtml && isApp) bar.appendChild(h('button', {class: 'ib', html: icon('pdf'), title: '轉成 PDF', onclick: function(){ picked.forEach(function(it){ toPdf(it); }); }}));
   var cats = {}; picked.forEach(function(it){ cats[areaOf(it)] = 1; });
   var oneCat = Object.keys(cats).length === 1 ? Object.keys(cats)[0] : '';
-  bar.appendChild(h('button', {class: 'ib', html: icon('layers'), title: '移到其他分類', disabled: !n, onclick: function(){
+  var moveArea = function(){
     menu('移到哪個分類？', Object.keys(CAT).map(function(k){ return [CAT[k].emo ? 'folder' : CAT[k].ic, areaName(k) + (oneCat === k ? '　（目前）' : ''), function(){
       var ids = picked.map(function(x){ return x.id; });
       ids.forEach(function(id){ var it = Lib.byId(id); if(it && autoArea(it) === k) delete AREA.map[id]; else AREA.map[id] = k; });
       AREA.save(); LF.setItems(ids, ''); LV.sel.clear(); LV.selMode = false; toast('已移到「' + areaName(k) + '」'); renderLib();
     }]; }).concat([['plus', '新增分類…', function(){ areaEdit(null, function(k){ var ids = picked.map(function(x){ return x.id; }); ids.forEach(function(id){ AREA.map[id] = k; }); AREA.save(); LF.setItems(ids, ''); LV.sel.clear(); LV.selMode = false; renderLib(); }); }]]));
-  }}));
+  };
+  bar.appendChild(h('button', {class: 'ib', html: icon('layers'), title: '移到其他分類', disabled: !n, onclick: moveArea}));
   bar.appendChild(h('button', {class: 'ib', html: icon('folder'), title: '移到資料夾', disabled: !n, onclick: function(){
     if(!oneCat){ toast('資料夾是依種類分開的，請只選同一種類的檔案', true); return; }
-    folderPicker(oneCat, '移到資料夾', function(fid){ LF.setItems(picked.map(function(x){ return x.id; }), fid); LV.sel.clear(); LV.selMode = false; toast('已移動'); renderLib(); dupOnMove(picked, fid); }, {cur: LV.folder[oneCat] || ''});
+    folderPicker(oneCat, '移到資料夾', function(fid){ LF.setItems(picked.map(function(x){ return x.id; }), fid); LV.sel.clear(); LV.selMode = false; toast('已移動'); renderLib(); dupOnMove(picked, fid); }, {cur: LV.folder[oneCat] || '', other: ['layers', '移到其他分類（影片、APK、其他…）', moveArea]});
   }}));
   var htmls = picked.filter(function(x){ return x.cat === 'html'; });
   if(htmls.length) bar.appendChild(h('button', {class: 'ib', html: icon('pdf'), title: '轉成 PDF', onclick: function(){ batchPdfDlg(htmls); }}));
@@ -594,13 +599,21 @@ async function areaEdit(k, done){
   var a = k ? CAT[k] : null;
   var name = await promptDlg(k ? '分類名稱' : '新增分類', k ? areaName(k) : '', '例如：字幕、工作文件、旅遊影片');
   if(!name) return;
+  /* 自訂分類可以指定副檔名：之後存進檔案庫的檔案，副檔名符合就自動收進這個分類 */
+  var isCustom = !k || AREA.custom.some(function(x){ return x.k === k; }), ext = null;
+  if(isCustom){
+    var cu0 = k ? AREA.custom.filter(function(x){ return x.k === k; })[0] : null;
+    var ev = await promptDlg('自動收進「' + name + '」的副檔名', cu0 && cu0.ext ? cu0.ext.join(', ') : '', '例如：apk, xapk（用逗號分開；不需要就留空）', '下一步');
+    if(ev == null && !k) ev = '';
+    if(ev != null) ext = String(ev).toLowerCase().split(/[\s,，、;]+/).map(function(x){ return x.replace(/^[.*]+/, '').replace(/[^a-z0-9]/g, ''); }).filter(Boolean).slice(0, 30);
+  }
   var apply = function(emo){
     if(k){
       AREA.over[k] = Object.assign({}, AREA.over[k] || {}, {name: name.slice(0, 20), emo: emo});
-      var cu = AREA.custom.filter(function(x){ return x.k === k; })[0]; if(cu){ cu.name = name.slice(0, 20); cu.emo = emo; }
+      var cu = AREA.custom.filter(function(x){ return x.k === k; })[0]; if(cu){ cu.name = name.slice(0, 20); cu.emo = emo; if(ext) cu.ext = ext; }
     } else {
       k = 'u' + uid();
-      AREA.custom.push({k: k, name: name.slice(0, 20), emo: emo, c: ['#8a6d4f', '#4f7a8a', '#7a4f8a', '#8a7a4f', '#4f8a5e'][AREA.custom.length % 5]});
+      AREA.custom.push({k: k, name: name.slice(0, 20), emo: emo, ext: ext || [], c: ['#8a6d4f', '#4f7a8a', '#7a4f8a', '#8a7a4f', '#4f8a5e'][AREA.custom.length % 5]});
     }
     AREA.save(); areaApply(); renderLib(); if(done) done(k);
     fire('areasChanged');
@@ -612,7 +625,7 @@ function manageAreas(){
   var s = openSheet({title: '管理分類', icon: 'layers', body: body, tall: true, foot: h('button', {class: 'btn pri', html: icon('plus', 'sm') + '新增分類', onclick: function(){ areaEdit(null); }})});
   function draw(){
     body.textContent = '';
-    body.appendChild(h('div', {class: 'sub', style: {marginBottom: '10px', lineHeight: '1.6'}, text: '可以改每個分類的名稱和圖示，或新增自己的分類。長按任一列上下拖動可以排序。檔案要換分類：在檔案上長按選取 → 下方的「移到其他分類」。'}));
+    body.appendChild(h('div', {class: 'sub', style: {marginBottom: '10px', lineHeight: '1.6'}, text: '可以改每個分類的名稱和圖示，或新增自己的分類。自己新增的分類可以指定副檔名（例如 apk），之後存進來的那種檔案會自動收進去。長按任一列上下拖動可以排序。檔案要換分類：在檔案上長按選取 → 上方工具列的「移到其他分類」（三層方塊的圖示）。'}));
     var cnt = {}; Lib.items.forEach(function(it){ var a = areaOf(it); cnt[a] = (cnt[a] || 0) + 1; });
     var list = h('div'); body.appendChild(list);
     Object.keys(CAT).forEach(function(k){
@@ -620,7 +633,7 @@ function manageAreas(){
       list.appendChild(h('div', {class: 'setRow areaRow'},
         h('span', {class: 'dsGrip', html: icon('grip', 'sm'), title: '長按上下拖動排序'}),
         h('span', {class: 'ic', html: areaIcon(k)}),
-        h('div', {class: 'grow'}, h('b', {text: areaName(k)}), h('div', {class: 'sub', text: (cnt[k] || 0) + ' 個檔案' + (custom ? '・自訂' : '')})),
+        h('div', {class: 'grow'}, h('b', {text: areaName(k)}), h('div', {class: 'sub', text: (cnt[k] || 0) + ' 個檔案' + (custom ? '・自訂' + ((CAT[k].ext && CAT[k].ext.length) ? '・自動收 .' + CAT[k].ext.join(' .') : '') : '')})),
         h('button', {class: 'ib', html: icon('edit'), title: '改名稱與圖示', onclick: function(){ areaEdit(k); }}),
         !custom && AREA.over[k] ? h('button', {class: 'ib', html: icon('reload'), title: '恢復預設', onclick: function(){ delete AREA.over[k]; AREA.save(); areaApply(); renderLib(); draw(); }}) : null,
         custom ? h('button', {class: 'ib', html: icon('trash'), style: {color: 'var(--danger)'}, onclick: async function(){

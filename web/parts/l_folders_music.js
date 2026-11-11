@@ -66,6 +66,12 @@ function folderPicker(cat, title, cb, opts){
     box.textContent = '';
     box.appendChild(h('div', {class: 'opt' + (opts.cur === '' ? ' on' : ''), onclick: function(){ s.close(); cb(''); }}, h('span', {class: 'oi', html: icon('home')}), h('div', {class: 'grow'}, h('b', {text: (CAT[cat] || CAT.other).name + '（最上層）'}))));
     LF.children(cat, '').forEach(function(f){ rowFor(f, 1); });
+    /* 資料夾只在同一個分類裡面；要換到別的分類（例如從「其他」到「APK」）走這裡 */
+    if(opts.other){
+      box.appendChild(h('div', {class: 'sub', style: {margin: '10px 4px 6px'}, text: '資料夾只在「' + areaName(cat) + '」這個分類裡面。要換到別的分類：'}));
+      box.appendChild(h('div', {class: 'opt', onclick: function(){ s.close(); setTimeout(opts.other[2], 200); }}, h('span', {class: 'oi', html: icon(opts.other[0])}), h('div', {class: 'grow'}, h('b', {text: opts.other[1]}))));
+    }
+    paintIcons(box);
   }
   draw();
 }
