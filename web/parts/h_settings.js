@@ -8,6 +8,12 @@ function renderSettings(){
   var P = $('setPage'); P.textContent = '';
   P.appendChild(h('h2', {class: 'pt', html: '<span class="logo">' + icon('gear') + '</span><span>設定<small>網頁擷取 v' + APP_VERSION + (isApp ? '・APK v' + (Upd.apk() || '?') : '・網頁版') + '</small></span>'}));
 
+  /* 軟體使用說明書 */
+  P.appendChild(card('books', '軟體使用說明書', [
+    h('div', {class: 'setRow', style: {borderTop: 0}, onclick: function(){ openGuide(false); }}, h('span', {class: 'ic', html: icon('info')}),
+      h('div', {class: 'grow'}, h('b', {text: '打開說明書'}), h('div', {class: 'sub', text: '所有功能怎麼用、要允許哪些權限、AI 金鑰怎麼申請和設定、其他 App 下載自動搬回'})), h('span', {class: 'chev', text: '›'}))
+  ]));
+
   /* 外觀 */
   P.appendChild(card('palette', '外觀', [
     h('div', {class: 'field'}, h('div', {class: 'lbl'}, '主題'), segRow([['auto', '跟隨系統'], ['light', '淺色'], ['dark', '深色']], 'theme')),
