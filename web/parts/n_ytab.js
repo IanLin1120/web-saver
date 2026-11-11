@@ -105,12 +105,7 @@ window.addEventListener('resize', function(){ clearTimeout(ytSyncLayout.t); ytSy
 $('ytBack').addEventListener('click', function(){ NAT.call('ytNav', 'back'); });
 $('ytHomeB').addEventListener('click', function(){ ytEnsure(ytIsMusic(YTB.url) ? YT_MUSIC : YT_HOME); });
 $('ytReload').addEventListener('click', function(){ NAT.call('ytNav', YTB.progress < 100 ? 'stop' : 'reload'); });
-/* YouTube Music 沒有關閉播放的按鈕：停止播放並重新開啟 Music 首頁（下方播放列跟著消失） */
-$('ytStopB').addEventListener('click', function(){
-  /* 停止音樂並收起播放列，不重新載入頁面 */
-  if(isApp) NAT.call('ytNav', 'muStop');
-  buzz(12); toast('已停止播放');
-});
+$('ytStopB').addEventListener('click', function(){ buzz(10); if(typeof ytmuListen === 'function') ytmuListen(); });
 $('ytModeB').addEventListener('click', function(){
   var toMusic = !(YTB.modeMusic != null ? YTB.modeMusic : ytIsMusic(YTB.url));
   YTB.modeMusic = toMusic; YTB.modeHold = Date.now(); ytModeUi();

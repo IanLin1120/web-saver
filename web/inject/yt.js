@@ -966,7 +966,7 @@
 (function () {
   'use strict';
   if (!/^music\./.test(location.hostname)) return;
-  var VER = 17;
+  var VER = 18;
   if (window.__wsMu === VER) return;
   if (window.__wsMuT) clearInterval(window.__wsMuT);
   window.__wsMu = VER;
@@ -1062,6 +1062,13 @@
     /* 標誌的白字看不清楚：反相（紅色保留） */
     X + 'ytmusic-nav-bar ytmusic-logo img,' + X + 'ytmusic-nav-bar a.ytmusic-logo img,' + X + 'ytmusic-nav-bar #logo img,' + X + 'ytmusic-nav-bar .logo,' + X + 'ytmusic-nav-bar picture img{filter:invert(1) hue-rotate(180deg) saturate(1.3)}',
     X + '[style*="color: rgb(255, 255, 255)"]:not(img):not(a.yt-spec-button-shape-next--filled){color:' + C.fg + '!important}',
+    /* 側邊選單的標誌、各種按鈕的白字：改成看得清楚的深棕色（實心重點色按鈕維持白字） */
+    X + 'tp-yt-app-drawer ytmusic-logo img,' + X + 'tp-yt-app-drawer picture img,' + X + 'ytmusic-guide-renderer ytmusic-logo img,' + X + '#guide-wrapper .logo img,' + X + 'tp-yt-app-drawer a.ytmusic-logo img{filter:invert(1) hue-rotate(180deg) saturate(1.3)}',
+    X + 'yt-button-shape button,' + X + 'button.yt-spec-button-shape-next,' + X + 'a.yt-spec-button-shape-next,' + X + 'ytmusic-guide-renderer button,' + X + 'ytmusic-guide-renderer yt-formatted-string,' + X + 'tp-yt-paper-item,' + X + 'tp-yt-paper-item yt-formatted-string{color:' + C.fg + '!important}',
+    X + 'yt-button-shape button .yt-core-attributed-string,' + X + 'yt-button-shape button span,' + X + 'yt-button-shape button yt-icon,' + X + 'a.yt-spec-button-shape-next span{color:inherit!important}',
+    X + 'yt-button-shape button.yt-spec-button-shape-next--filled,' + X + 'a.yt-spec-button-shape-next--filled,' + X + 'ytmusic-chip-cloud-chip-renderer[is-selected] a{color:' + C.accFg + '!important}',
+    X + 'ytmusic-guide-renderer yt-button-shape button,' + X + 'tp-yt-app-drawer yt-button-shape button{background:' + C.s2 + '!important;border:1px solid ' + C.line + '!important}',
+    X + '.wsMuDark{color:' + C.fg + '!important}',
     /* 使用網頁擷取的播放介面：藏起 YouTube Music 自己的播放列與播放頁（按鈕還在，由 App 控制） */
     'html.wsMuOwn ytmusic-player-bar,html.wsMuOwn #player-bar-background{position:fixed!important;left:-200vw!important;bottom:0!important;opacity:0!important;pointer-events:none!important}',
     /* YouTube Music 播放頁的展開／收合不要動畫（瞬間完成），收合的那一小段時間整頁透明（最多 2.5 秒，時間到一定恢復） */
@@ -1166,7 +1173,46 @@
     b.style.top = Math.round(cy - 17) + 'px';
     b.classList.add('on');
   }
+  /* 全面檢查：畫面上的文字如果是白色／很淺，而它後面的底色也是淺色，就改成深棕色（縮圖、實心按鈕上的白字不動） */
+  function parseRgb(c) { var m = /rgba?\(([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)(?:[,/ ]+([\d.]+))?/.exec(c || ''); return m ? [+m[1], +m[2], +m[3], m[4] == null ? 1 : +m[4]] : null; }
+  function lum(c) { return (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) / 255; }
+  function bgLight(el) {
+    for (var n = el, g = 0; n && n.nodeType === 1 && g < 14; n = n.parentElement, g++) {
+      var cs = getComputedStyle(n);
+      if (cs.backgroundImage && cs.backgroundImage !== 'none') return /gradient/.test(cs.backgroundImage) ? null : false;
+      var b = parseRgb(cs.backgroundColor);
+      if (b && b[3] > 0.5) return lum(b) > 0.62;
+    }
+    return true;   /* 一路都透明：就是頁面的奶油色底 */
+  }
+  function fixContrast() {
+    var els = document.querySelectorAll('yt-formatted-string, .yt-core-attributed-string, tp-yt-paper-item, button, a, span, h1, h2, h3, .title, .subtitle, .text, yt-icon, tp-yt-paper-tab, label, input');
+    var n = 0;
+    for (var i = 0; i < els.length && n < 500; i++) {
+      var el = els[i]; if (el.__wsC === VER) continue;
+      var r = el.getBoundingClientRect(); if (r.width < 2 || r.height < 2 || r.bottom < 0 || r.top > innerHeight) continue;
+      n++; el.__wsC = VER;
+      if (el.closest('ytmusic-immersive-header-renderer, ytmusic-visual-header-renderer, ytmusic-fullbleed-thumbnail-renderer, ytmusic-item-thumbnail-overlay-renderer, ytmusic-play-button-renderer, ytmusic-player-page, ytmusic-player-bar, .yt-spec-button-shape-next--filled, ytmusic-thumbnail-renderer, #wsMuX, ytmusic-chip-cloud-chip-renderer[is-selected]')) continue;
+      var isIcon = el.tagName === 'YT-ICON';
+      if (!isIcon && !(el.childNodes.length && Array.prototype.some.call(el.childNodes, function (x) { return x.nodeType === 3 && x.nodeValue.trim(); })) && el.tagName !== 'INPUT') continue;
+      var c = parseRgb(getComputedStyle(el).color); if (!c || c[3] < 0.2) continue;
+      if (lum(c) < 0.72) continue;
+      var bl = bgLight(el);
+      if (bl === true) el.classList.add('wsMuDark');
+    }
+  }
+  /* 不需要的區塊：「繼續收聽」 */
+  function hideShelves() {
+    qa('ytmusic-carousel-shelf-renderer, ytmusic-shelf-renderer, ytmusic-immersive-carousel-shelf-renderer').forEach(function (sh) {
+      if (sh.__wsSh === VER) return;
+      var t = txt(q('h2 .title, .header .title, yt-formatted-string.title, h2', sh)); if (!t) return;
+      sh.__wsSh = VER;
+      if (/^(繼續收聽|继续收听|繼續聆聽|Continue listening|Keep listening)$/i.test(t)) { sh.classList.add('wsMuHide'); dlog('hide shelf ' + t); }
+    });
+  }
   function hidePromos() {
+    try { hideShelves(); } catch (e) {}
+    try { fixContrast(); } catch (e) {}
     var nav = document.querySelector('ytmusic-nav-bar'); if (!nav) return;
     nav.querySelectorAll('a,button,yt-button-renderer,yt-button-shape').forEach(function (el) {
       var t = (el.textContent || '').replace(/\s/g, '');

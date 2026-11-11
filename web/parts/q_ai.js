@@ -152,6 +152,7 @@ async function aiAskGemini(prompt, opt){
       if(Object.keys(vm).length) fd.video_metadata = vm;
       parts.push(fd);
     }
+    if(opt.audio) parts.push({inline_data: {mime_type: opt.audio.mime || 'audio/aac', data: opt.audio.b64}});
     parts.push({text: prompt});
     var gc = {responseMimeType: 'application/json', maxOutputTokens: 65536};
     if(opt.video) gc.mediaResolution = 'MEDIA_RESOLUTION_LOW';

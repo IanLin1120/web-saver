@@ -375,6 +375,34 @@ public class Bridge {
     /* ---------- 手機內建螢幕錄影 ---------- */
     @JavascriptInterface public boolean dndOk() { return ScreenRec.dndAllowed(a); }
     @JavascriptInterface public void dndSettings() { ui(new Runnable() { @Override public void run() { ScreenRec.openDndSettings(a); } }); }
+    /* 聽歌辨識：用麥克風錄一小段（AAC），回傳 base64 */
+    private android.media.MediaRecorder micRec; private java.io.File micFile;
+    @JavascriptInterface public boolean micStart() {
+        try {
+            micStop0();
+            micFile = new java.io.File(a.getCacheDir(), "listen.aac");
+            micRec = new android.media.MediaRecorder();
+            micRec.setAudioSource(android.media.MediaRecorder.AudioSource.MIC);
+            micRec.setOutputFormat(android.media.MediaRecorder.OutputFormat.AAC_ADTS);
+            micRec.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC);
+            micRec.setAudioChannels(1); micRec.setAudioSamplingRate(44100); micRec.setAudioEncodingBitRate(96000);
+            micRec.setOutputFile(micFile.getAbsolutePath());
+            micRec.prepare(); micRec.start();
+            return true;
+        } catch (Throwable t) { micStop0(); return false; }
+    }
+    private void micStop0() { try { if (micRec != null) { try { micRec.stop(); } catch (Throwable t) { /* 太短 */ } micRec.release(); } } catch (Throwable t) { /* ignore */ } micRec = null; }
+    @JavascriptInterface public String micStop() {
+        micStop0();
+        try {
+            if (micFile == null || !micFile.exists() || micFile.length() < 2000) return "";
+            java.io.FileInputStream in = new java.io.FileInputStream(micFile);
+            byte[] b = new byte[(int) micFile.length()]; int o = 0, r;
+            try { while (o < b.length && (r = in.read(b, o, b.length - o)) > 0) o += r; } finally { in.close(); }
+            micFile.delete();
+            return android.util.Base64.encodeToString(b, 0, o, android.util.Base64.NO_WRAP);
+        } catch (Throwable t) { return ""; }
+    }
     @JavascriptInterface public boolean audioOk() { return a.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED; }
     @JavascriptInterface public void audioAsk() { ui(new Runnable() { @Override public void run() { a.requestPermissions(new String[] {android.Manifest.permission.RECORD_AUDIO}, 1010); } }); }
     @JavascriptInterface public void srecAsk(final String name) { ui(new Runnable() { @Override public void run() { ScreenRec.ask(a, name); } }); }
