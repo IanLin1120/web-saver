@@ -133,14 +133,26 @@ Music.next = function(auto){
   this.load(true);
 };
 Music.prev = function(){ if(this.el.currentTime > 4){ this.el.currentTime = 0; return; } this.idx = (this.idx - 1 + this.queue.length) % this.queue.length; this.load(true); };
-Music.stop = function(){ this.el.pause(); this.el.removeAttribute('src'); this.queue = []; this.idx = -1; Dock.remove('music'); if(this.sheet) this.sheet.close(); };
+Music.stop = function(){ this.el.pause(); this.el.removeAttribute('src'); this.queue = []; this.idx = -1; Dock.remove('music'); if(this.sheet) this.sheet.close(); if(this.sysMeta) this.sysMeta(); };
 Music.el.addEventListener('ended', function(){ Music.next(true); });
 /* 播放中讓 App 在背景繼續執行（切到主畫面、關螢幕也不會停） */
 Music.el.addEventListener('play', function(){ var it = Music.queue[Music.idx]; if(isApp) NAT.call('keep', 'music', '正在播放：' + (it ? (it.title || it.name) : '音樂')); });
 Music.el.addEventListener('pause', function(){ if(isApp && !Music.el.ended) NAT.call('keep', 'music', ''); });
+/* 系統的媒體控制（通知列播放器、快速面板、鎖定畫面）顯示正在播的歌 */
+Music.sysMeta = function(){
+  if(!isApp || !NAT.has('mediaMeta')) return;
+  var it = Music.queue[Music.idx];
+  if(!it){ if(!(typeof YTMU !== 'undefined' && YTMU.active())) NAT.call('mediaMeta', '{}'); return; }
+  NAT.call('mediaMeta', JSON.stringify({title: songTitle(it), artist: it.artist || '音樂庫', art: Lib.thumb(it) || '', dur: isFinite(Music.el.duration) ? Music.el.duration : (it.dur || 0), pos: Music.el.currentTime || 0, playing: !Music.el.paused}));
+};
+['play', 'pause', 'seeked', 'loadedmetadata'].forEach(function(ev){ Music.el.addEventListener(ev, function(){ Music.sysMeta(); }); });
 on('mediaCmd', function(c){
   if(!Music.queue.length) return;
   if(c === 'toggle'){ if(Music.el.paused) Music.el.play(); else Music.el.pause(); }
+  else if(c === 'play') Music.el.play();
+  else if(c === 'pause') Music.el.pause();
+  else if(c === 'prev'){ if(Music.prev) Music.prev(); }
+  else if(/^seek:/.test(c)){ var t = parseFloat(c.slice(5)); if(isFinite(t)) Music.el.currentTime = t; }
   else if(c === 'next') Music.next();
 });
 if('mediaSession' in navigator){

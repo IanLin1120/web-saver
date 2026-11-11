@@ -470,8 +470,17 @@ on('credAsk', function(d){
     foot: h('div', {style: {display: 'contents'}},
       h('button', {class: 'btn ghost', text: '永不', onclick: function(){ NAT.call('credNever', d.host, true); s.close(); }}),
       h('button', {class: 'btn ghost', text: '不要', onclick: function(){ s.close(); }}),
-      h('button', {class: 'btn pri', text: d.update ? '更新' : '儲存', onclick: function(){ var ok = NAT.call('credSavePending', d.host); s.close(); toast(ok ? '已儲存密碼' : '儲存失敗', !ok); }}))});
+      h('button', {class: 'btn pri', text: d.update ? '更新' : '儲存', onclick: function(){
+        var save = function(){ var ok = NAT.call('credSavePending', d.host); toast(ok ? '已儲存密碼' : '儲存失敗', !ok); };
+        s.close();
+        if(SEC.has()){ save(); return; }
+        /* 還沒設定解鎖密碼：一定要先設定，才會儲存帳號密碼（之後查看、複製、修改都要輸入密碼或指紋） */
+        dialog('先設定解鎖密碼', '為了保護你儲存的帳號密碼，請先設定一組 6 位數的解鎖密碼。設定完成後才會儲存這組帳號；之後查看、複製、修改已儲存的密碼，都要輸入解鎖密碼或指紋。', [
+          ['設定密碼', function(){ SEC._afterSet = save; setPinFlow(); }],
+          ['不儲存', function(){ toast('沒有儲存這組密碼'); }, '']]);
+      }}))});
 });
+on('secChanged', function(){ if(SEC._afterSet && SEC.has()){ var f = SEC._afterSet; SEC._afterSet = null; f(); } });
 on('credAvail', function(d){
   var users = d.users || [];
   if(!users.length) return;

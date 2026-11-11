@@ -667,3 +667,47 @@ on('picked', async function(d){
   }
   if(d.err) toast('有檔案匯入失敗：' + d.err.split('\n')[0], true);
 });
+
+/* ---------- 重複檔案提醒：新進來的檔案（下載、匯入、擷取）跟已有的檔案「檔名一樣」或「大小完全一樣」時，讓你確認 ---------- */
+var DUP = {known: null, queue: [], busy: false};
+function dupKey(n){ return String(n || '').toLowerCase().replace(/\s*\(\d+\)(?=\.[a-z0-9]+$|$)/, '').trim(); }
+function dupExt(n){ return (String(n || '').match(/\.([a-z0-9]+)$/i) || [, ''])[1].toLowerCase(); }
+on('libChanged', function(){
+  var items = Lib.items || [];
+  if(!DUP.known){ DUP.known = {}; items.forEach(function(it){ DUP.known[it.id] = 1; }); return; }
+  var fresh = items.filter(function(it){ return !DUP.known[it.id]; });
+  items.forEach(function(it){ DUP.known[it.id] = 1; });
+  if(!fresh.length || CFG.dupAsk === false) return;
+  fresh.forEach(function(nw){
+    if(nw.cat === 'html' || /^(筆記|字幕)/.test(nw.kind || '')) return;
+    var sameName = null, sameSize = null;
+    items.forEach(function(o){
+      if(o.id === nw.id || fresh.indexOf(o) >= 0 && o.time >= nw.time && o.id > nw.id) return;
+      if(dupKey(o.name) === dupKey(nw.name)) sameName = sameName || o;
+      else if(o.size === nw.size && nw.size > 50 * 1024 && dupExt(o.name) === dupExt(nw.name)) sameSize = sameSize || o;
+    });
+    var o = sameName || sameSize;
+    if(o) DUP.queue.push({nw: nw, old: o, name: !!sameName, size: o.size === nw.size});
+  });
+  dupNext();
+});
+function dupNext(){
+  if(DUP.busy || !DUP.queue.length) return;
+  var d = DUP.queue.shift(), nw = Lib.byId(d.nw.id), old = Lib.byId(d.old.id);
+  if(!nw || !old || TRASH[nw.id] || TRASH[old.id]){ dupNext(); return; }
+  DUP.busy = true;
+  var done = function(){ DUP.busy = false; setTimeout(dupNext, 250); };
+  var verdict = d.name && d.size ? '檔名和大小都一樣，很可能是同一個檔案。' : d.name ? '只有檔名一樣、大小不同，可能是不同的檔案（或不同畫質／版本）。' : '檔名不同，但大小完全一樣，可能是同一個檔案。';
+  var row = function(tag, it){ return h('div', {class: 'lrow', style: {cursor: 'default'}}, h('div', {class: 'th', style: Lib.thumb(it) ? {backgroundImage: 'url("' + Lib.thumb(it) + '")'} : {background: (CAT[areaOf(it)] || CAT.other).c}, html: Lib.thumb(it) ? '' : icon(areaIcon(areaOf(it)))}),
+    h('div', {class: 't'}, h('b', {text: it.name}), h('div', {class: 'sub', text: tag + '・' + fmtSize(it.size) + '・' + new Date(it.time).toLocaleString('zh-TW', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'})}))); };
+  var body = h('div', null, h('div', {class: 'note', text: verdict}), h('div', {class: 'list'}, row('剛加入', nw), row('原本就有', old)));
+  var s = openSheet({title: '可能是重複的檔案', icon: 'copy', body: body, onClose: done,
+    foot: h('div', {style: {display: 'contents'}},
+      h('button', {class: 'btn ghost', text: '都保留', onclick: function(){ s.close(); }}),
+      h('button', {class: 'btn', html: icon('edit', 'sm') + '改檔名', onclick: async function(){
+        var n = await promptDlg('幫剛加入的檔案改檔名', nw.name.replace(/\.[a-z0-9]+$/i, ''));
+        if(n){ await Lib.rename(nw, n); await Lib.refresh(); renderLib(); toast('已改檔名'); s.close(); }
+      }}),
+      h('button', {class: 'btn pri', html: icon('trash', 'sm') + '刪除剛加入的', onclick: async function(){ s.close(); await Lib.trash([nw.id]); renderLib(); toast('已把剛加入的那個丟到垃圾桶'); }}))});
+  paintIcons(body);
+}

@@ -23,6 +23,14 @@ YTMU.syncTry = function(it, delay){
     }, delay);
   })();
 };
+YTMU.sysMeta = function(){
+  if(!isApp || !NAT.has('mediaMeta')) return;
+  var s = this.st;
+  if(!this.active()){ if(!Music.queue.length) NAT.call('mediaMeta', '{}'); return; }
+  var k = [s.vid, s.title, s.artist, s.art, s.dur, s.playing, Math.round(this.time() / 5)].join('|');
+  if(k === this.metaK) return; this.metaK = k;
+  NAT.call('mediaMeta', JSON.stringify({title: s.title, artist: s.artist || 'YouTube Music', art: s.art || '', dur: s.dur || 0, pos: this.time(), playing: !!s.playing}));
+};
 YTMU.active = function(){ var s = this.st; return !!(s && !s.off && s.title); };
 /* 給歌詞用的「假檔案」：同一首歌（影片 ID）共用，歌詞存在快取 */
 YTMU.item = function(){
@@ -67,6 +75,7 @@ on('muState', function(d){
   /* YouTube Music 開始播放：離線音樂整個關掉（不留兩個播放列） */
   if(d.playing && (Music.queue || []).length) Music.stop();
   var big = !prev.title || prev.vid !== d.vid || prev.playing !== d.playing || prev.off !== d.off || prev.like !== d.like || prev.repeat !== d.repeat || prev.shuffle !== d.shuffle || prev.art !== d.art || !!d.queue;
+  YTMU.sysMeta();
   if(big){ YTMU.mini(); YTMU.draw(prev.like !== d.like || prev.repeat !== d.repeat || prev.shuffle !== d.shuffle); } else YTMU.progress();
   if(d.vid !== prev.vid && typeof fabSync === 'function'){ fabSync.k = null; fabSync(); }
 });
@@ -80,7 +89,7 @@ YTMU.toggle = function(){
   var s = this.st; if(!s) return;
   s.cur = this.time(); this.t0 = Date.now(); s.playing = !s.playing;
   this.cmd(s.playing ? 'play' : 'pause'); buzz(8);
-  this.mini(); this.soft();
+  this.mini(); this.soft(); this.sysMeta();
 };
 YTMU.next = function(){ this.cmd('next'); buzz(8); };
 YTMU.prev = function(){ this.cmd('prev'); buzz(8); };
@@ -90,6 +99,7 @@ YTMU.stop = function(){
   if(this.st){ this.st.off = true; this.st.playing = false; }
   Dock.remove('ytmu'); document.body.classList.remove('ytmuDock');
   if(this.sheet && !this.sheet.closed) this.sheet.close();
+  this.metaK = ''; this.sysMeta();
 };
 
 var YM_PAUSE = '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>';

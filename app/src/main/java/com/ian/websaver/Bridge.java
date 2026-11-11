@@ -176,20 +176,41 @@ public class Bridge {
     }
 
     /** 下載面板：讀取從播放器攔截到的串流與影片資訊 */
+    /** 正在開著這部影片的播放器：YouTube（就算在背景）、目前顯示的、或瀏覽分頁；不會選到 YouTube Music（免得打斷正在聽的音樂） */
+    private Browser ytOf(String vid) {
+        Browser[] c = {a.ytYt, a.yt != a.ytMu ? a.yt : null, a.br};
+        for (Browser b : c) if (b != null && YtSniff.vidOf(b.curUrl).equals(vid)) return b;
+        return null;
+    }
+    /** 在背景的 YouTube 載入影片（不切換畫面、不暫停 YouTube Music）：從 YouTube Music 下載時讀影片資訊用 */
+    @JavascriptInterface public void ytBgLoad(final String url) { ui(new Runnable() { @Override public void run() {
+        Browser t = a.ytFor(false);
+        if (t == a.yt) { t.load(url); return; }
+        try { t.wv.onResume(); } catch (Throwable e) { /* ignore */ }
+        t.bgQuiet = true;
+        t.load(url);
+    } }); }
+    @JavascriptInterface public void ytBgPause() { ui(new Runnable() { @Override public void run() {
+        Browser t = a.ytYt; if (t == null || t == a.yt) return;
+        t.wv.evaluateJavascript("(function(){try{[].forEach.call(document.querySelectorAll('video'),function(v){v.muted=true;v.pause()})}catch(e){}})()", null);
+    } }); }
+    /** 系統的媒體控制（通知列、快速面板、鎖定畫面）顯示正在播的歌 */
+    @JavascriptInterface public void mediaMeta(final String json) { KeepAlive.meta(a, json); }
+
     @JavascriptInterface public String ytSniff(String vid) { return YtSniff.get(vid); }
 
     @JavascriptInterface public void ytForget(String vid) { YtSniff.forget(vid); }
 
     /** 請正在播這部影片的播放器切換到指定畫質並短暫播放，讓我們攔截到該畫質的串流網址 */
     @JavascriptInterface public String ytPrep(final String vid, final String q) {
-        final Browser b = YtSniff.vidOf(a.yt.curUrl).equals(vid) ? a.yt : YtSniff.vidOf(a.br.curUrl).equals(vid) ? a.br : null;
+        final Browser b = ytOf(vid);
         if (b == null) return "";
         ui(new Runnable() { @Override public void run() { b.wv.evaluateJavascript("window.__wsYTprep&&__wsYTprep(" + JSONObject.quote(q) + ")", null); } });
         return b.tag;
     }
 
     @JavascriptInterface public String ytInfoReq(final String vid) {
-        final Browser b = YtSniff.vidOf(a.yt.curUrl).equals(vid) ? a.yt : YtSniff.vidOf(a.br.curUrl).equals(vid) ? a.br : null;
+        final Browser b = ytOf(vid);
         if (b == null) return "";
         ui(new Runnable() { @Override public void run() { b.wv.evaluateJavascript("window.__wsYTinfo&&__wsYTinfo()", null); } });
         return b.tag;

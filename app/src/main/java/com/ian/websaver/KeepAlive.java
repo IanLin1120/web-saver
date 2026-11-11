@@ -45,6 +45,96 @@ public class KeepAlive extends Service {
         } catch (Throwable t) { /* 背景時不允許啟動前景服務：忽略 */ }
     }
 
+    /* ---------- 系統媒體控制：通知列的播放器、快速面板、鎖定畫面、藍牙耳機 ---------- */
+    private static android.media.session.MediaSession sess;
+    private static String mTitle = "", mArtist = "", mArtUrl = "";
+    private static android.graphics.Bitmap mArt;
+    private static long mDur, mPos; private static boolean mPlaying;
+
+    private static void cmd(String c) { MainActivity.emit("mediaCmd", c); MainActivity m = MainActivity.cur; if (m != null) m.mediaCmd(c); }
+
+    private static void ensureSession(Context c) {
+        if (sess != null) return;
+        sess = new android.media.session.MediaSession(c.getApplicationContext(), "websaver");
+        sess.setCallback(new android.media.session.MediaSession.Callback() {
+            @Override public void onPlay() { cmd("play"); }
+            @Override public void onPause() { cmd("pause"); }
+            @Override public void onSkipToNext() { cmd("next"); }
+            @Override public void onSkipToPrevious() { cmd("prev"); }
+            @Override public void onSeekTo(long pos) { cmd("seek:" + (pos / 1000.0)); }
+            @Override public void onStop() { cmd("pause"); }
+        });
+    }
+
+    private static void pushSession() {
+        if (sess == null) return;
+        android.media.MediaMetadata.Builder mb = new android.media.MediaMetadata.Builder()
+            .putString(android.media.MediaMetadata.METADATA_KEY_TITLE, mTitle)
+            .putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, mArtist)
+            .putLong(android.media.MediaMetadata.METADATA_KEY_DURATION, mDur > 0 ? mDur : -1);
+        if (mArt != null) mb.putBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART, mArt);
+        sess.setMetadata(mb.build());
+        long acts = android.media.session.PlaybackState.ACTION_PLAY | android.media.session.PlaybackState.ACTION_PAUSE | android.media.session.PlaybackState.ACTION_PLAY_PAUSE
+            | android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT | android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS | android.media.session.PlaybackState.ACTION_SEEK_TO;
+        sess.setPlaybackState(new android.media.session.PlaybackState.Builder().setActions(acts)
+            .setState(mPlaying ? android.media.session.PlaybackState.STATE_PLAYING : android.media.session.PlaybackState.STATE_PAUSED, mPos, mPlaying ? 1f : 0f).build());
+        sess.setActive(true);
+    }
+
+    private static android.graphics.Bitmap loadArt(String u) {
+        try {
+            android.graphics.Bitmap b = null;
+            if (u.startsWith("data:")) { byte[] d = android.util.Base64.decode(u.substring(u.indexOf(',') + 1), android.util.Base64.DEFAULT); b = android.graphics.BitmapFactory.decodeByteArray(d, 0, d.length); }
+            else if (u.startsWith("file://")) b = android.graphics.BitmapFactory.decodeFile(android.net.Uri.parse(u).getPath());
+            else if (u.startsWith("/")) b = android.graphics.BitmapFactory.decodeFile(u);
+            else if (u.startsWith("http")) {
+                java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(u).openConnection();
+                c.setConnectTimeout(8000); c.setReadTimeout(8000);
+                java.io.InputStream in = c.getInputStream();
+                try { b = android.graphics.BitmapFactory.decodeStream(in); } finally { in.close(); }
+            }
+            if (b != null && (b.getWidth() > 640 || b.getHeight() > 640)) {
+                float k = 640f / Math.max(b.getWidth(), b.getHeight());
+                b = android.graphics.Bitmap.createScaledBitmap(b, Math.round(b.getWidth() * k), Math.round(b.getHeight() * k), true);
+            }
+            return b;
+        } catch (Throwable t) { return null; }
+    }
+
+    /** App 介面回報正在播的歌：{title, artist, art, dur（秒）, pos（秒）, playing}；title 空白代表沒有在播 */
+    static void meta(final Context c, final String json) {
+        Util.ui(new Runnable() { @Override public void run() {
+            try {
+                org.json.JSONObject o = new org.json.JSONObject(json == null || json.isEmpty() ? "{}" : json);
+                String t = o.optString("title", "");
+                if (t.isEmpty()) {
+                    mTitle = ""; mArtist = ""; mArt = null; mArtUrl = "";
+                    if (sess != null) { try { sess.setActive(false); sess.release(); } catch (Throwable e) { /* ignore */ } sess = null; }
+                    refresh(c); return;
+                }
+                ensureSession(c);
+                mTitle = t; mArtist = o.optString("artist", "");
+                mDur = (long) (o.optDouble("dur", 0) * 1000); mPos = (long) (o.optDouble("pos", 0) * 1000); mPlaying = o.optBoolean("playing", false);
+                final String art = o.optString("art", "");
+                if (!art.equals(mArtUrl)) {
+                    mArtUrl = art; mArt = null;
+                    if (!art.isEmpty()) new Thread(new Runnable() { @Override public void run() {
+                        final android.graphics.Bitmap b = loadArt(art);
+                        Util.ui(new Runnable() { @Override public void run() { if (art.equals(mArtUrl) && b != null) { mArt = b; pushSession(); refresh(c); } } });
+                    } }).start();
+                }
+                pushSession(); refresh(c);
+            } catch (Throwable t) { /* ignore */ }
+        } });
+    }
+
+    /** 重新產生通知（服務在執行時才需要） */
+    private static void refresh(Context c) {
+        boolean need; synchronized (TASKS) { need = !TASKS.isEmpty(); }
+        if (!need || c == null) return;
+        try { Intent i = new Intent(c.getApplicationContext(), KeepAlive.class); if (Build.VERSION.SDK_INT >= 26) c.getApplicationContext().startForegroundService(i); else c.getApplicationContext().startService(i); } catch (Throwable t) { /* ignore */ }
+    }
+
     static boolean musicOn() { synchronized (TASKS) { return TASKS.containsKey("music"); } }
 
     static boolean media() { synchronized (TASKS) { return TASKS.containsKey("yt") || TASKS.containsKey("music"); } }
@@ -80,7 +170,16 @@ public class KeepAlive extends Service {
             b.addAction(new Notification.Action.Builder(null, "暫停／繼續錄影", act("srecPause", 4)).build());
             b.addAction(new Notification.Action.Builder(null, "停止錄影", act("srecStop", 3)).build());
         }
-        if (media()) {
+        if (media() && sess != null && !mTitle.isEmpty()) {
+            /* 媒體樣式通知：封面、歌名、歌手、上一首／播放暫停／下一首；系統的快速面板與鎖定畫面也會顯示 */
+            b.setSmallIcon(android.R.drawable.ic_media_play).setContentTitle(mTitle).setContentText(mArtist.isEmpty() ? "網頁擷取" : mArtist)
+                .setVisibility(Notification.VISIBILITY_PUBLIC);
+            if (mArt != null) b.setLargeIcon(mArt);
+            b.addAction(new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.ic_media_previous), "上一首", act("prev", 5)).build());
+            b.addAction(new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(this, mPlaying ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play), mPlaying ? "暫停" : "播放", act("toggle", 1)).build());
+            b.addAction(new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.ic_media_next), "下一首", act("next", 2)).build());
+            b.setStyle(new Notification.MediaStyle().setMediaSession(sess.getSessionToken()).setShowActionsInCompactView(0, 1, 2));
+        } else if (media()) {
             b.setSmallIcon(android.R.drawable.ic_media_play);
             b.addAction(new Notification.Action.Builder(null, "播放／暫停", act("toggle", 1)).build());
             b.addAction(new Notification.Action.Builder(null, "下一首", act("next", 2)).build());

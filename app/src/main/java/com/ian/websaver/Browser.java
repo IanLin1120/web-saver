@@ -224,6 +224,7 @@ final class Browser {
     /** 第一次切到 YouTube Music：等畫面畫出來才換上來（不會先看到一片白） */
     Runnable onCommit;
 
+    boolean bgQuiet;   /* 在背景靜音讀取影片資訊中 */
     void pauseMedia() { try { wv.evaluateJavascript("(function(){try{[].forEach.call(document.querySelectorAll('video,audio'),function(m){m.pause()})}catch(e){}})()", null); } catch (Throwable t) { /* ignore */ } }
 
     Browser(MainActivity act, String tg) {
@@ -608,6 +609,7 @@ final class Browser {
         if (w > 0 && h > 0) { vidW = w; vidH = h; }
         if (!playing && videoPlaying) lastStopAt = System.currentTimeMillis();
         if (inPip) a.updatePipParams();
+        if (bgQuiet && a.yt != this) { videoPlaying = playing; return; }   /* 背景讀資訊：不算正在播放 */
         if (!hiddenBr && playing != videoPlaying) KeepAlive.set(a, "yt", playing && isYt(curHost) ? "正在播放 YouTube" : null);
         videoPlaying = playing;
         if (w > 0 && h > 0) videoRatio = Math.max(0.42f, Math.min(2.38f, (float) w / h));
@@ -691,6 +693,7 @@ final class Browser {
             o.put("secure", curUrl.startsWith("https:"));
             o.put("fs", fs);
             o.put("tab", tabId);
+            if ("yt".equals(tag) && a.yt != this) return;   /* 背景的那一個 YouTube／Music 不回報，免得畫面被切過去 */
             if (!hiddenBr && !bgTab()) MainActivity.emit("yt".equals(tag) ? "ytbr" : "br", o.toString());
         } catch (Throwable t) { /* ignore */ }
     }

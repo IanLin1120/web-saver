@@ -143,6 +143,14 @@ public class MainActivity extends Activity {
                 if (b == null && KeepAlive.musicOn()) return; /* App 內音樂播放器自己處理 */
                 if (b == null && yt != null && YtSniff.vidOf(yt.curUrl).length() > 0) b = yt;
                 if (b == null) return;
+                if (b == ytMu) {   /* YouTube Music：交給頁面上的控制（跟 App 的播放面板同一套） */
+                    String c = cmd.startsWith("seek:") ? "seek" : cmd, arg = cmd.startsWith("seek:") ? cmd.substring(5) : "";
+                    b.wv.evaluateJavascript("window.__wsMuCmd&&__wsMuCmd(" + org.json.JSONObject.quote(c) + "," + org.json.JSONObject.quote(arg) + ")", null);
+                    return;
+                }
+                if (cmd.startsWith("seek:")) { b.wv.evaluateJavascript("(function(){var v=document.querySelector('video');if(v)v.currentTime=" + Double.parseDouble(cmd.substring(5)) + "})()", null); return; }
+                if ("prev".equals(cmd)) { b.wv.evaluateJavascript("(function(){var p=document.getElementById('movie_player');if(p&&p.previousVideo)p.previousVideo();})()", null); return; }
+                if ("play".equals(cmd) || "pause".equals(cmd)) { b.wv.evaluateJavascript("(function(){var v=document.querySelector('video');if(v){" + ("play".equals(cmd) ? "v.play()" : "v.pause()") + "}})()", null); return; }
                 String js = "toggle".equals(cmd) ? "(function(){var v=document.querySelector('video');if(v){if(v.paused)v.play();else v.pause();}})()"
                     : "next".equals(cmd) ? "(function(){var p=document.getElementById('movie_player');if(p&&p.nextVideo)p.nextVideo();})()" : "";
                 if (!js.isEmpty()) b.wv.evaluateJavascript(js, null);
@@ -274,6 +282,8 @@ public class MainActivity extends Activity {
         final Browser o = old;
         Util.MAIN.postDelayed(new Runnable() { @Override public void run() { if (o != yt && !o.shown) try { o.wv.onPause(); } catch (Throwable t) { /* ignore */ } } }, 400);
         yt = b;
+        if (b.bgQuiet) { b.bgQuiet = false; try { b.wv.evaluateJavascript("(function(){try{[].forEach.call(document.querySelectorAll('video'),function(v){v.muted=false})}catch(e){}})()", null); } catch (Throwable t) { /* ignore */ } }
+        try { b.wv.onResume(); } catch (Throwable t) { /* ignore */ }
         b.show(vis);
         b.emitState();
         if (fab != null) fab.refresh();
