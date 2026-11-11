@@ -75,6 +75,8 @@ public class Bridge {
 
     @JavascriptInterface public void nativeToast(final String msg) { ui(new Runnable() { @Override public void run() { android.widget.Toast.makeText(a, msg, android.widget.Toast.LENGTH_SHORT).show(); } }); }
 
+    @JavascriptInterface public void shareText(String text) { share("", text); }
+
     @JavascriptInterface public void share(String title, String url) {
         Intent i = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, url);
         if (title != null && !title.isEmpty()) i.putExtra(Intent.EXTRA_SUBJECT, title);

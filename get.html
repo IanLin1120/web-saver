@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>網頁擷取・接收檔案</title>
+<style>
+:root{--bg:#f6efe3;--card:#fffaf1;--text:#3b2f24;--mut:#8a7a68;--acc:#4f6b3a;--accfg:#fff;--line:#e6d9c4;--err:#b8402e}
+@media (prefers-color-scheme:dark){:root{--bg:#211b16;--card:#2c241d;--text:#f1e7d8;--mut:#a89884;--acc:#9bbf7c;--accfg:#1b1712;--line:#43382d;--err:#ef8f7f}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 system-ui,-apple-system,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif}
+main{max-width:640px;margin:0 auto;padding:24px 16px 60px}
+h1{font-size:22px;margin:0 0 4px}.mut{color:var(--mut);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px;margin-top:14px}
+.row{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}.row:first-child{border-top:0}
+.row .g{flex:1;min-width:0}.row b{display:block;overflow-wrap:anywhere}
+button{font:inherit;font-weight:700;border:0;border-radius:999px;padding:9px 18px;background:var(--acc);color:var(--accfg);cursor:pointer;flex:none}
+button:disabled{opacity:.5;cursor:default}
+.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .2s}
+.err{color:var(--err)}.ok{color:var(--acc);font-weight:700}
+</style></head><body><main>
+<h1>接收檔案</h1><div class="mut">從「網頁擷取」App 傳來的檔案。檔案有加密，只有拿到這個連結的人才能解開。</div>
+<div class="card" id="st">讀取中…</div><div class="card" id="list" hidden></div>
+<div id="all" hidden style="margin-top:14px;text-align:center"><button id="allB">全部下載</button></div>
+</main><script>
+(function(){
+  var $ = function(i){ return document.getElementById(i); };
+  function st(t, cls){ $('st').textContent = t; $('st').className = 'card ' + (cls || ''); }
+  function b64u(s){ s = s.replace(/-/g, '+').replace(/_/g, '/'); while(s.length % 4) s += '='; var b = atob(s), u = new Uint8Array(b.length); for(var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+  function size(n){ return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : n < 1073741824 ? (n / 1048576).toFixed(1) + ' MB' : (n / 1073741824).toFixed(2) + ' GB'; }
+  function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+  function save(blob, name){ var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 60000); }
+  var H = location.hash.replace(/^#/, '').split('/'), mode = H[0], key, base, id, man;
+  if(!window.crypto || !crypto.subtle){ st('這個瀏覽器不支援解密，請改用 Chrome、Edge、Safari 或 Firefox 的新版本開啟。', 'err'); return; }
+  async function dec(u8){ return new Uint8Array(await crypto.subtle.decrypt({name: 'AES-GCM', iv: u8.subarray(0, 12)}, key, u8.subarray(12))); }
+  async function get(url, tries){
+    for(var i = 0; ; i++){
+      try{ var r = await fetch(url, {cache: 'no-store'}); if(r.ok) return r; if(r.status !== 404 || i >= tries) throw new Error(r.status === 404 ? '404' : '伺服器回應 ' + r.status); }
+      catch(e){ if(i >= tries) throw e; }
+      await sleep(2500);
+    }
+  }
+  /* 一個檔案：GitHub 模式逐塊下載；公用中繼模式是一條串流，裡面一塊一塊（4 位元組長度＋密文） */
+  async function fetchFile(i, onP){
+    var f = man.files[i], parts = [], got = 0;
+    if(mode === 'g'){
+      for(var c = 0; c < f.c; c++){
+        var r = await get(base + i + '/' + c, 3), p = await dec(new Uint8Array(await r.arrayBuffer()));
+        parts.push(p); got += p.length; onP(got / Math.max(1, f.s));
+      }
+    } else {
+      var r2 = await fetch(base + i); if(!r2.ok) throw new Error('中繼站回應 ' + r2.status);
+      var rd = r2.body.getReader(), buf = new Uint8Array(0);
+      for(;;){
+        var x = await rd.read();
+        if(x.value){ var nb = new Uint8Array(buf.length + x.value.length); nb.set(buf); nb.set(x.value, buf.length); buf = nb; }
+        while(buf.length >= 4){
+          var len = new DataView(buf.buffer, buf.byteOffset, 4).getUint32(0);
+          if(buf.length < 4 + len) break;
+          var p2 = await dec(buf.slice(4, 4 + len)); parts.push(p2); got += p2.length; onP(got / Math.max(1, f.s));
+          buf = buf.slice(4 + len);
+        }
+        if(x.done) break;
+      }
+      if(buf.length) throw new Error('傳輸中斷，檔案不完整');
+    }
+    return new Blob(parts);
+  }
+  var busy = false;
+  async function dl(i){
+    var row = $('r' + i), btn = row.querySelector('button'), bar = row.querySelector('.bar i'), sub = row.querySelector('.mut');
+    if(row.dataset.done && mode === 'p') return;
+    btn.disabled = true; btn.textContent = '下載中…';
+    try{
+      var b = await fetchFile(i, function(p){ bar.style.width = Math.min(100, p * 100) + '%'; });
+      save(b, man.files[i].n); row.dataset.done = 1; bar.style.width = '100%';
+      btn.textContent = mode === 'p' ? '已下載' : '再下載一次'; btn.disabled = mode === 'p';
+      sub.textContent = size(man.files[i].s) + '・已存到下載資料夾';
+    }catch(e){ btn.disabled = false; btn.textContent = '重試'; sub.textContent = '失敗：' + (e.message || e) + (mode === 'p' ? '（請對方重新分享）' : ''); sub.className = 'mut err'; throw e; }
+  }
+  async function run(list){ if(busy) return; busy = true; $('allB').disabled = true; try{ for(var k = 0; k < list.length; k++) await dl(list[k]); st('✓ 完成。檔案在瀏覽器的「下載」資料夾。', 'ok'); }catch(e){} busy = false; $('allB').disabled = false; }
+  (async function(){
+    try{
+      if(mode === 'g' && H.length >= 4){
+        id = H[2]; key = b64u(H[3]);
+        base = (H[4] ? new TextDecoder().decode(b64u(H[4])) : 'https://raw.githubusercontent.com') + '/' + H[1] + '/web-saver-relay/t-' + id + '/';
+      } else if(mode === 'p' && H.length >= 3){
+        id = H[1]; key = b64u(H[2]);
+        base = (H[3] ? new TextDecoder().decode(b64u(H[3])) : 'https://ppng.io') + '/ws-' + id + '-';
+      } else { st('連結不完整。請確認整個網址（包含 # 後面的部分）都有複製到。', 'err'); return; }
+      key = await crypto.subtle.importKey('raw', key, 'AES-GCM', false, ['decrypt']);
+      if(mode === 'p') st('連線中…請確認對方手機的分享畫面還開著。');
+      var r;
+      try{ r = await get(base + 'm', mode === 'g' ? 4 : 0); }
+      catch(e){ st(mode === 'g' ? '找不到這份檔案：可能已經被對方刪除，或超過保留時間。請對方重新分享。' : '連不上中繼站，或對方已經關掉分享畫面。請對方重新分享。', 'err'); return; }
+      try{ man = JSON.parse(new TextDecoder().decode(await dec(new Uint8Array(await r.arrayBuffer())))); }
+      catch(e){ st('解不開：連結裡的金鑰不對，請對方重新分享。', 'err'); return; }
+      var tot = 0; man.files.forEach(function(f){ tot += f.s; });
+      st('共 ' + man.files.length + ' 個檔案（' + size(tot) + '）。' + (mode === 'p' ? '檔案是即時從對方手機傳過來，下載完之前請不要關掉這一頁；每個檔案只能下載一次，會依序下載。' : ''));
+      var L = $('list'); L.hidden = false;
+      man.files.forEach(function(f, i){
+        var row = document.createElement('div'); row.className = 'row'; row.id = 'r' + i;
+        var g = document.createElement('div'); g.className = 'g';
+        var b = document.createElement('b'); b.textContent = f.n; var m = document.createElement('div'); m.className = 'mut'; m.textContent = size(f.s);
+        var bar = document.createElement('div'); bar.className = 'bar'; bar.appendChild(document.createElement('i'));
+        g.appendChild(b); g.appendChild(m); g.appendChild(bar); row.appendChild(g);
+        var bt = document.createElement('button'); bt.textContent = '下載';
+        if(mode === 'p') bt.hidden = true; else bt.onclick = function(){ run([i]); };
+        row.appendChild(bt); L.appendChild(row);
+      });
+      $('all').hidden = false; $('allB').textContent = man.files.length > 1 ? '全部下載' : '下載';
+      $('allB').onclick = function(){ var l = []; man.files.forEach(function(f, i){ if(!(mode === 'p' && $('r' + i).dataset.done)) l.push(i); }); run(l); };
+    }catch(e){ st('發生錯誤：' + (e.message || e), 'err'); }
+  })();
+})();
+</script></body></html>

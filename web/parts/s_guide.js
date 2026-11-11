@@ -24,6 +24,8 @@ var G_FIG = {
   watch: function(){ return gRows([{ic: 'film', t: '圖片與影片下載', s: '設定頁裡的這一區'}, {ic: 'download', t: '其他 App 下載自動搬回', s: 'Snaptube、Quetta 等下載完自動搬進檔案庫', hit: 1, n: '1'}], '① 設定 → 圖片與影片下載 → 其他 App 下載自動搬回') +
     '<div class="gFig"><div class="gFlow"><span>' + gI('video') + '<i>YouTube<br>下載面板</i></span><b>→</b><span>' + gI('download') + '<i>交給其他<br>App 下載</i></span><b>→</b><span class="gHit">' + gI('folder') + '<i>自動搬回<br>檔案庫</i></span></div><em>設定好之後的流程</em></div>'; },
   lock: function(){ return gRows([{ic: 'lock', t: '密碼鎖與指紋', s: '設定 → 隱私與安全', hit: 1}], '在這裡設定 6 位數解鎖密碼') + '<div class="gFig"><div class="gPin"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div><em>解鎖時輸入 6 位數，或用指紋</em></div>'; },
+  relay: function(){ return '<div class="gFig"><div class="gFlow"><span>' + gI('folder') + '<i>你的手機<br>加密</i></span><b>→</b><span class="gHit">' + gI('globe') + '<i>中繼站<br>GitHub／公用</i></span><b>→</b><span>' + gI('download') + '<i>對方用瀏覽器<br>解密下載</i></span></div><em>兩邊不用在同一個網路</em></div>' +
+    '<div class="gFig"><div class="gBar"><span class="gB"><i>同一個網路</i></span><span class="gB gHit"><i>GitHub 中繼</i><u>1</u></span><span class="gB gHit"><i>公用中繼</i><u>2</u></span></div><em>傳檔面板最上面選要用哪一種</em></div>'; },
   upd: function(){ return gRows([{ic: 'reload', t: '版本與更新', s: '檢查新版本、分享 App 下載連結', hit: 1}], '設定 → 版本與更新'); }
 };
 var GUIDE = [
@@ -110,9 +112,29 @@ var GUIDE = [
     '<li><b>Word／Excel／PPT／文字檔</b>：點開就能看，按「編輯」可以改文字或儲存格再存檔；PPT 可以「投影播放」。啟用巨集的 Excel 可以看巨集程式碼，巨集會完整保留，但手機上不能執行。</li>' +
     '<li><b>整理</b>：長按檔案可以多選，再移到資料夾、改檔名、刪除。刪除的檔案會先進垃圾桶。</li>' +
     '<li><b>重複檔案提醒</b>：新加入的檔案跟已有的檔名一樣或大小一樣時，會問你要都保留、改檔名還是刪除。</li>' +
-    '<li><b>傳到電腦或其他手機</b>：「設定 → 儲存與匯出 → 無線傳到電腦／其他手機」。對方掃畫面上的 QR Code（或輸入網址）就能用瀏覽器下載。兩邊要在同一台分享器底下（Wi-Fi 或網路線都可以）；沒有共同的網路時，打開這支手機的「個人熱點」讓對方連進來，或用 USB 網路共用。</li>' +
+    '<li><b>傳到電腦或其他手機</b>：「設定 → 儲存與匯出 → 無線傳到電腦／其他手機」。對方掃畫面上的 QR Code（或輸入網址）就能用瀏覽器下載。兩邊要在同一台分享器底下（Wi-Fi 或網路線都可以）；沒有共同的網路時，打開這支手機的「個人熱點」讓對方連進來，或用 USB 網路共用。對方在完全不同的網路時，改用中繼站（見「跨網路傳檔」）。</li>' +
     '</ul>'},
 
+  {ic: 'share', fig: 'relay', t: '跨網路傳檔：GitHub 中繼、公用中繼', html:
+    '<p>對方和你不在同一個網路（例如人在別的地方、你只有行動網路）時，檔案可以先經過一台「中繼站」再到對方。有兩種可以選：</p>' +
+    '<table class="gTbl"><tr><th></th><th>GitHub 中繼</th><th>公用中繼</th></tr>' +
+    '<tr><td>檔案經過哪裡</td><td>你自己的 GitHub 帳號</td><td>別人架設的公開中繼站（預設 ppng.io）</td></tr>' +
+    '<tr><td>會不會存下來</td><td>暫存，傳完刪除</td><td>不會，只是即時經過</td></tr>' +
+    '<tr><td>對方什麼時候下載</td><td>隨時（刪除之前）</td><td>要和你同時在線，你的畫面要開著</td></tr>' +
+    '<tr><td>事前準備</td><td>要有 GitHub 帳號和權杖</td><td>不用</td></tr></table>' +
+    '<p>兩種都會先在手機把檔案<b>加密</b>，解密用的金鑰只在你給對方的連結裡，中繼站和其他人都打不開。</p>' +
+    '<p><b>怎麼用</b></p><ol>' +
+    '<li>到<b>檔案庫</b>長按勾選要傳的檔案 → 按「匯出／分享」→「無線傳到電腦／其他手機」。</li>' +
+    '<li>在最上面選「<b>GitHub 中繼</b>」或「<b>公用中繼</b>」。</li>' +
+    '<li>把畫面上的 QR Code 給對方掃，或按「傳給對方」把連結用 LINE 等傳過去。對方用瀏覽器打開就能下載，不用裝 App。</li></ol>' +
+    '<p><b>GitHub 中繼：第一次要設定權杖</b></p><ol>' +
+    '<li>用瀏覽器登入 <b>github.com</b>（沒有帳號要先免費註冊）。</li>' +
+    '<li>右上角頭像 → <b>Settings</b> → 左邊最下面 <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Tokens (classic)</b>。</li>' +
+    '<li>按 <b>Generate new token (classic)</b>。Note 隨便填（例如「網頁擷取傳檔」），Expiration 選你要的期限，下面的權限只勾 <b>public_repo</b>。</li>' +
+    '<li>按最下面的 <b>Generate token</b>，複製 <b>ghp_</b> 開頭的那一串（只會顯示這一次）。</li>' +
+    '<li>回到 App 的「GitHub 中繼」分頁貼上，按「儲存並檢查」。App 會在你的 GitHub 自動建立一個叫 <b>web-saver-relay</b> 的公開倉庫當中繼站。</li></ol>' +
+    '<p><b>GitHub 中繼：傳完刪除</b>　對方下載完後，按「<b>對方收到了，刪除暫存</b>」就會把 GitHub 上的暫存刪掉。忘了按也沒關係，60 分鐘後 App 會自動刪（App 要有開）。</p>' +
+    '<div class="gTip">檔案很大（超過 300 MB）時，經過中繼會很慢，建議還是用同一個網路或手機熱點直接傳。公用中繼是別人的免費服務，偶爾可能連不上，連不上時改用 GitHub 中繼。</div>'},
   {ic: 'download', fig: 'watch', t: '其他 App 下載自動搬回（Snaptube 等）', html:
     '<p>有些影片用其他下載 App（例如 Snaptube、Quetta）比較好抓。設定一次之後，用它們下載完的影片、音樂、字幕會<b>自動搬進這個 App 的檔案庫</b>，原本的檔案會刪掉，不佔兩份空間。</p>' +
     '<ol>' +
