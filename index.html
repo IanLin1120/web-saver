@@ -4,7 +4,7 @@
 <script>/* 線上更新開機程式：手機上若已下載比 APK 內建更新的介面版本，就改用新版（存在 IndexedDB）。
    新版連續兩次沒有正常開啟 → 自動退回 APK 內建版本。網址加上 #builtin 也會強制使用內建版本。 */
 (function () {
-  var B = '1.9.22'; if (!window.__OTA) window.APP_BUILTIN = B;
+  var B = '1.9.23'; if (!window.__OTA) window.APP_BUILTIN = B;
   if (window.__OTA || location.hash.indexOf('builtin') >= 0) return;
   var v = null; try { v = JSON.parse(localStorage.getItem('ws.ota') || 'null'); } catch (e) {}
   function gt(a, b) { a = String(a).split('.').map(Number); b = String(b).split('.').map(Number); for (var i = 0; i < Math.max(a.length, b.length); i++) { var p = a[i] || 0, q = b[i] || 0; if (p !== q) return p > q; } return false; }
@@ -2080,7 +2080,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 /* ============================================================
    核心：工具函式、圖示、主題、面板（sheet）、提示、原生橋接、頁面切換
    ============================================================ */
-const APP_VERSION = '1.9.22';
+const APP_VERSION = '1.9.23';
 var GH = {user: 'IanLin1120', repo: 'web-saver',
   get pages(){ return 'https://' + this.user.toLowerCase() + '.github.io/' + this.repo + '/'; },
   get web(){ return 'https://github.com/' + this.user + '/' + this.repo; }};
@@ -3199,8 +3199,17 @@ on('credAsk', function(d){
     foot: h('div', {style: {display: 'contents'}},
       h('button', {class: 'btn ghost', text: '永不', onclick: function(){ NAT.call('credNever', d.host, true); s.close(); }}),
       h('button', {class: 'btn ghost', text: '不要', onclick: function(){ s.close(); }}),
-      h('button', {class: 'btn pri', text: d.update ? '更新' : '儲存', onclick: function(){ var ok = NAT.call('credSavePending', d.host); s.close(); toast(ok ? '已儲存密碼' : '儲存失敗', !ok); }}))});
+      h('button', {class: 'btn pri', text: d.update ? '更新' : '儲存', onclick: function(){
+        var save = function(){ var ok = NAT.call('credSavePending', d.host); toast(ok ? '已儲存密碼' : '儲存失敗', !ok); };
+        s.close();
+        if(SEC.has()){ save(); return; }
+        /* 還沒設定解鎖密碼：一定要先設定，才會儲存帳號密碼（之後查看、複製、修改都要輸入密碼或指紋） */
+        dialog('先設定解鎖密碼', '為了保護你儲存的帳號密碼，請先設定一組 6 位數的解鎖密碼。設定完成後才會儲存這組帳號；之後查看、複製、修改已儲存的密碼，都要輸入解鎖密碼或指紋。', [
+          ['設定密碼', function(){ SEC._afterSet = save; setPinFlow(); }],
+          ['不儲存', function(){ toast('沒有儲存這組密碼'); }, '']]);
+      }}))});
 });
+on('secChanged', function(){ if(SEC._afterSet && SEC.has()){ var f = SEC._afterSet; SEC._afterSet = null; f(); } });
 on('credAvail', function(d){
   var users = d.users || [];
   if(!users.length) return;
@@ -4754,6 +4763,50 @@ on('picked', async function(d){
   }
   if(d.err) toast('有檔案匯入失敗：' + d.err.split('\n')[0], true);
 });
+
+/* ---------- 重複檔案提醒：新進來的檔案（下載、匯入、擷取）跟已有的檔案「檔名一樣」或「大小完全一樣」時，讓你確認 ---------- */
+var DUP = {known: null, queue: [], busy: false};
+function dupKey(n){ return String(n || '').toLowerCase().replace(/\s*\(\d+\)(?=\.[a-z0-9]+$|$)/, '').trim(); }
+function dupExt(n){ return (String(n || '').match(/\.([a-z0-9]+)$/i) || [, ''])[1].toLowerCase(); }
+on('libChanged', function(){
+  var items = Lib.items || [];
+  if(!DUP.known){ DUP.known = {}; items.forEach(function(it){ DUP.known[it.id] = 1; }); return; }
+  var fresh = items.filter(function(it){ return !DUP.known[it.id]; });
+  items.forEach(function(it){ DUP.known[it.id] = 1; });
+  if(!fresh.length || CFG.dupAsk === false) return;
+  fresh.forEach(function(nw){
+    if(nw.cat === 'html' || /^(筆記|字幕)/.test(nw.kind || '')) return;
+    var sameName = null, sameSize = null;
+    items.forEach(function(o){
+      if(o.id === nw.id || fresh.indexOf(o) >= 0 && o.time >= nw.time && o.id > nw.id) return;
+      if(dupKey(o.name) === dupKey(nw.name)) sameName = sameName || o;
+      else if(o.size === nw.size && nw.size > 50 * 1024 && dupExt(o.name) === dupExt(nw.name)) sameSize = sameSize || o;
+    });
+    var o = sameName || sameSize;
+    if(o) DUP.queue.push({nw: nw, old: o, name: !!sameName, size: o.size === nw.size});
+  });
+  dupNext();
+});
+function dupNext(){
+  if(DUP.busy || !DUP.queue.length) return;
+  var d = DUP.queue.shift(), nw = Lib.byId(d.nw.id), old = Lib.byId(d.old.id);
+  if(!nw || !old || TRASH[nw.id] || TRASH[old.id]){ dupNext(); return; }
+  DUP.busy = true;
+  var done = function(){ DUP.busy = false; setTimeout(dupNext, 250); };
+  var verdict = d.name && d.size ? '檔名和大小都一樣，很可能是同一個檔案。' : d.name ? '只有檔名一樣、大小不同，可能是不同的檔案（或不同畫質／版本）。' : '檔名不同，但大小完全一樣，可能是同一個檔案。';
+  var row = function(tag, it){ return h('div', {class: 'lrow', style: {cursor: 'default'}}, h('div', {class: 'th', style: Lib.thumb(it) ? {backgroundImage: 'url("' + Lib.thumb(it) + '")'} : {background: (CAT[areaOf(it)] || CAT.other).c}, html: Lib.thumb(it) ? '' : icon(areaIcon(areaOf(it)))}),
+    h('div', {class: 't'}, h('b', {text: it.name}), h('div', {class: 'sub', text: tag + '・' + fmtSize(it.size) + '・' + new Date(it.time).toLocaleString('zh-TW', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'})}))); };
+  var body = h('div', null, h('div', {class: 'note', text: verdict}), h('div', {class: 'list'}, row('剛加入', nw), row('原本就有', old)));
+  var s = openSheet({title: '可能是重複的檔案', icon: 'copy', body: body, onClose: done,
+    foot: h('div', {style: {display: 'contents'}},
+      h('button', {class: 'btn ghost', text: '都保留', onclick: function(){ s.close(); }}),
+      h('button', {class: 'btn', html: icon('edit', 'sm') + '改檔名', onclick: async function(){
+        var n = await promptDlg('幫剛加入的檔案改檔名', nw.name.replace(/\.[a-z0-9]+$/i, ''));
+        if(n){ await Lib.rename(nw, n); await Lib.refresh(); renderLib(); toast('已改檔名'); s.close(); }
+      }}),
+      h('button', {class: 'btn pri', html: icon('trash', 'sm') + '刪除剛加入的', onclick: async function(){ s.close(); await Lib.trash([nw.id]); renderLib(); toast('已把剛加入的那個丟到垃圾桶'); }}))});
+  paintIcons(body);
+}
 
 /* ============================================================
    檢視器：離線網頁、PDF、圖片（雙指縮放／滑動切換）、影片、音訊、ZIP、文字
@@ -6402,24 +6455,28 @@ async function ytPageData(id, onStep){
   /* 從 YouTube Music 按下載：影片資訊要靠 YouTube 那邊的播放器讀，讀完自動切回 YouTube Music（不出聲、不留在 YouTube 畫面） */
   var fromMusic = typeof ytIsMusic === 'function' && ytIsMusic(YTB.url) && isApp && NAT.has('ytSwitch');
   var muUrl = YTB.url;
-  try{ return await ytPageData0(id, onStep, fromMusic); }
+  var bgOk = fromMusic && NAT.has('ytBgLoad');
+  try{ return await ytPageData0(id, onStep, fromMusic, bgOk); }
   finally{
-    if(fromMusic && !ytIsMusic(YTB.url)){
+    if(bgOk) NAT.call('ytBgPause');
+    else if(fromMusic && !ytIsMusic(YTB.url)){
       NAT.call('ytNav', 'pause');
       NAT.call('ytSwitch', true, (YTB.last && YTB.last.music) || muUrl || YT_MUSIC);
       setTimeout(function(){ if(typeof ytUpdateVisible === 'function') ytUpdateVisible(); if(typeof ytModeUi === 'function') ytModeUi(); }, 300);
     }
   }
 }
-async function ytPageData0(id, onStep, quiet){
+async function ytPageData0(id, onStep, quiet, bgLoad){
   if(!isApp || !NAT.has('ytInfoReq')) return null;
   var where = NAT.call('ytInfoReq', id), bg = false;
   /* 在別的分頁（例如 AI 摘要）背景讀取時：YouTube 畫面不顯示、影片不出聲 */
-  var hush = function(){ if(bg && (quiet || curView !== 'yt')) NAT.call('ytNav', 'pause'); };
+  /* bgLoad：影片開在背景的 YouTube（不切畫面、YouTube Music 繼續播），只把背景那一個靜音暫停 */
+  var hush = function(){ if(bgLoad){ NAT.call('ytBgPause'); return; } if(bg && (quiet || curView !== 'yt')) NAT.call('ytNav', 'pause'); };
   if(!where){
     bg = quiet || curView !== 'yt';
     if(onStep) onStep('在 YouTube 分頁開啟影片…');
-    YTB.started = true; NAT.call('ytLoad', 'https://m.youtube.com/watch?v=' + id);
+    if(bgLoad) NAT.call('ytBgLoad', 'https://m.youtube.com/watch?v=' + id);
+    else { YTB.started = true; NAT.call('ytLoad', 'https://m.youtube.com/watch?v=' + id); }
     for(var k = 0; k < 40 && !where; k++){ await sleep(500); hush(); where = NAT.call('ytInfoReq', id); }
     if(!where) return null;
   }
@@ -7086,14 +7143,26 @@ Music.next = function(auto){
   this.load(true);
 };
 Music.prev = function(){ if(this.el.currentTime > 4){ this.el.currentTime = 0; return; } this.idx = (this.idx - 1 + this.queue.length) % this.queue.length; this.load(true); };
-Music.stop = function(){ this.el.pause(); this.el.removeAttribute('src'); this.queue = []; this.idx = -1; Dock.remove('music'); if(this.sheet) this.sheet.close(); };
+Music.stop = function(){ this.el.pause(); this.el.removeAttribute('src'); this.queue = []; this.idx = -1; Dock.remove('music'); if(this.sheet) this.sheet.close(); if(this.sysMeta) this.sysMeta(); };
 Music.el.addEventListener('ended', function(){ Music.next(true); });
 /* 播放中讓 App 在背景繼續執行（切到主畫面、關螢幕也不會停） */
 Music.el.addEventListener('play', function(){ var it = Music.queue[Music.idx]; if(isApp) NAT.call('keep', 'music', '正在播放：' + (it ? (it.title || it.name) : '音樂')); });
 Music.el.addEventListener('pause', function(){ if(isApp && !Music.el.ended) NAT.call('keep', 'music', ''); });
+/* 系統的媒體控制（通知列播放器、快速面板、鎖定畫面）顯示正在播的歌 */
+Music.sysMeta = function(){
+  if(!isApp || !NAT.has('mediaMeta')) return;
+  var it = Music.queue[Music.idx];
+  if(!it){ if(!(typeof YTMU !== 'undefined' && YTMU.active())) NAT.call('mediaMeta', '{}'); return; }
+  NAT.call('mediaMeta', JSON.stringify({title: songTitle(it), artist: it.artist || '音樂庫', art: Lib.thumb(it) || '', dur: isFinite(Music.el.duration) ? Music.el.duration : (it.dur || 0), pos: Music.el.currentTime || 0, playing: !Music.el.paused}));
+};
+['play', 'pause', 'seeked', 'loadedmetadata'].forEach(function(ev){ Music.el.addEventListener(ev, function(){ Music.sysMeta(); }); });
 on('mediaCmd', function(c){
   if(!Music.queue.length) return;
   if(c === 'toggle'){ if(Music.el.paused) Music.el.play(); else Music.el.pause(); }
+  else if(c === 'play') Music.el.play();
+  else if(c === 'pause') Music.el.pause();
+  else if(c === 'prev'){ if(Music.prev) Music.prev(); }
+  else if(/^seek:/.test(c)){ var t = parseFloat(c.slice(5)); if(isFinite(t)) Music.el.currentTime = t; }
   else if(c === 'next') Music.next();
 });
 if('mediaSession' in navigator){
@@ -10176,6 +10245,14 @@ YTMU.syncTry = function(it, delay){
     }, delay);
   })();
 };
+YTMU.sysMeta = function(){
+  if(!isApp || !NAT.has('mediaMeta')) return;
+  var s = this.st;
+  if(!this.active()){ if(!Music.queue.length) NAT.call('mediaMeta', '{}'); return; }
+  var k = [s.vid, s.title, s.artist, s.art, s.dur, s.playing, Math.round(this.time() / 5)].join('|');
+  if(k === this.metaK) return; this.metaK = k;
+  NAT.call('mediaMeta', JSON.stringify({title: s.title, artist: s.artist || 'YouTube Music', art: s.art || '', dur: s.dur || 0, pos: this.time(), playing: !!s.playing}));
+};
 YTMU.active = function(){ var s = this.st; return !!(s && !s.off && s.title); };
 /* 給歌詞用的「假檔案」：同一首歌（影片 ID）共用，歌詞存在快取 */
 YTMU.item = function(){
@@ -10220,6 +10297,7 @@ on('muState', function(d){
   /* YouTube Music 開始播放：離線音樂整個關掉（不留兩個播放列） */
   if(d.playing && (Music.queue || []).length) Music.stop();
   var big = !prev.title || prev.vid !== d.vid || prev.playing !== d.playing || prev.off !== d.off || prev.like !== d.like || prev.repeat !== d.repeat || prev.shuffle !== d.shuffle || prev.art !== d.art || !!d.queue;
+  YTMU.sysMeta();
   if(big){ YTMU.mini(); YTMU.draw(prev.like !== d.like || prev.repeat !== d.repeat || prev.shuffle !== d.shuffle); } else YTMU.progress();
   if(d.vid !== prev.vid && typeof fabSync === 'function'){ fabSync.k = null; fabSync(); }
 });
@@ -10233,7 +10311,7 @@ YTMU.toggle = function(){
   var s = this.st; if(!s) return;
   s.cur = this.time(); this.t0 = Date.now(); s.playing = !s.playing;
   this.cmd(s.playing ? 'play' : 'pause'); buzz(8);
-  this.mini(); this.soft();
+  this.mini(); this.soft(); this.sysMeta();
 };
 YTMU.next = function(){ this.cmd('next'); buzz(8); };
 YTMU.prev = function(){ this.cmd('prev'); buzz(8); };
@@ -10243,6 +10321,7 @@ YTMU.stop = function(){
   if(this.st){ this.st.off = true; this.st.playing = false; }
   Dock.remove('ytmu'); document.body.classList.remove('ytmuDock');
   if(this.sheet && !this.sheet.closed) this.sheet.close();
+  this.metaK = ''; this.sysMeta();
 };
 
 var YM_PAUSE = '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>';
