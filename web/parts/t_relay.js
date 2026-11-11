@@ -312,33 +312,74 @@ function qrScan(){
   }});
   var torchB = h('button', {class: 'btn', html: icon('torch', 'sm') + '手電筒', style: {display: 'none'}, onclick: function(){
     torch = !torch; try{ stream.getVideoTracks()[0].applyConstraints({advanced: [{torch: torch}]}); }catch(e){} this.classList.toggle('pri', torch); }});
-  var body = h('div', null, h('div', {class: 'qrCam'}, video, h('i')), msg,
-    h('div', {class: 'btn-row', style: {justifyContent: 'center'}}, h('button', {class: 'btn', html: icon('image', 'sm') + '從相片選', onclick: function(){ file.click(); }}), torchB), file);
+  var swapB = h('button', {class: 'btn', html: icon('reload', 'sm') + '換鏡頭', style: {display: 'none'}, onclick: function(){ if(cams.length < 2) return; camIdx = (camIdx + 1) % cams.length; lsSet('ws.qrCam', cams[camIdx].deviceId); open(cams[camIdx].deviceId); }});
+  var zoomIn = h('input', {type: 'range', min: 1, max: 4, step: 0.1, value: 1, oninput: function(){ setZoom(+this.value); }});
+  var zoomRow = h('div', {class: 'qrZoom', style: {display: 'none'}}, h('span', {text: '縮小'}), zoomIn, h('span', {text: '放大'}));
+  var body = h('div', null, h('div', {class: 'qrCam'}, video, h('i')), msg, zoomRow,
+    h('div', {class: 'btn-row', style: {justifyContent: 'center', flexWrap: 'wrap'}}, swapB, torchB, h('button', {class: 'btn', html: icon('image', 'sm') + '從相片選', onclick: function(){ file.click(); }})), file);
   var sheet = openSheet({title: '掃 QR Code', icon: 'qr', body: body, tall: true, onClose: stop});
-  function stop(){ alive = false; clearInterval(tmr); try{ if(stream) stream.getTracks().forEach(function(t){ t.stop(); }); }catch(e){} }
+  var cams = [], camIdx = 0, hwZoom = false, cv = document.createElement('canvas'), busy = false;
+  function halt(){ try{ if(stream) stream.getTracks().forEach(function(t){ t.stop(); }); }catch(e){} stream = null; }
+  function stop(){ alive = false; clearInterval(tmr); halt(); }
   function done(t){ if(!alive) return; stop(); sheet.close(); setTimeout(function(){ qrOpenResult(t); }, 200); }
+  /* 放大縮小：鏡頭本身支援就用鏡頭的變焦，不支援就把畫面放大（辨識用的還是整張畫面） */
+  function setZoom(z){
+    if(hwZoom){ try{ stream.getVideoTracks()[0].applyConstraints({advanced: [{zoom: z}]}); }catch(e){} }
+    else video.style.transform = 'scale(' + z + ')';
+  }
+  /* 後鏡頭有好幾顆（廣角、主鏡頭、望遠）時，系統預設給的不一定是主鏡頭：優先用上次選的，否則挑編號最小的那顆後鏡頭 */
+  function backCams(list){
+    var v = list.filter(function(d){ return d.kind === 'videoinput'; });
+    var b = v.filter(function(d){ return /back|rear|environment|後|背/i.test(d.label); });
+    if(!b.length) b = v.filter(function(d){ return !/front|user|前/i.test(d.label); });
+    var num = function(d){ var m = /(\d+)/.exec(d.label); return m ? +m[1] : 99; };
+    return b.sort(function(x, y){ return num(x) - num(y); });
+  }
+  function open(id, first){
+    halt(); torch = false; torchB.classList.remove('pri'); video.style.transform = '';
+    var c = id ? {deviceId: {exact: id}} : {facingMode: {ideal: 'environment'}};
+    c.width = {ideal: 1280}; c.height = {ideal: 720};
+    return navigator.mediaDevices.getUserMedia({video: c, audio: false}).then(async function(s){
+      if(!alive){ s.getTracks().forEach(function(t){ t.stop(); }); return; }
+      stream = s; video.srcObject = s; video.play().catch(function(){});
+      var tr = s.getVideoTracks()[0], cap = null;
+      try{ cap = tr.getCapabilities && tr.getCapabilities(); }catch(e){}
+      torchB.style.display = cap && cap.torch ? '' : 'none';
+      hwZoom = !!(cap && cap.zoom && cap.zoom.max > cap.zoom.min);
+      zoomIn.min = hwZoom ? cap.zoom.min : 1; zoomIn.max = hwZoom ? Math.min(cap.zoom.max, 8) : 4; zoomIn.step = hwZoom ? (cap.zoom.step || 0.1) : 0.1;
+      var z0 = 1; try{ var st = tr.getSettings(); if(hwZoom && st.zoom) z0 = st.zoom; }catch(e){}
+      if(hwZoom && cap.zoom.min < z0){ z0 = Math.max(cap.zoom.min, 1); setZoom(z0); }   /* 一開始盡量用 1 倍，不要預設就是放大的 */
+      zoomIn.value = z0; zoomRow.style.display = '';
+      if(first){
+        try{
+          cams = backCams(await navigator.mediaDevices.enumerateDevices());
+          swapB.style.display = cams.length > 1 ? '' : 'none';
+          var curId = ''; try{ curId = tr.getSettings().deviceId || ''; }catch(e){}
+          var want = lsGet('ws.qrCam', ''), wi = cams.findIndex(function(d){ return d.deviceId === want; });
+          if(wi < 0) wi = 0;
+          camIdx = Math.max(0, cams.findIndex(function(d){ return d.deviceId === curId; }));
+          if(cams.length && cams[wi].deviceId && cams[wi].deviceId !== curId){ camIdx = wi; return open(cams[wi].deviceId); }
+        }catch(e){}
+      }
+    });
+  }
   try{ if('BarcodeDetector' in window) det = new BarcodeDetector({formats: ['qr_code']}); }catch(e){ det = null; }
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ msg.textContent = '這裡沒辦法開相機，請用「從相片選」。'; return; }
-  navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: 'environment'}, width: {ideal: 1280}, height: {ideal: 720}}, audio: false}).then(function(s){
-    if(!alive){ s.getTracks().forEach(function(t){ t.stop(); }); return; }
-    stream = s; video.srcObject = s; video.play().catch(function(){});
-    try{ var cap = s.getVideoTracks()[0].getCapabilities && s.getVideoTracks()[0].getCapabilities(); if(cap && cap.torch) torchB.style.display = ''; }catch(e){}
-    var cv = document.createElement('canvas'), busy = false;
-    tmr = setInterval(async function(){
-      if(busy || !alive || video.readyState < 2 || !video.videoWidth) return;
-      busy = true;
-      try{
-        var t = '';
-        if(det){ try{ var rs = await det.detect(video); if(rs && rs[0]) t = rs[0].rawValue; }catch(e){ det = null; } }
-        if(!t){
-          var sc = Math.min(1, 720 / Math.max(video.videoWidth, video.videoHeight));
-          cv.width = Math.round(video.videoWidth * sc); cv.height = Math.round(video.videoHeight * sc);
-          cv.getContext('2d', {willReadFrequently: true}).drawImage(video, 0, 0, cv.width, cv.height);
-          t = qrDecodeCanvas(cv);
-        }
-        if(t) done(t);
-      }catch(e){}
-      busy = false;
-    }, 220);
-  }).catch(function(e){ msg.textContent = '無法開啟相機（' + ((e && e.name) || '') + '）。請到手機設定允許「網頁擷取」使用相機，或用「從相片選」。'; });
+  tmr = setInterval(async function(){
+    if(busy || !alive || !stream || video.readyState < 2 || !video.videoWidth) return;
+    busy = true;
+    try{
+      var t = '';
+      if(det){ try{ var rs = await det.detect(video); if(rs && rs[0]) t = rs[0].rawValue; }catch(e){ det = null; } }
+      if(!t){
+        var sc = Math.min(1, 720 / Math.max(video.videoWidth, video.videoHeight));
+        cv.width = Math.round(video.videoWidth * sc); cv.height = Math.round(video.videoHeight * sc);
+        cv.getContext('2d', {willReadFrequently: true}).drawImage(video, 0, 0, cv.width, cv.height);
+        t = qrDecodeCanvas(cv);
+      }
+      if(t) done(t);
+    }catch(e){}
+    busy = false;
+  }, 220);
+  open('', true).catch(function(e){ msg.textContent = '無法開啟相機（' + ((e && e.name) || '') + '）。請到手機設定允許「網頁擷取」使用相機，或用「從相片選」。'; });
 }

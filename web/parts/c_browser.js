@@ -355,7 +355,7 @@ function renderStart(){
   var tiles = h('div', {class: 'tiles'});
   tiles.appendChild(h('div', {class: 'tile', onclick: function(){ openBmList(''); }}, h('div', {class: 'fav', html: icon('books')}), h('span', {text: '我的收藏'}), h('small', {class: 'sub', text: BM.items.length + ' 個'})));
   tiles.appendChild(h('div', {class: 'tile', onclick: function(){ openHistory(); }}, h('div', {class: 'fav', html: icon('history')}), h('span', {text: '瀏覽記錄'}), h('small', {class: 'sub', text: Hist.items.length + ' 筆'})));
-  tiles.appendChild(h('div', {class: 'tile', onclick: function(){ qrScan(); }}, h('div', {class: 'fav', html: icon('qr')}), h('span', {text: '掃 QR Code'}), h('small', {class: 'sub', text: '開網址／收檔案'})));
+  tiles.appendChild(h('div', {class: 'tile', onclick: function(){ qrScan(); }}, h('div', {class: 'fav', html: icon('qr')}), h('span', {text: '掃 QR Code'}), h('small', {class: 'sub', text: '網址／收檔'})));
   /* 立即上鎖（跟「隱私與安全」裡的按鈕一樣）：有設定密碼才顯示 */
   if(SEC.has()) tiles.appendChild(h('div', {class: 'tile', onclick: function(){ if(isApp) NAT.call('lockRelock'); SEC.webOk = false; fire('secChanged'); toast('🔒 已上鎖'); renderStart(); }},
     h('div', {class: 'fav', html: icon('lock')}), h('span', {text: '立即上鎖'}), h('small', {class: 'sub', text: SEC.open() ? '目前已解鎖' : '目前已上鎖'})));
