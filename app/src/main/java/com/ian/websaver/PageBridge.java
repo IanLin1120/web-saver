@@ -30,6 +30,8 @@ public class PageBridge {
     @JavascriptInterface public void video(final boolean playing, final int w, final int h) { Util.ui(new Runnable() { @Override public void run() { b.videoState(playing, w, h); } }); }
 
     @JavascriptInterface public void muState(String json) { MainActivity.emit("muState", json); }
+    /** 聽歌辨識：頁面把正在播的聲音（不經麥克風）錄好後傳回來 */
+    @JavascriptInterface public void tapAudio(String json) { MainActivity.emit("tapAudio", json); }
 
     @JavascriptInterface public void ytDl(String id) { MainActivity.emit("ytdl", id); }
 

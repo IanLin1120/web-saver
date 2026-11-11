@@ -416,7 +416,7 @@ function exportSheet(items){
     opt('folder', '存到指定資料夾…', tn ? '目前：' + esc(tn) + '（可存到 SD 卡、USB 隨身碟、雲端硬碟資料夾）' : '自己選位置：SD 卡、USB 隨身碟、雲端硬碟…', function(){ NAT.call('libExport', ids, 'tree'); });
     if(tn) opt('edit', '換一個資料夾再存', '重新選擇要存放的位置', function(){ NAT.call('libExport', ids, 'pickTree'); });
     opt('share', '分享／傳送', 'LINE、Gmail、Google 雲端硬碟、Quick Share（傳到電腦或其他手機）…', function(){ NAT.call('libExport', ids, 'share'); });
-    opt('wifi', 'Wi-Fi 傳到電腦', '電腦連同一個 Wi-Fi，用瀏覽器打開網址就能下載', openWifi);
+    opt('wifi', '無線傳到電腦／其他手機', '掃 QR Code 或輸入網址就能下載；同一個網路、手機熱點、USB 都可以', openWifi);
     if(items.length === 1) opt('open', '用其他 App 開啟', '例如用 Chrome 開 HTML、用相簿開圖片', function(){ NAT.call('libExport', ids, 'open'); });
     if(items.length > 1) opt('zip', '打包成 ZIP（存回檔案庫）', '合併成一個壓縮檔，再用上面的方式匯出', function(){ zipItems(items); });
   } else {
@@ -439,19 +439,47 @@ async function zipItems(items){
   await Lib.addBlob(await z.generateAsync({type: 'blob', compression: 'STORE'}), '網頁擷取_' + items.length + '個檔案.zip', {});
   toast('✓ 已打包成 ZIP');
 }
+function qrSvg(text, px){
+  try{
+    var q = qrcode(0, 'M'); q.addData(text); q.make();
+    var n = q.getModuleCount(), m = 2, d = '';
+    for(var r = 0; r < n; r++) for(var c = 0; c < n; c++) if(q.isDark(r, c)) d += 'M' + (c + m) + ' ' + (r + m) + 'h1v1h-1z';
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + (n + m * 2) + ' ' + (n + m * 2) + '" width="' + px + '" height="' + px + '" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="' + d + '" fill="#000"/></svg>';
+  }catch(e){ return ''; }
+}
+var WIFI_KIND = {wifi: ['wifi', 'Wi-Fi', '對方連到同一台分享器（Wi-Fi 或網路線都可以）'], hotspot: ['wifi', '手機熱點', '對方連到這支手機開的熱點'], usb: ['link', 'USB 網路共用', '用傳輸線接電腦'],
+  eth: ['link', '有線網路', '對方連到同一台分享器'], bt: ['link', '藍牙網路共用', '對方用藍牙連到這支手機'], p2p: ['wifi', 'Wi-Fi Direct', '對方用 Wi-Fi Direct 連到這支手機']};
 function openWifi(){
-  var body = h('div');
-  var s = openSheet({title: 'Wi-Fi 傳到電腦', icon: 'wifi', body: body});
+  var body = h('div'), sel = 0;
+  var s = openSheet({title: '無線傳到電腦／其他手機', icon: 'wifi', body: body, tall: true});
   function draw(){
     body.textContent = '';
-    var on = NAT.call('wifiOn');
     var r = NAT.json('wifiStart');
-    if(!r || r.ok === false){ body.appendChild(h('div', {class: 'note err', text: '無法啟動：' + (r && r.err || '請確認手機已連上 Wi-Fi')})); return; }
-    body.appendChild(h('div', {class: 'sub', html: '① 電腦和手機連到<b>同一個 Wi-Fi</b><br>② 在電腦的瀏覽器網址列輸入：'}));
-    body.appendChild(h('div', {class: 'wifiUrl', text: r.url}));
-    body.appendChild(h('div', {class: 'btn-row'}, h('button', {class: 'btn', html: icon('copy', 'sm') + '複製網址', onclick: function(){ copyText(r.url); }}),
-      h('button', {class: 'btn dang', html: icon('x', 'sm') + '停止分享', onclick: function(){ NAT.call('wifiStop'); s.close(); toast('已停止 Wi-Fi 傳輸'); }})));
+    if(!r || r.ok === false){
+      body.appendChild(h('div', {class: 'note err', text: '無法啟動：' + (r && r.err || '請確認手機已連上 Wi-Fi')}));
+      body.appendChild(h('div', {class: 'note', html: '<b>沒有 Wi-Fi 也可以傳：</b>打開手機的「個人熱點」，讓電腦或另一支手機連進來，再按「重新整理」。'}));
+      body.appendChild(h('div', {class: 'btn-row'}, h('button', {class: 'btn pri', html: icon('reload', 'sm') + '重新整理', onclick: draw})));
+      paintIcons(body); return;
+    }
+    var nets = r.nets && r.nets.length ? r.nets : [{url: r.url, ip: r.ip, kind: 'wifi'}];
+    if(sel >= nets.length) sel = 0;
+    var cur = nets[sel], K = WIFI_KIND[cur.kind] || WIFI_KIND.wifi;
+    if(nets.length > 1) body.appendChild(h('div', {class: 'chips', style: {marginBottom: '8px'}}, nets.map(function(n, i){ var k = WIFI_KIND[n.kind] || WIFI_KIND.wifi;
+      return h('button', {class: 'chip' + (i === sel ? ' on' : ''), html: icon(k[0], 'sm') + k[1], onclick: function(){ sel = i; draw(); }}); })));
+    body.appendChild(h('div', {class: 'sub', html: '① ' + esc(K[2]) + '（目前用：<b>' + esc(K[1]) + '</b>）<br>② 用對方的相機掃這個 QR Code，或在瀏覽器網址列輸入下面的網址：'}));
+    var qr = qrSvg(cur.url, 210);
+    if(qr) body.appendChild(h('div', {class: 'wifiQr', html: qr}));
+    body.appendChild(h('div', {class: 'wifiUrl', text: cur.url}));
+    body.appendChild(h('div', {class: 'btn-row'}, h('button', {class: 'btn', html: icon('copy', 'sm') + '複製網址', onclick: function(){ copyText(cur.url); }}),
+      h('button', {class: 'btn', html: icon('reload', 'sm') + '重新整理', onclick: draw}),
+      h('button', {class: 'btn dang', html: icon('x', 'sm') + '停止分享', onclick: function(){ NAT.call('wifiStop'); s.close(); toast('已停止傳輸'); }})));
     body.appendChild(h('div', {class: 'note', html: '③ 網頁會列出檔案庫裡的所有檔案，按「下載」取得原始檔案，或「全部打包下載」。<br>網址裡的通行碼 <b>' + esc(r.key) + '</b> 可防止同網路的其他人讀取。離開 App 或按「停止分享」就會關閉。'}));
+    body.appendChild(h('details', {class: 'note'}, h('summary', {html: '<b>對方不在同一個 Wi-Fi 怎麼辦？</b>'}), h('div', {html:
+      '<p>檔案是由這支手機直接傳給對方，所以兩邊要「連得到彼此」，有三種接法：</p>' +
+      '<p><b>同一台分享器</b>：不一定都要用 Wi-Fi。電腦插網路線、手機連 Wi-Fi，只要是同一台分享器（同一個家用／公司網路）就可以。</p>' +
+      '<p><b>手機熱點</b>：沒有共同的網路時，打開這支手機的「個人熱點」，讓電腦或另一支手機連進來，再按上面的「重新整理」，選「手機熱點」。傳檔走的是熱點本身，不會用到行動網路流量。</p>' +
+      '<p><b>USB 傳輸線</b>：用線接電腦，在手機開「USB 網路共用」，再按「重新整理」，選「USB 網路共用」。</p>' +
+      '<p>手機只用行動網路、對方在完全不同的網路（例如人在別的地方）時，沒辦法這樣直接傳：電信的行動網路不允許外面的裝置連進手機。</p>'})));
     paintIcons(body);
   }
   draw();

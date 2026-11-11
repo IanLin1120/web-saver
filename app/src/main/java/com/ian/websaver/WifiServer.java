@@ -54,9 +54,11 @@ final class WifiServer {
                 }
             }, "ws-wifi").start();
         }
-        String ip = ip();
-        if (ip == null) throw new Exception("手機沒有連上 Wi-Fi");
-        return new JSONObject().put("url", "http://" + ip + ":" + port + "/?k=" + key).put("ip", ip).put("port", port).put("key", key).toString();
+        org.json.JSONArray nets = nets();
+        if (nets.length() == 0) throw new Exception("手機目前沒有可以分享的網路：請連上 Wi-Fi，或打開手機的「個人熱點」讓對方連進來");
+        String ip = nets.getJSONObject(0).getString("ip");
+        for (int i = 0; i < nets.length(); i++) { JSONObject o = nets.getJSONObject(i); o.put("url", "http://" + o.getString("ip") + ":" + port + "/?k=" + key); }
+        return new JSONObject().put("url", "http://" + ip + ":" + port + "/?k=" + key).put("ip", ip).put("port", port).put("key", key).put("nets", nets).toString();
     }
 
     static synchronized void stop() {
@@ -65,6 +67,29 @@ final class WifiServer {
     }
 
     static boolean running() { return ss != null && !ss.isClosed(); }
+
+    /** 手機目前所有可以讓別的裝置連進來的區域網路位址：Wi-Fi、個人熱點、USB 網路共用、有線、藍牙（不含行動網路） */
+    static org.json.JSONArray nets() {
+        org.json.JSONArray out = new org.json.JSONArray(), hot = new org.json.JSONArray();
+        try {
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!ni.isUp() || ni.isLoopback()) continue;
+                String n = ni.getName().toLowerCase();
+                if (n.startsWith("rmnet") || n.startsWith("ccmni") || n.startsWith("dummy") || n.startsWith("tun") || n.startsWith("ppp") || n.startsWith("v4-") || n.startsWith("clat") || n.startsWith("pdp")) continue;
+                String kind = n.equals("wlan0") ? "wifi" : (n.startsWith("ap") || n.startsWith("swlan") || n.startsWith("softap") || n.startsWith("wlan") || n.startsWith("wigig")) ? "hotspot"
+                    : (n.startsWith("rndis") || n.startsWith("usb") || n.startsWith("ncm")) ? "usb" : n.startsWith("eth") ? "eth" : n.startsWith("bt") ? "bt" : n.startsWith("p2p") ? "p2p" : null;
+                if (kind == null) continue;
+                for (InetAddress ad : Collections.list(ni.getInetAddresses())) {
+                    if (!(ad instanceof Inet4Address) || ad.isLinkLocalAddress()) continue;
+                    JSONObject o = new JSONObject().put("ip", ad.getHostAddress()).put("kind", kind).put("ifn", n);
+                    if (kind.equals("wifi")) out.put(o); else hot.put(o);
+                }
+            }
+            for (int i = 0; i < hot.length(); i++) out.put(hot.get(i));
+            if (out.length() == 0) { String ip = ip(); if (ip != null) out.put(new JSONObject().put("ip", ip).put("kind", "wifi").put("ifn", "")); }
+        } catch (Throwable t) { /* ignore */ }
+        return out;
+    }
 
     static String ip() {
         try {

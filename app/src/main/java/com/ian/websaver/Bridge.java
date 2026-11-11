@@ -145,6 +145,13 @@ public class Bridge {
     } }); }
     @JavascriptInterface public boolean ytHas(boolean music) { Browser b = music ? a.ytMu : a.ytYt; return b != null && a.ytLoaded(b); }
 
+    /** 聽歌辨識：直接錄目前 YouTube／YouTube Music 頁面正在播的聲音（不暫停播放、不用麥克風） */
+    @JavascriptInterface public void ytTap(final String cmd) {
+        ui(new Runnable() { @Override public void run() {
+            Browser y = a.yt; if (y == null || y.wv == null) { MainActivity.emit("tapAudio", "{\"err\":\"nopage\"}"); return; }
+            y.wv.evaluateJavascript("(function(){try{if(window.__wsTap)__wsTap(" + JSONObject.quote(cmd == null ? "" : cmd) + ");else WSPage.tapAudio('{\"err\":\"noscript\"}')}catch(e){}})()", null);
+        } });
+    }
     @JavascriptInterface public void muCmd(final String c, final String arg) {
         ui(new Runnable() { @Override public void run() {
             Browser m = a.ytMu; if (m == null || m.wv == null) return;

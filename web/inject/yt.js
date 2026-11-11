@@ -969,7 +969,7 @@
 (function () {
   'use strict';
   if (!/^music\./.test(location.hostname)) return;
-  var VER = 18;
+  var VER = 19;
   if (window.__wsMu === VER) return;
   if (window.__wsMuT) clearInterval(window.__wsMuT);
   window.__wsMu = VER;
@@ -1024,6 +1024,8 @@
     X + 'ytmusic-thumbnail-renderer img,' + X + 'img.yt-img-shadow,' + X + '.thumbnail img{border-radius:10px}',
     X + 'ytmusic-play-button-renderer{--ytmusic-play-button-background-color:' + C.acc + '!important;--ytmusic-play-button-icon-color:#fff!important;--ytmusic-play-button-active-background-color:' + C.acc2 + '!important}',
     X + 'ytmusic-item-thumbnail-overlay-renderer[indexed] #background{background:rgba(59,47,36,.35)!important}',
+    /* 卡片縮圖上的圓形播放鈕：不顯示（留在頁面裡、只是看不到也按不到，點縮圖照常打開那一頁） */
+    X + 'ytmusic-two-row-item-renderer ytmusic-play-button-renderer,' + X + 'ytmusic-two-row-item-renderer ytmusic-item-thumbnail-overlay-renderer #play-button{opacity:0!important;pointer-events:none!important}',
     /* 按鈕 */
     X + 'yt-button-shape button.yt-spec-button-shape-next--filled,' + X + 'yt-button-shape button.yt-spec-button-shape-next--mono.yt-spec-button-shape-next--filled{background:' + C.acc + '!important;color:' + C.accFg + '!important}',
     X + 'yt-button-shape button.yt-spec-button-shape-next--tonal{background:' + C.s2 + '!important;color:' + C.fg + '!important}',
@@ -1569,4 +1571,103 @@
   addEventListener('resize', function () { setTimeout(place, 120); });
   var raf = 0; addEventListener('scroll', function () { if (!raf) raf = requestAnimationFrame(function () { raf = 0; place(); }); }, {passive: true, capture: true});
   tick();
+})();
+
+
+/* ============================================================
+   聽歌辨識：直接「旁聽」頁面上正在播的影片／音樂（captureStream，不經麥克風、不暫停播放）
+   錄成 16kHz 單聲道 WAV，用 WSPage.tapAudio 傳回 App；WebAudio 不能用時改用 MediaRecorder
+   ============================================================ */
+(function () {
+  if (window.__wsTap) return;
+  var cur = null;
+  function send(o) { try { WSPage.tapAudio(JSON.stringify(o)); } catch (e) {} }
+  function b64(u8) { var s = '', i, n = u8.length; for (i = 0; i < n; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, Math.min(n, i + 0x8000))); return btoa(s); }
+  function wav(chunks, rate) {
+    var n = 0, i; for (i = 0; i < chunks.length; i++) n += chunks[i].length;
+    var R = 16000, k = rate / R, m = Math.floor(n / k), all = new Float32Array(n), o = 0;
+    for (i = 0; i < chunks.length; i++) { all.set(chunks[i], o); o += chunks[i].length; }
+    var buf = new ArrayBuffer(44 + m * 2), dv = new DataView(buf), peak = 0;
+    function w(p, t) { for (var j = 0; j < t.length; j++) dv.setUint8(p + j, t.charCodeAt(j)); }
+    w(0, 'RIFF'); dv.setUint32(4, 36 + m * 2, true); w(8, 'WAVEfmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+    dv.setUint32(24, R, true); dv.setUint32(28, R * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); w(36, 'data'); dv.setUint32(40, m * 2, true);
+    for (i = 0; i < m; i++) {
+      var a = Math.floor(i * k), b = Math.min(n, Math.floor((i + 1) * k)), sum = 0, c = 0;
+      for (var j = a; j < b; j++) { sum += all[j]; c++; }
+      var v = c ? sum / c : 0; if (Math.abs(v) > peak) peak = Math.abs(v);
+      dv.setInt16(44 + i * 2, Math.max(-1, Math.min(1, v)) * 32767, true);
+    }
+    return {b64: b64(new Uint8Array(buf)), peak: peak, sec: m / R};
+  }
+  function pick() {
+    var vs = document.querySelectorAll('video, audio'), best = null;
+    for (var i = 0; i < vs.length; i++) { var v = vs[i]; if (!v.paused && !v.ended && v.readyState > 2 && !v.muted) { if (!best || (v.duration || 0) > (best.duration || 0)) best = v; } }
+    return best;
+  }
+  function cleanup(c) {
+    c.dead = true; clearTimeout(c.t); clearTimeout(c.w);
+    try { if (c.node) { c.node.onaudioprocess = null; c.node.disconnect(); } } catch (e) {}
+    try { if (c.src) c.src.disconnect(); } catch (e) {}
+    try { if (c.ctx) c.ctx.close(); } catch (e) {}
+    try { if (c.mr && c.mr.state !== 'inactive') c.mr.stop(); } catch (e) {}
+    if (cur === c) cur = null;
+  }
+  function finish(c) {
+    if (c.dead) return;
+    if (c.mr) { try { c.mr.stop(); } catch (e) { cleanup(c); send({err: 'rec'}); } return; }
+    var r = c.chunks.length ? wav(c.chunks, c.ctx.sampleRate) : null;
+    cleanup(c);
+    if (!r || r.sec < 2) { send({err: 'short'}); return; }
+    if (r.peak < 0.003) { send({err: 'silent'}); return; }
+    send({ok: 1, mime: 'audio/wav', b64: r.b64, sec: r.sec, how: 'pcm'});
+  }
+  function startRecorder(c, stream) {
+    /* 備援：WebAudio 沒有送資料進來時，改用 MediaRecorder 錄成 webm */
+    try {
+      var as = new MediaStream(stream.getAudioTracks());
+      var mt = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].filter(function (m) { return window.MediaRecorder && MediaRecorder.isTypeSupported(m); })[0];
+      if (!mt) throw new Error('nomr');
+      var parts = [];
+      c.mr = new MediaRecorder(as, {mimeType: mt, audioBitsPerSecond: 64000});
+      c.mr.ondataavailable = function (e) { if (e.data && e.data.size) parts.push(e.data); };
+      c.mr.onstop = function () {
+        var dead = c.dead; cleanup(c); if (dead && !c.want) return;
+        var bl = new Blob(parts, {type: mt});
+        if (bl.size < 3000) { send({err: 'short'}); return; }
+        var fr = new FileReader(); fr.onload = function () { send({ok: 1, mime: mt.split(';')[0], b64: String(fr.result).split(',')[1] || '', how: 'mr'}); }; fr.onerror = function () { send({err: 'read'}); }; fr.readAsDataURL(bl);
+      };
+      c.mr.start(500);
+    } catch (e) { cleanup(c); send({err: 'nocapture', msg: String(e && e.message || e)}); }
+  }
+  window.__wsTap = function (cmd) {
+    if (cmd === 'cancel') { if (cur) cleanup(cur); return; }
+    if (cmd === 'finish') { if (cur) { cur.want = true; finish(cur); } else send({err: 'none'}); return; }
+    if (cur) cleanup(cur);
+    var sec = Math.max(3, Math.min(20, +String(cmd).split(':')[1] || 10));
+    var v = pick();
+    if (!v) { send({err: 'noplay'}); return; }
+    var stream;
+    try { stream = v.captureStream ? v.captureStream() : v.mozCaptureStream ? v.mozCaptureStream() : null; } catch (e) { stream = null; }
+    if (!stream || !stream.getAudioTracks().length) { send({err: 'nocapture'}); return; }
+    var c = cur = {chunks: [], got: 0};
+    send({started: 1, title: document.title || ''});
+    c.t = setTimeout(function () { c.want = true; finish(c); }, sec * 1000);
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      c.ctx = new AC();
+      c.src = c.ctx.createMediaStreamSource(new MediaStream(stream.getAudioTracks()));
+      c.node = c.ctx.createScriptProcessor(4096, 2, 1);
+      var mute = c.ctx.createGain(); mute.gain.value = 0;     /* 只旁聽，不再多放一次聲音 */
+      c.node.onaudioprocess = function (e) {
+        if (c.dead) return;
+        var L = e.inputBuffer.getChannelData(0), Rr = e.inputBuffer.numberOfChannels > 1 ? e.inputBuffer.getChannelData(1) : L, m = new Float32Array(L.length);
+        for (var i = 0; i < L.length; i++) m[i] = (L[i] + Rr[i]) / 2;
+        c.chunks.push(m); c.got += m.length;
+      };
+      c.src.connect(c.node); c.node.connect(mute); mute.connect(c.ctx.destination);
+      if (c.ctx.state === 'suspended' && c.ctx.resume) c.ctx.resume();
+      /* 1.5 秒內沒有資料進來：WebAudio 被擋，改用 MediaRecorder */
+      c.w = setTimeout(function () { if (c.dead || c.got > 0) return; try { c.node.onaudioprocess = null; c.node.disconnect(); c.src.disconnect(); c.ctx.close(); } catch (e) {} c.node = c.src = c.ctx = null; startRecorder(c, stream); }, 1500);
+    } catch (e) { c.node = c.src = c.ctx = null; startRecorder(c, stream); }
+  };
 })();

@@ -16,7 +16,7 @@ var G_FIG = {
   perm: function(){ return '<div class="gFig"><div class="gDlg"><b>要允許「網頁擷取」傳送通知嗎？</b><div><span>不允許</span><span class="gHit">允許</span></div></div><em>手機跳出這種詢問時，選「允許」</em></div>'; },
   browse: function(){ return gBar([{ic: 'back'}, {ic: 'home'}, {t: '輸入網址或關鍵字', wide: 1}, {ic: 'grid', hit: 1, n: '1'}], '① 右上角的「功能選單」：擷取網頁、下載影片、收藏、無痕模式都在裡面'); },
   yt: function(){ return gNav(1) + '<div class="gFig"><div class="gStage"><span class="gPlay">' + gI('play', '') + '</span><span class="gFab gHit">' + gI('download') + '</span></div><em>看影片時，按可以拖曳的「⬇」懸浮按鈕就能下載</em></div>'; },
-  music: function(){ return gBar([{ic: 'back'}, {ic: 'home'}, {ic: 'reload'}, {ic: 'mic', hit: 1, n: '2'}, '<span class="gSeg"><i>' + gI('video') + '</i><i class="on gHit">' + gI('audio') + '</i><u>1</u></span>', {ic: 'more'}], '① 切到音符就是 YouTube Music　② 麥克風是「聽歌辨識」') +
+  music: function(){ return gBar([{ic: 'back'}, {ic: 'home'}, {ic: 'reload'}, {ic: 'listen', hit: 1, n: '2'}, '<span class="gSeg"><i>' + gI('video') + '</i><i class="on gHit">' + gI('audio') + '</i><u>1</u></span>', {ic: 'more'}], '① 切到音符就是 YouTube Music　② 圓形聲波按鈕是「聽歌辨識」（YouTube 和 YouTube Music 都有）') +
     gMini('歌名', '歌手（有同步歌詞時顯示正在唱的那句）', '播放時下方的小播放列：點一下打開播放面板，最右邊 ✕ 停止播放'); },
   ai: function(){ return gBar([{ic: 'back'}, {t: 'AI 摘要', wide: 1}, {t: '● Gemini', hit: 1, n: '1'}, {ic: 'more'}], '① 在「AI 摘要」分頁，點右上角顯示 AI 名稱的按鈕，打開「AI 設定」') +
     '<div class="gFig"><div class="gForm"><label>AI 引擎</label><div class="gSeg2"><i>Claude</i><i class="on">Gemini</i></div><label>Gemini API 金鑰</label><div class="gInp gHit">AIzaSy･･････････････<u>2</u></div></div><em>② 引擎選「Gemini」，把複製的金鑰貼到這一格</em></div>'; },
@@ -44,7 +44,7 @@ var GUIDE = [
     '<tr><th>權限</th><th>用在哪裡</th></tr>' +
     '<tr><td>通知</td><td>下載進度、下載完成、背景播放音樂時的播放控制。<b>建議允許</b>，不然關掉螢幕後下載和音樂可能會停。</td></tr>' +
     '<tr><td>安裝未知的應用程式</td><td>App 自己更新到新版本時需要（「設定 → 版本與更新」）。</td></tr>' +
-    '<tr><td>麥克風</td><td>聽歌辨識。</td></tr>' +
+    '<tr><td>麥克風</td><td>聽歌辨識要聽「周圍的聲音」時才需要；辨識 App 裡正在播的影片或音樂不需要。</td></tr>' +
     '<tr><td>相機</td><td>只用在「入侵者拍照」：有人連續輸錯 3 次解鎖密碼時拍一張。</td></tr>' +
     '<tr><td>螢幕錄製、勿擾模式</td><td>用螢幕錄影錄下抓不到的影片時需要；每次開始錄影系統會再問一次。</td></tr>' +
     '<tr><td>資料夾存取</td><td>「其他 App 下載自動搬回」要你自己選一次那個 App 的下載資料夾。</td></tr>' +
@@ -70,6 +70,7 @@ var GUIDE = [
     '<li><b>背景播放</b>：切到別的 App 或關螢幕，聲音會繼續播；回到主畫面時會變成小視窗（子母畫面）。</li>' +
     '<li><b>下載</b>：看影片時畫面上有一顆可以拖曳的「⬇」懸浮按鈕，按下去選畫質，或只下載音樂（MP3）。下載好的檔案在檔案庫。</li>' +
     '<li><b>交給其他下載 App</b>：下載面板裡也可以把影片交給 Snaptube 等 App 下載，下載完會自動搬回檔案庫（見「其他 App 下載自動搬回」）。</li>' +
+    '<li><b>聽歌辨識</b>：上方的圓形聲波按鈕。想知道影片裡在放哪首歌時按一下，App 會直接聽影片的聲音 10 秒（不用麥克風、影片不會暫停），再告訴你歌名（詳見「YouTube Music」那一節）。</li>' +
     '<li>右上角「⋮」可以調整播放器設定：預設畫質、播放速度、自動跳過贊助片段等。</li>' +
     '</ol>'},
 
@@ -79,7 +80,7 @@ var GUIDE = [
     '<li>點任何一首歌就會播放，並打開播放面板：封面、進度條、上一首／下一首、隨機、循環、喜歡、播放佇列。</li>' +
     '<li><b>歌詞</b>：播放面板按「歌詞」。App 會自動找會跟著唱的同步歌詞，找不到就顯示 YouTube Music 內建的歌詞；也可以按「找歌詞」自己挑。</li>' +
     '<li>把面板關掉後，下方會留一條小播放列，可以暫停、下一首，最右邊的 ✕ 是停止播放。</li>' +
-    '<li><b>聽歌辨識</b>：切換鈕旁邊的麥克風按鈕。讓手機聽周圍的音樂 10 秒，辨識出歌名後自動在 YouTube Music 搜尋。這個功能要先設定 Gemini 金鑰（見「AI 摘要」）。</li>' +
+    '<li><b>聽歌辨識</b>：切換鈕旁邊的圓形聲波按鈕（YouTube 和 YouTube Music 兩邊都有）。聽 10 秒後辨識出歌名。<br>・App 裡有影片或音樂在播：直接聽那個聲音，不用麥克風，<b>播放不會暫停</b>。<br>・沒有東西在播，或按「改聽周圍的聲音」：用麥克風聽外面的音樂（其他 App 或喇叭播的也可以）。<br>・在 YouTube Music 會自動去搜尋那首歌；在 YouTube 看影片時只顯示歌名，影片繼續播，要搜尋再自己按。<br>這個功能要先設定 Gemini 金鑰（見「AI 摘要」）。</li>' +
     '<li>手機的通知列和快速面板也會顯示正在播的歌，可以直接在那裡控制。</li>' +
     '</ol>'},
 
@@ -109,7 +110,7 @@ var GUIDE = [
     '<li><b>Word／Excel／PPT／文字檔</b>：點開就能看，按「編輯」可以改文字或儲存格再存檔；PPT 可以「投影播放」。啟用巨集的 Excel 可以看巨集程式碼，巨集會完整保留，但手機上不能執行。</li>' +
     '<li><b>整理</b>：長按檔案可以多選，再移到資料夾、改檔名、刪除。刪除的檔案會先進垃圾桶。</li>' +
     '<li><b>重複檔案提醒</b>：新加入的檔案跟已有的檔名一樣或大小一樣時，會問你要都保留、改檔名還是刪除。</li>' +
-    '<li><b>傳到電腦</b>：「設定 → 儲存與匯出 → Wi-Fi 傳到電腦」，電腦和手機連同一個 Wi-Fi，用電腦的瀏覽器就能下載檔案。</li>' +
+    '<li><b>傳到電腦或其他手機</b>：「設定 → 儲存與匯出 → 無線傳到電腦／其他手機」。對方掃畫面上的 QR Code（或輸入網址）就能用瀏覽器下載。兩邊要在同一台分享器底下（Wi-Fi 或網路線都可以）；沒有共同的網路時，打開這支手機的「個人熱點」讓對方連進來，或用 USB 網路共用。</li>' +
     '</ul>'},
 
   {ic: 'download', fig: 'watch', t: '其他 App 下載自動搬回（Snaptube 等）', html:

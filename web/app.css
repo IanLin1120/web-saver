@@ -906,3 +906,8 @@ body.ytmuDock #ytArea{bottom:calc(var(--dock) + 6px)}
 .gPlay{color:#fff;opacity:.85}
 .gFab{position:absolute;right:14px;bottom:14px;width:42px;height:42px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center}
 .gFab.gHit{border-radius:50%}
+
+.wifiQr{display:grid;place-items:center;margin:10px 0 2px}
+.wifiQr svg{border-radius:14px;border:1px solid var(--border-soft);box-shadow:0 2px 10px rgba(80,50,20,.1)}
+details.note summary{cursor:pointer}
+details.note p{margin:8px 0 0}

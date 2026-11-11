@@ -14,7 +14,6 @@ function ytModeUi(){
   var b = $('ytModeB'); if(!b) return;
   b.classList.toggle('music', !!mu);
   b.title = mu ? '目前是 YouTube Music，點一下切回 YouTube' : '目前是 YouTube，點一下切換到 YouTube Music';
-  var sb = $('ytStopB'); if(sb) sb.classList.toggle('hide', !mu);
 }
 
 function ytSyncLayout(){

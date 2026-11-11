@@ -227,7 +227,7 @@ YTMU.soft = function(){
 YTMU.setOwn = function(on){ YTMU.own = !!on; lsSet('ws.ytmuOwn', YTMU.own); YTMU.cmd('own', on ? '1' : '0'); YTMU.mini(); };
 
 /* ============================================================
-   聽歌辨識：用麥克風聽 10 秒，交給 Gemini 聽出歌名（聽不出歌名就用聽到的歌詞），再到 YouTube Music 搜尋
+   聽歌辨識：聽 10 秒，交給 Gemini 聽出歌名（聽不出歌名就用聽到的歌詞），再到 YouTube Music／YouTube 搜尋
    ============================================================ */
 function ytmuSearch(q){
   var u = 'https://music.youtube.com/search?q=' + encodeURIComponent(q);
@@ -236,61 +236,111 @@ function ytmuSearch(q){
   else ytEnsure(u);
   ytUpdateVisible();
 }
-function ytmuListen(){
+/* 聽歌辨識
+   來源兩種：'tap' 直接旁聽 App 裡 YouTube／YouTube Music 正在播的聲音（不經麥克風）；'mic' 用麥克風聽周圍。
+   兩種都不會暫停正在播的影片或音樂。 */
+var LSN = {cb: null};
+on('tapAudio', function(d){ if(LSN.cb) LSN.cb(d || {}); });
+function ytmuListen(force){
   if(!isApp || !NAT.has('micStart')){ toast('聽歌辨識需要新版 App（請安裝最新的 APK）', true); return; }
   if(!AICFG.gkey){ toast('聽歌辨識要用 Gemini：請先到「AI 摘要」設定 Gemini 金鑰', true, ['去設定', function(){ showView('ai'); if(typeof aiSettings === 'function') aiSettings(); }]); return; }
-  if(!NAT.call('audioOk')){ NAT.call('audioAsk'); toast('請允許使用麥克風，再按一次'); return; }
-  var SEC_N = 10, body = h('div', {class: 'lsnBox'}), ctl = new AbortController(), done = false, tmr = 0, t0 = 0, recOn = false;
-  var sheet = openSheet({title: '聽歌辨識', icon: 'mic', body: body, onClose: function(){ done = true; clearInterval(tmr); try{ ctl.abort(); }catch(e){} if(recOn){ recOn = false; NAT.call('micStop'); } }});
-  /* 正在用 App 播的音樂會蓋過外面的聲音：先暫停 */
-  var wasYt = YTMU.st && YTMU.st.playing, wasLocal = !Music.el.paused;
-  if(wasYt) YTMU.cmd('pause'); if(wasLocal) Music.el.pause();
+  var inMusic = YTB.modeMusic != null ? YTB.modeMusic : ytIsMusic(YTB.url);
+  var canTap = NAT.has('ytTap') && YTB.started;
+  var mode = force || (canTap ? 'tap' : 'mic');
+  if(mode === 'mic' && !NAT.call('audioOk')){ NAT.call('audioAsk'); toast('請允許使用麥克風，再按一次'); return; }
+  var SEC_N = 10, body = h('div', {class: 'lsnBox'}), ctl = new AbortController(), done = false, tmr = 0, t0 = 0, recOn = false, tapOn = false;
+  var sheet = openSheet({title: '聽歌辨識', icon: 'listen', body: body, onClose: function(){
+    done = true; clearInterval(tmr); LSN.cb = null; try{ ctl.abort(); }catch(e){}
+    if(recOn){ recOn = false; NAT.call('micStop'); }
+    if(tapOn){ tapOn = false; NAT.call('ytTap', 'cancel'); }
+  }});
+  var again = function(m){ sheet.close(); setTimeout(function(){ ytmuListen(m); }, 250); };
+  var swapB = function(){ return mode === 'tap'
+    ? h('button', {class: 'btn', html: icon('mic', 'sm') + '改聽周圍的聲音', onclick: function(){ again('mic'); }})
+    : canTap ? h('button', {class: 'btn', html: icon('listen', 'sm') + '改聽手機正在播的', onclick: function(){ again('tap'); }}) : null; };
   function view(big, sub, extra){
     body.textContent = '';
-    body.appendChild(h('div', {class: 'lsnOrb' + (recOn ? ' on' : ''), html: icon('mic', 'lg')}));
+    body.appendChild(h('div', {class: 'lsnOrb' + (recOn || tapOn ? ' on' : ''), html: icon(mode === 'tap' ? 'listen' : 'mic', 'lg')}));
     body.appendChild(h('b', {class: 'lsnBig', text: big}));
     if(sub) body.appendChild(h('div', {class: 'sub', style: {textAlign: 'center'}, text: sub}));
     if(extra) body.appendChild(extra);
     paintIcons(body);
   }
-  function fail(msg){ view('沒有辨識出來', msg, h('div', {class: 'btn-row', style: {justifyContent: 'center'}}, h('button', {class: 'btn pri', html: icon('mic', 'sm') + '再聽一次', onclick: function(){ sheet.close(); setTimeout(ytmuListen, 250); }}))); }
-  async function finish(){
-    clearInterval(tmr); if(done) return;
-    recOn = false;
-    var b64 = NAT.call('micStop');
+  function fail(msg){ view('沒有辨識出來', msg, h('div', {class: 'btn-row', style: {justifyContent: 'center', flexWrap: 'wrap'}}, h('button', {class: 'btn pri', html: icon('listen', 'sm') + '再聽一次', onclick: function(){ again(mode); }}), swapB())); }
+  async function ask(audio){
     if(done) return;
-    if(!b64){ fail('沒有錄到聲音，請確認麥克風權限'); return; }
     view('辨識中…', '交給 Gemini 聽這段音樂');
     try{
-      var r = await aiAskGemini('這是一段用手機麥克風錄下的音樂（可能有環境雜音，也可能是有人在哼唱）。請辨識這是哪一首歌。\n' +
+      var r = await aiAskGemini((mode === 'tap' ? '這是一段從影片或音樂直接錄下的聲音（可能同時有人講話、音效或背景音樂）。請辨識裡面的音樂是哪一首歌。\n' : '這是一段用手機麥克風錄下的音樂（可能有環境雜音，也可能是有人在哼唱）。請辨識這是哪一首歌。\n') +
         '只回傳 JSON：{"found": true 或 false, "title": "歌名（原文）", "artist": "歌手／演出者（原文）", "lyrics": "你實際聽到的一兩句歌詞（原文照寫，沒有聽到人聲就留空）", "confidence": 0 到 1 的數字, "note": "一句話說明（繁體中文）"}\n' +
         '規則：不確定是哪首歌時 found 填 false，不要亂猜歌名；但只要聽得到歌詞，lyrics 一定要照實寫下來（我會用歌詞去搜尋）。',
-        {audio: {mime: 'audio/aac', b64: b64}, signal: ctl.signal});
+        {audio: audio, signal: ctl.signal});
       if(done) return;
       r = r || {};
       var title = String(r.title || '').trim(), artist = String(r.artist || '').trim(), ly = String(r.lyrics || '').trim();
       var sure = r.found && title && (r.confidence == null || r.confidence >= 0.5);
       var q = sure ? (title + ' ' + artist).trim() : ly ? ly.split(/[\n。！？!?]/)[0].slice(0, 40) : '';
-      if(!q){ fail(r.note || '聽不出是哪首歌，也沒有聽到歌詞。靠近音源、等唱到人聲時再試一次。'); return; }
+      if(!q){ fail(r.note || '聽不出是哪首歌，也沒有聽到歌詞。等唱到人聲時再試一次。'); return; }
       buzz(15);
-      var go = function(){ if(!done){ sheet.close(); } ytmuSearch(q); };
+      var goMu = function(){ if(!done) sheet.close(); ytmuSearch(q); };
+      var goYt = function(){ if(!done) sheet.close(); showView('yt'); ytEnsure('https://m.youtube.com/results?search_query=' + encodeURIComponent(q)); };
+      /* 在 YouTube Music 裡：自動去搜尋（不會中斷正在播的歌）。在 YouTube 看影片時：只顯示結果，不自動跳頁，影片繼續播 */
       view(sure ? title : '用聽到的歌詞搜尋', sure ? (artist || '') : '「' + q + '」',
         h('div', null,
           r.note ? h('div', {class: 'sub', style: {textAlign: 'center', margin: '6px 0'}, text: r.note}) : null,
-          h('div', {class: 'btn-row', style: {justifyContent: 'center'}},
-            h('button', {class: 'btn pri', html: icon('search', 'sm') + '在 YouTube Music 搜尋', onclick: go}),
-            h('button', {class: 'btn', html: icon('mic', 'sm') + '再聽一次', onclick: function(){ sheet.close(); setTimeout(ytmuListen, 250); }}))));
-      /* 自動到 YouTube Music 搜尋 */
-      setTimeout(function(){ if(!done) go(); }, sure ? 1400 : 2200);
+          h('div', {class: 'btn-row', style: {justifyContent: 'center', flexWrap: 'wrap'}},
+            h('button', {class: 'btn pri', html: icon('audio', 'sm') + '在 YouTube Music 搜尋', onclick: goMu}),
+            inMusic ? null : h('button', {class: 'btn', html: icon('video', 'sm') + '在 YouTube 搜尋', onclick: goYt}),
+            h('button', {class: 'btn', html: icon('copy', 'sm') + '複製', onclick: function(){ copyText(q); }}),
+            h('button', {class: 'btn', html: icon('listen', 'sm') + '再聽一次', onclick: function(){ again(mode); }})),
+          inMusic ? null : h('div', {class: 'sub', style: {textAlign: 'center', marginTop: '8px'}, text: '影片會繼續播放；按上面的按鈕才會跳去搜尋'})));
+      if(inMusic) setTimeout(function(){ if(!done) goMu(); }, sure ? 1400 : 2200);
     }catch(e){ if(!done) fail((e && e.message) || '辨識失敗'); }
   }
+  function countdown(label){
+    t0 = Date.now();
+    var stopB = h('div', {class: 'btn-row', style: {justifyContent: 'center', flexWrap: 'wrap'}},
+      h('button', {class: 'btn', text: '聽夠了，開始辨識', onclick: function(){ if(Date.now() - t0 > 3000) finish(); else toast('再多聽幾秒'); }}), swapB());
+    view('正在聽…', label + '，還有 ' + SEC_N + ' 秒', stopB);
+    clearInterval(tmr);
+    tmr = setInterval(function(){
+      var left = SEC_N - Math.floor((Date.now() - t0) / 1000);
+      if(left <= 0){ if(mode === 'mic') finish(); else { var s0 = body.querySelector('.sub'); if(s0) s0.textContent = '整理聲音中…'; if(left < -4){ clearInterval(tmr); LSN.cb && LSN.cb({err: 'timeout'}); } } return; }
+      var s = body.querySelector('.sub'); if(s) s.textContent = label + '，還有 ' + left + ' 秒';
+    }, 300);
+  }
+  function finish(){
+    if(done) return;
+    if(mode === 'tap'){ NAT.call('ytTap', 'finish'); return; }
+    clearInterval(tmr); recOn = false;
+    var b64 = NAT.call('micStop');
+    if(!b64){ fail('沒有錄到聲音，請確認麥克風權限'); return; }
+    ask({mime: 'audio/aac', b64: b64});
+  }
+  function toMic(why){
+    /* 旁聽不到（沒有東西在播、或這支手機的瀏覽器元件不支援）：改用麥克風，不用使用者再按一次 */
+    tapOn = false; LSN.cb = null; clearInterval(tmr);
+    if(!NAT.call('audioOk')){ view(why, '可以改用麥克風聽周圍的聲音', h('div', {class: 'btn-row', style: {justifyContent: 'center'}}, h('button', {class: 'btn pri', html: icon('mic', 'sm') + '用麥克風聽', onclick: function(){ again('mic'); }}))); return; }
+    toast(why + '，改用麥克風聽周圍的聲音'); again('mic');
+  }
+  if(mode === 'tap'){
+    tapOn = true;
+    view('準備中…', '正在接上手機裡播放的聲音');
+    var guard = setTimeout(function(){ if(!done && tapOn && !t0) toMic('接不上正在播的聲音'); }, 2500);
+    LSN.cb = function(d){
+      if(done) return;
+      if(d.started){ clearTimeout(guard); countdown('直接聽 App 裡正在播的聲音（不用麥克風，播放不會中斷）'); return; }
+      clearTimeout(guard); clearInterval(tmr);
+      if(d.ok && d.b64){ tapOn = false; LSN.cb = null; ask({mime: d.mime || 'audio/wav', b64: d.b64}); return; }
+      if(d.err === 'noplay'){ toMic('App 裡現在沒有影片或音樂在播'); return; }
+      if(d.err === 'silent'){ tapOn = false; fail('錄到的是靜音。請確認影片有聲音、沒有被靜音，再試一次；或改聽周圍的聲音。'); return; }
+      if(d.err === 'short' || d.err === 'timeout'){ tapOn = false; fail('沒有錄到足夠的聲音，再試一次；或改聽周圍的聲音。'); return; }
+      toMic('這個畫面沒辦法直接旁聽');
+    };
+    NAT.call('ytTap', 'start:' + SEC_N);
+    return;
+  }
   if(!NAT.call('micStart')){ view('無法使用麥克風', '請到手機設定允許「網頁擷取」使用麥克風'); return; }
-  recOn = true; t0 = Date.now();
-  var stopB = h('div', {class: 'btn-row', style: {justifyContent: 'center'}}, h('button', {class: 'btn', text: '聽夠了，開始辨識', onclick: function(){ if(Date.now() - t0 > 3000) finish(); else toast('再多聽幾秒'); }}));
-  view('正在聽…', '把手機靠近音樂，還有 ' + SEC_N + ' 秒', stopB);
-  tmr = setInterval(function(){
-    var left = SEC_N - Math.floor((Date.now() - t0) / 1000);
-    if(left <= 0){ finish(); return; }
-    var s = body.querySelector('.sub'); if(s) s.textContent = '把手機靠近音樂，還有 ' + left + ' 秒';
-  }, 300);
+  recOn = true;
+  countdown('用麥克風聽周圍的聲音（正在播的不會暫停）');
 }

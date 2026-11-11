@@ -121,7 +121,7 @@ function renderSettings(){
       return h('div', {class: 'setRow wrap'}, h('span', {class: 'ic', html: icon('download')}), h('div', {class: 'grow'}, h('b', {text: '同時下載數量'}), h('div', {class: 'sub', text: 'YouTube、一般影片、音樂可以同時下載、互不干擾；超過的自動排隊（背景錄製會依序進行）'})), sel);
     })() : null,
     isApp ? swRow('同時存一份到手機「下載/網頁擷取」', '每次擷取或下載完成，自動複製一份到手機公開的下載資料夾', 'autoExport') : null,
-    isApp ? h('div', {class: 'setRow', onclick: openWifi}, h('span', {class: 'ic', html: icon('wifi')}), h('div', {class: 'grow'}, h('b', {text: 'Wi-Fi 傳到電腦'}), h('div', {class: 'sub', text: '電腦用瀏覽器直接下載檔案庫的原始檔案'})), h('span', {class: 'chev', text: '›'})) : null,
+    isApp ? h('div', {class: 'setRow', onclick: openWifi}, h('span', {class: 'ic', html: icon('wifi')}), h('div', {class: 'grow'}, h('b', {text: '無線傳到電腦／其他手機'}), h('div', {class: 'sub', text: '電腦用瀏覽器直接下載檔案庫的原始檔案'})), h('span', {class: 'chev', text: '›'})) : null,
     h('div', {class: 'setRow', onclick: function(){ showView('lib'); }}, h('span', {class: 'ic', html: icon('folder')}), h('div', {class: 'grow'}, h('b', {text: '開啟檔案庫'}), h('div', {class: 'sub', text: '查看空間使用、分類、匯出'})), h('span', {class: 'chev', text: '›'})),
     h('div', {class: 'setRow', onclick: bmBackup}, h('span', {class: 'ic', html: icon('books')}), h('div', {class: 'grow'}, h('b', {text: '收藏備份／還原'}), h('div', {class: 'sub', text: BM.items.length + ' 個收藏・' + BM.folders.length + ' 個收藏夾'})), h('span', {class: 'chev', text: '›'}))
   ]));
