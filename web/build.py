@@ -16,7 +16,7 @@ ad_js = 'window.WS_AD=' + json.dumps({'hosts': hosts, 'css': css}, ensure_ascii=
 def inline(src):            # 避免 </script> 提早結束標籤
     return src.replace('</script', '<\\/script')
 
-vend = ''.join('<script>' + inline(R('vendor', n + '.js')) + '</script>\n' for n in ['jszip', 'pdf', 'lame.min', 'wme.min', 'mp3wasm', 'katex.min', 'qrcode'])
+vend = ''.join('<script>' + inline(R('vendor', n + '.js')) + '</script>\n' for n in ['jszip', 'pdf', 'lame.min', 'wme.min', 'mp3wasm', 'katex.min', 'qrcode', 'jsqr'])
 worker = json.dumps(R('vendor', 'pdf.worker.js')).replace('</', '<\\/')
 inject_src = {n: R('inject', n + '.js') for n in ['page', 'capture', 'reader', 'media', 'yt']}
 inject_js = 'window.WS_INJECT=' + json.dumps(inject_src, ensure_ascii=False).replace('</', '<\\/') + ';'

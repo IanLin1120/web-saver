@@ -91,6 +91,17 @@ public class MainActivity extends Activity {
         });
         ui.setWebChromeClient(new WebChromeClient() {
             @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) { return chooseFile(cb, p); }
+            /* App 自己的畫面（掃 QR Code）要用相機：有相機權限才給 */
+            @Override public void onPermissionRequest(final android.webkit.PermissionRequest r) {
+                runOnUiThread(new Runnable() { @Override public void run() {
+                    try {
+                        boolean cam = false;
+                        for (String x : r.getResources()) if (android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(x)) cam = true;
+                        if (cam && checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) r.grant(new String[] {android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE});
+                        else r.deny();
+                    } catch (Throwable t) { try { r.deny(); } catch (Throwable x) { /* ignore */ } }
+                } });
+            }
             @Override public boolean onConsoleMessage(ConsoleMessage m) {
                 android.util.Log.d("WS-ui", m.message() + " @" + m.lineNumber());
                 return true;

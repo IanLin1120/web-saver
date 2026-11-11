@@ -190,3 +190,155 @@ function relayPane(body, mode, items, redraw){
   }).catch(function(e){ if(alive){ st2.className = 'note err'; st2.textContent = '無法開始：' + ((e && e.message) || e); } });
   return stop;
 }
+
+/* ============================================================
+   接收：別人給的中繼連結，直接在 App 裡下載、解密、存進檔案庫
+   ============================================================ */
+function rlParse(url){
+  var m = /^https?:\/\/[^#?]+\/get\.html#(g|p)\/(.+)$/.exec(String(url || '').trim());
+  if(!m) return null;
+  var H = m[2].split('/'), dec = function(s){ s = s.replace(/-/g, '+').replace(/_/g, '/'); while(s.length % 4) s += '='; var b = atob(s), u = new Uint8Array(b.length); for(var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+  try{
+    if(m[1] === 'g' && H.length >= 3) return {mode: 'g', key: dec(H[2]), base: (H[3] ? new TextDecoder().decode(dec(H[3])) : 'https://raw.githubusercontent.com') + '/' + H[0] + '/' + RELAY.REPO + '/t-' + H[1] + '/'};
+    if(m[1] === 'p' && H.length >= 2) return {mode: 'p', key: dec(H[1]), base: (H[2] ? new TextDecoder().decode(dec(H[2])) : RELAY.PIPE) + '/ws-' + H[0] + '-'};
+  }catch(e){}
+  return null;
+}
+/* 一邊解密一邊寫進檔案庫（APK 分段寫入，不把整個檔案放在記憶體） */
+function rlWriter(name){
+  var token = uid(), parts = [], app = isApp && NAT.has('libSaveChunk');
+  return {
+    write: async function(u8){
+      if(!app){ parts.push(u8); return; }
+      for(var o = 0; o < u8.length; o += 786432){
+        var r = NAT.json('libSaveChunk', token, await rlBlobB64(u8.subarray(o, o + 786432)), false, name, 'application/octet-stream', '{}');
+        if(!r || r.ok === false) throw new Error(r && r.err || '儲存失敗');
+      }
+    },
+    end: async function(){
+      if(!app) return await Lib.addBlob(new Blob(parts), name, {});
+      var r = NAT.json('libSaveChunk', token, '', true, name, 'application/octet-stream', '{}');
+      if(!r || r.ok === false) throw new Error(r && r.err || '儲存失敗');
+      return r.item;
+    }
+  };
+}
+function relayReceive(url){
+  var P = rlParse(url), body = h('div'), ctl = new AbortController(), alive = true;
+  var sheet = openSheet({title: '接收檔案', icon: 'download', body: body, tall: true, onClose: function(){ alive = false; try{ ctl.abort(); }catch(e){} }});
+  var st = h('div', {class: 'note', text: '連線中…'}); body.appendChild(st);
+  var list = h('div', {class: 'list'}); body.appendChild(list);
+  if(!P || !window.crypto || !crypto.subtle){ st.className = 'note err'; st.textContent = P ? '這支手機的系統元件不支援解密。' : '連結不完整，請對方重新分享。'; return; }
+  (async function(){
+    var key, man;
+    async function dec(u8){ return new Uint8Array(await crypto.subtle.decrypt({name: 'AES-GCM', iv: u8.subarray(0, 12)}, key, u8.subarray(12))); }
+    async function get(u, tries){
+      for(var i = 0; ; i++){
+        try{ var r = await fetch(u, {cache: 'no-store', signal: ctl.signal}); if(r.ok) return r; if(r.status !== 404 || i >= tries) throw new Error('伺服器回應 ' + r.status); }
+        catch(e){ if(i >= tries || !alive) throw e; }
+        await sleep(2500);
+      }
+    }
+    try{
+      key = await crypto.subtle.importKey('raw', P.key, 'AES-GCM', false, ['decrypt']);
+      var r;
+      try{ r = await get(P.base + 'm', P.mode === 'g' ? 4 : 0); }
+      catch(e){ if(alive){ st.className = 'note err'; st.textContent = P.mode === 'g' ? '找不到這份檔案：可能已經被對方刪除，或超過保留時間。請對方重新分享。' : '連不上中繼站，或對方已經關掉分享畫面。請對方重新分享。'; } return; }
+      try{ man = JSON.parse(new TextDecoder().decode(await dec(new Uint8Array(await r.arrayBuffer())))); }
+      catch(e){ st.className = 'note err'; st.textContent = '解不開：連結裡的金鑰不對，請對方重新分享。'; return; }
+      var tot = 0; man.files.forEach(function(f){ tot += f.s; });
+      var rows = man.files.map(function(f){ var sub = h('div', {class: 'sub', text: fmtSize(f.s)}); list.appendChild(h('div', {class: 'lrow'}, h('div', {class: 'grow'}, h('b', {text: f.n}), sub))); return sub; });
+      for(var i = 0; i < man.files.length; i++){
+        var f = man.files[i], w = rlWriter(f.n), got = 0;
+        var prog = function(n){ got += n; if(alive){ rows[i].textContent = fmtSize(got) + ' / ' + fmtSize(f.s); st.textContent = '下載中（' + (i + 1) + '/' + man.files.length + '）・' + Math.round(got / Math.max(1, f.s) * 100) + '%'; } };
+        if(P.mode === 'g'){
+          for(var c = 0; c < f.c; c++){ var p = await dec(new Uint8Array(await (await get(P.base + i + '/' + c, 3)).arrayBuffer())); await w.write(p); prog(p.length); }
+        } else {
+          var r2 = await fetch(P.base + i, {signal: ctl.signal}); if(!r2.ok) throw new Error('中繼站回應 ' + r2.status);
+          var rd = r2.body.getReader(), buf = new Uint8Array(0);
+          for(;;){
+            var x = await rd.read();
+            if(x.value){ var nb = new Uint8Array(buf.length + x.value.length); nb.set(buf); nb.set(x.value, buf.length); buf = nb; }
+            while(buf.length >= 4){
+              var len = new DataView(buf.buffer, buf.byteOffset, 4).getUint32(0);
+              if(buf.length < 4 + len) break;
+              var p2 = await dec(buf.slice(4, 4 + len)); await w.write(p2); prog(p2.length); buf = buf.slice(4 + len);
+            }
+            if(x.done) break;
+          }
+          if(buf.length) throw new Error('傳輸中斷，檔案不完整');
+        }
+        await w.end();
+        rows[i].textContent = fmtSize(f.s) + '・✓ 已存到檔案庫';
+      }
+      await Lib.refresh(); if(typeof renderLib === 'function') renderLib();
+      buzz(20); st.textContent = '✓ 完成：' + man.files.length + ' 個檔案（' + fmtSize(tot) + '）已存到檔案庫。';
+      body.appendChild(h('div', {class: 'btn-row'}, h('button', {class: 'btn pri', html: icon('folder', 'sm') + '打開檔案庫', onclick: function(){ sheet.close(); showView('lib'); }})));
+      paintIcons(body);
+    }catch(e){ if(alive){ st.className = 'note err'; st.textContent = '接收失敗：' + ((e && e.message) || e) + (P.mode === 'p' ? '（公用中繼每個檔案只能傳一次，請對方重新分享）' : ''); } }
+  })();
+}
+
+/* ============================================================
+   掃 QR Code：相機即時掃描（或從相片選），掃到網址就用 App 打開；掃到傳檔連結就直接接收
+   ============================================================ */
+function qrOpenResult(text){
+  text = String(text || '').trim();
+  if(!text) return;
+  buzz(20);
+  if(rlParse(text)){ relayReceive(text); return; }
+  if(/^https?:\/\//i.test(text) || (typeof looksLikeUrl === 'function' && looksLikeUrl(text) && !/\s/.test(text))){ toast('開啟：' + text.slice(0, 60)); navigate(toUrl(text)); return; }
+  var body = h('div', null, h('div', {class: 'wifiUrl', style: {fontSize: '14px', userSelect: 'text'}, text: text}),
+    h('div', {class: 'btn-row'}, h('button', {class: 'btn pri', html: icon('copy', 'sm') + '複製', onclick: function(){ copyText(text); }}),
+      h('button', {class: 'btn', html: icon('search', 'sm') + '用這段文字搜尋', onclick: function(){ s.close(); navigate(toUrl(text)); }})));
+  var s = openSheet({title: 'QR Code 的內容', icon: 'qr', body: body});
+}
+function qrDecodeCanvas(cv){
+  try{ var c = cv.getContext('2d', {willReadFrequently: true}), d = c.getImageData(0, 0, cv.width, cv.height), r = jsQR(d.data, d.width, d.height, {inversionAttempts: 'attemptBoth'}); return r && r.data ? r.data : ''; }catch(e){ return ''; }
+}
+function qrScan(){
+  if(isApp && NAT.has('camOk') && !NAT.call('camOk')){ NAT.call('camAsk'); toast('請允許使用相機，再按一次「掃 QR Code」'); return; }
+  var video = h('video', {playsinline: '', muted: '', autoplay: ''}), stream = null, alive = true, tmr = 0, det = null, torch = false;
+  var msg = h('div', {class: 'sub', style: {textAlign: 'center'}, text: '把 QR Code 放進框框裡'});
+  var file = h('input', {type: 'file', accept: 'image/*', style: {display: 'none'}, onchange: async function(){
+    var f = this.files && this.files[0]; if(!f) return;
+    try{
+      var bm = await createImageBitmap(f), sc = Math.min(1, 1600 / Math.max(bm.width, bm.height)), cv = document.createElement('canvas');
+      cv.width = Math.round(bm.width * sc); cv.height = Math.round(bm.height * sc); cv.getContext('2d').drawImage(bm, 0, 0, cv.width, cv.height);
+      var t = ''; if(det){ try{ var rs = await det.detect(cv); if(rs && rs[0]) t = rs[0].rawValue; }catch(e){} }
+      if(!t) t = qrDecodeCanvas(cv);
+      if(t) done(t); else toast('這張圖片裡找不到 QR Code', true);
+    }catch(e){ toast('讀不到這張圖片', true); }
+  }});
+  var torchB = h('button', {class: 'btn', html: icon('torch', 'sm') + '手電筒', style: {display: 'none'}, onclick: function(){
+    torch = !torch; try{ stream.getVideoTracks()[0].applyConstraints({advanced: [{torch: torch}]}); }catch(e){} this.classList.toggle('pri', torch); }});
+  var body = h('div', null, h('div', {class: 'qrCam'}, video, h('i')), msg,
+    h('div', {class: 'btn-row', style: {justifyContent: 'center'}}, h('button', {class: 'btn', html: icon('image', 'sm') + '從相片選', onclick: function(){ file.click(); }}), torchB), file);
+  var sheet = openSheet({title: '掃 QR Code', icon: 'qr', body: body, tall: true, onClose: stop});
+  function stop(){ alive = false; clearInterval(tmr); try{ if(stream) stream.getTracks().forEach(function(t){ t.stop(); }); }catch(e){} }
+  function done(t){ if(!alive) return; stop(); sheet.close(); setTimeout(function(){ qrOpenResult(t); }, 200); }
+  try{ if('BarcodeDetector' in window) det = new BarcodeDetector({formats: ['qr_code']}); }catch(e){ det = null; }
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ msg.textContent = '這裡沒辦法開相機，請用「從相片選」。'; return; }
+  navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: 'environment'}, width: {ideal: 1280}, height: {ideal: 720}}, audio: false}).then(function(s){
+    if(!alive){ s.getTracks().forEach(function(t){ t.stop(); }); return; }
+    stream = s; video.srcObject = s; video.play().catch(function(){});
+    try{ var cap = s.getVideoTracks()[0].getCapabilities && s.getVideoTracks()[0].getCapabilities(); if(cap && cap.torch) torchB.style.display = ''; }catch(e){}
+    var cv = document.createElement('canvas'), busy = false;
+    tmr = setInterval(async function(){
+      if(busy || !alive || video.readyState < 2 || !video.videoWidth) return;
+      busy = true;
+      try{
+        var t = '';
+        if(det){ try{ var rs = await det.detect(video); if(rs && rs[0]) t = rs[0].rawValue; }catch(e){ det = null; } }
+        if(!t){
+          var sc = Math.min(1, 720 / Math.max(video.videoWidth, video.videoHeight));
+          cv.width = Math.round(video.videoWidth * sc); cv.height = Math.round(video.videoHeight * sc);
+          cv.getContext('2d', {willReadFrequently: true}).drawImage(video, 0, 0, cv.width, cv.height);
+          t = qrDecodeCanvas(cv);
+        }
+        if(t) done(t);
+      }catch(e){}
+      busy = false;
+    }, 220);
+  }).catch(function(e){ msg.textContent = '無法開啟相機（' + ((e && e.name) || '') + '）。請到手機設定允許「網頁擷取」使用相機，或用「從相片選」。'; });
+}

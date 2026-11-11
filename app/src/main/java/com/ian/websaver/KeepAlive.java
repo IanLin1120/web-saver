@@ -26,6 +26,7 @@ public class KeepAlive extends Service {
     private static final String CH_RUN = "run", CH_DONE = "done";
     private static final Map<String, String> TASKS = new LinkedHashMap<>();
     private static Context app;
+    private static volatile boolean requested, started;
     private PowerManager.WakeLock wake;
     private WifiManager.WifiLock wifi;
 
@@ -40,8 +41,10 @@ public class KeepAlive extends Service {
         }
         Intent i = new Intent(app, KeepAlive.class);
         try {
-            if (need) { if (Build.VERSION.SDK_INT >= 26) app.startForegroundService(i); else app.startService(i); }
-            else app.stopService(i);
+            if (need) { requested = true; if (Build.VERSION.SDK_INT >= 26) app.startForegroundService(i); else app.startService(i); }
+            /* 剛要求啟動、服務還沒跑起來就 stopService，系統會直接讓 App 閃退（startForegroundService 之後一定要 startForeground）。
+               這種情況不要停，等 onStartCommand 跑到時它會發現沒有工作、自己結束。 */
+            else if (started || !requested) app.stopService(i);
         } catch (Throwable t) { /* 背景時不允許啟動前景服務：忽略 */ }
     }
 
@@ -221,11 +224,13 @@ public class KeepAlive extends Service {
                 wifi.acquire();
             } catch (Throwable t) { wifi = null; }
         }
-        if (empty) stopSelf();
+        started = true;
+        if (empty) { requested = false; started = false; stopSelf(); }
         return START_NOT_STICKY;
     }
 
     @Override public void onDestroy() {
+        started = false; requested = false;
         try { if (wake != null) wake.release(); } catch (Throwable t) { /* ignore */ }
         try { if (wifi != null) wifi.release(); } catch (Throwable t) { /* ignore */ }
         super.onDestroy();

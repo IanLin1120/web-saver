@@ -1,5 +1,6 @@
 package com.ian.websaver;
 
+import java.io.File;
 import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -297,6 +298,7 @@ final class Browser {
         w.setWebChromeClient(new Chrome(isPopup));
         w.setDownloadListener(new DownloadListener() {
             @Override public void onDownloadStart(String url, String ua, String cd, String mime, long len) {
+                if (url.startsWith("blob:") || url.startsWith("data:")) { blobDownload(w, url, mime); return; }
                 String name = URLUtil.guessFileName(url, cd, mime);
                 MediaDl.single(a, url, curUrl, name, mime);
                 if (isPopup && popup != null && popup.copyBackForwardList().getSize() <= 1) closePopup();
@@ -424,6 +426,32 @@ final class Browser {
             showError(v, r.getUrl().toString(), desc);
         }
 
+        /* 網頁把記憶體用光、顯示程序被系統收掉時：預設行為是整個 App 一起閃退。這裡改成只重建這個分頁、重新載入 */
+        @Override public boolean onRenderProcessGone(WebView v, android.webkit.RenderProcessGoneDetail d) {
+            try {
+                if (v == popup) { closePopup(); return true; }
+                if (v != wv) return true;
+                final String back = curUrl;
+                int idx = a.root.indexOfChild(wv), vis = wv.getVisibility();
+                android.view.ViewGroup.LayoutParams lp = wv.getLayoutParams();
+                a.root.removeView(wv);
+                try { wv.destroy(); } catch (Throwable t) { /* ignore */ }
+                wv = makeWebView(false);
+                wv.getSettings().setMediaPlaybackRequiresUserGesture(false);
+                final float rad = Util.dp(a, 16);
+                wv.setOutlineProvider(new android.view.ViewOutlineProvider() {
+                    @Override public void getOutline(View vv, android.graphics.Outline o) { o.setRoundRect(0, 0, vv.getWidth(), vv.getHeight(), rad); }
+                });
+                wv.setClipToOutline(true);
+                wv.setVisibility(vis);
+                a.root.addView(wv, idx < 0 ? 0 : idx, lp);
+                applyMode(false);
+                MainActivity.toast("這個網頁用掉太多記憶體，已重新載入");
+                if (back != null && (back.startsWith("http://") || back.startsWith("https://"))) wv.loadUrl(back);
+            } catch (Throwable t) { /* ignore */ }
+            return true;
+        }
+
         @Override public void onReceivedSslError(WebView v, SslErrorHandler h, SslError e) {
             h.cancel();
             if (!isPopup && e.getUrl() != null && e.getUrl().equals(curUrl)) showError(v, e.getUrl(), "安全憑證有問題（SSL），已停止載入以保護你的資料");
@@ -470,6 +498,43 @@ final class Browser {
         @Override public void onPermissionRequest(PermissionRequest r) { r.deny(); }
 
         @Override public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback cb) { cb.invoke(origin, false, false); }
+    }
+
+    /* ---------- 網頁用程式產生的檔案（blob:／data: 連結）：請頁面把內容分段交給 App 存進檔案庫 ---------- */
+    private final java.util.HashMap<String, File> blobFiles = new java.util.HashMap<String, File>();
+
+    void blobDownload(WebView w, String url, String mime) {
+        String tok = "b" + System.nanoTime();
+        MainActivity.toast("開始下載…");
+        String js = "(function(){var u=" + JSONObject.quote(url) + ",t=" + JSONObject.quote(tok) + ",B=window.WSPage;if(!B||!B.blobChunk)return;"
+            + "var nm='';try{var as=document.querySelectorAll('a[download]');for(var i=0;i<as.length;i++)if(as[i].href===u){nm=as[i].getAttribute('download')||'';break;}}catch(e){}"
+            + "fetch(u).then(function(r){return r.blob()}).then(function(b){var CH=786432,o=0;"
+            + "function next(){var last=o+CH>=b.size,fr=new FileReader();fr.onload=function(){B.blobChunk(t,String(fr.result).split(',')[1]||'',last,nm,b.type||'');o+=CH;if(!last)next();};"
+            + "fr.onerror=function(){B.blobChunk(t,'!err',true,nm,'');};fr.readAsDataURL(b.slice(o,o+CH));}next();})"
+            + ".catch(function(){B.blobChunk(t,'!err',true,nm,'');});})()";
+        w.evaluateJavascript(js, null);
+    }
+
+    void blobChunk(final String tok, final String b64, final boolean last, final String name, final String mime) {
+        try {
+            File f;
+            synchronized (blobFiles) { f = blobFiles.get(tok); }
+            if ("!err".equals(b64)) { if (f != null) { f.delete(); synchronized (blobFiles) { blobFiles.remove(tok); } } MainActivity.toast("下載失敗：這個網頁的檔案讀不到"); return; }
+            String nm = name == null ? "" : name.trim().replaceAll("[\\\\/:*?\"<>|\\r\\n]", "_");
+            if (nm.isEmpty()) {
+                String ext = android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(mime == null ? "" : mime.split(";")[0].trim());
+                nm = "下載_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(new java.util.Date()) + "." + (ext == null || ext.isEmpty() ? "bin" : ext);
+            }
+            if (f == null) { f = Lib.get(a).tmpFile(Util.extOf(nm)); synchronized (blobFiles) { blobFiles.put(tok, f); } }
+            java.io.FileOutputStream os = new java.io.FileOutputStream(f, true);
+            os.write(android.util.Base64.decode(b64, android.util.Base64.DEFAULT));
+            os.close();
+            if (!last) return;
+            synchronized (blobFiles) { blobFiles.remove(tok); }
+            Lib.get(a).add(f, nm, mime == null || mime.isEmpty() ? "application/octet-stream" : mime, curUrl, nm, null);
+            MainActivity.emit("lib", "");
+            MainActivity.toast("✓ 已存到檔案庫：" + nm);
+        } catch (Throwable t) { MainActivity.toast("下載失敗：" + t.getMessage()); }
     }
 
     static String hostOf(String url) {
