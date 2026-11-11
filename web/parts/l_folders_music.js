@@ -103,8 +103,9 @@ Music.playList = async function(items, start){
   if(this.shuffle){ var first = this.queue.splice(this.idx, 1)[0]; this.queue.sort(function(){ return Math.random() - .5; }); this.queue.unshift(first); this.idx = 0; }
   await this.load(true);
 };
-Music.playItem = function(it){
-  var L = musicItems();
+Music.playItem = function(it, list){
+  /* 從檔案庫的某個資料夾點歌：播放佇列只放那個資料夾裡的歌（照畫面上的順序），不是整個音樂庫 */
+  var L = list ? list.filter(function(x){ return x.cat === 'audio' && !SEC.hidden(x); }) : musicItems();
   var i = L.findIndex(function(x){ return x.id === it.id; });
   if(i < 0){ L = [it]; i = 0; }
   this.playList(L, i);

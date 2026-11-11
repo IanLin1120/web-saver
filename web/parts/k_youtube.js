@@ -194,6 +194,7 @@ async function ytPageData(id, onStep){
   var fromMusic = typeof ytIsMusic === 'function' && ytIsMusic(YTB.url) && isApp && NAT.has('ytSwitch');
   var muUrl = YTB.url;
   var bgOk = fromMusic && NAT.has('ytBgLoad');
+  if(bgOk) YTB.bgUsed = true;   /* YouTube 那邊被拿去在背景讀資訊：下次切過去時回首頁 */
   try{ return await ytPageData0(id, onStep, fromMusic, bgOk); }
   finally{
     if(bgOk) NAT.call('ytBgPause');

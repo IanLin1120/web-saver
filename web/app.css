@@ -861,3 +861,48 @@ body.ytmuDock #ytArea{bottom:calc(var(--dock) + 6px)}
 .gTbl td:first-child{white-space:nowrap;font-weight:700}
 .gEnd{display:flex;flex-direction:column;align-items:center;gap:10px;padding:14px 0 18px;text-align:center}
 .gOk{min-width:70%;padding:14px 20px;font-size:16px}
+
+/* 說明書示意圖 */
+.gFig{margin:8px 0 12px;display:flex;flex-direction:column;gap:6px}
+.gFig em{font-style:normal;font-size:12.5px;color:var(--text-muted);text-align:center;line-height:1.5}
+.gFig .i{flex:none}
+.gHit{outline:2.5px solid #d24a3a;outline-offset:2px;border-radius:12px;position:relative}
+.gFig u{text-decoration:none;position:absolute;right:-7px;top:-9px;min-width:17px;height:17px;border-radius:9px;background:#d24a3a;color:#fff;font:700 11px/17px system-ui;text-align:center;z-index:1}
+.gNav,.gBar,.gMini,.gRows,.gForm,.gDlg,.gFlow,.gStage{background:var(--bg);border:1px solid var(--border-soft);border-radius:18px;box-shadow:0 2px 8px rgba(80,50,20,.08)}
+.gNav{display:flex;justify-content:space-around;padding:8px 6px}
+.gNav span{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 9px;border-radius:14px;font-size:11px;font-weight:700;color:var(--text)}
+.gNav span i,.gB i,.gFlow i,.gSeg2 i{font-style:normal}
+.gNav span.on{background:var(--accent);color:var(--accent-fg)}
+.gBar{display:flex;align-items:center;gap:8px;padding:9px 12px}
+.gB{position:relative;display:flex;align-items:center;gap:5px;padding:6px;font-size:12.5px;color:var(--text);white-space:nowrap}
+.gB.wide{flex:1;min-width:0;background:var(--surface-2);border-radius:999px;padding:7px 12px;color:var(--text-muted);overflow:hidden}
+.gSeg{position:relative;display:flex;background:var(--surface-2);border-radius:999px;padding:3px}
+.gSeg i{display:grid;place-items:center;width:38px;height:30px;border-radius:999px}
+.gSeg i.on{background:#e0245e;color:#fff}
+.gMini{display:flex;align-items:center;gap:10px;padding:8px 12px}
+.gArt{width:38px;height:38px;border-radius:10px;background:var(--c-audio,#8a6bb0);color:#fff;display:grid;place-items:center;flex:none}
+.gT{flex:1;min-width:0;display:flex;flex-direction:column}
+.gT small,.gRow small{color:var(--text-muted);font-size:11.5px;line-height:1.4}
+.gX{padding:4px;display:grid}
+.gRows{padding:2px 12px}
+.gRow{position:relative;display:flex;align-items:center;gap:10px;padding:10px 4px;border-top:1px solid var(--border-soft)}
+.gRow:first-child{border-top:0}
+.gRow span{flex:1;min-width:0;display:flex;flex-direction:column}
+.gRow s{text-decoration:none;color:var(--text-muted)}
+.gRow.gHit{margin:4px -4px;padding:10px 8px}
+.gForm{padding:12px;display:flex;flex-direction:column;gap:6px}
+.gForm label{font-size:12px;color:var(--text-muted);font-weight:700}
+.gSeg2{display:flex;background:var(--surface-2);border-radius:999px;padding:3px;font-size:13px;font-weight:700}
+.gSeg2 i{flex:1;text-align:center;padding:6px;border-radius:999px}
+.gSeg2 i.on{background:var(--accent);color:var(--accent-fg)}
+.gInp{position:relative;background:var(--surface-2);border-radius:10px;padding:9px 12px;font:13px ui-monospace,monospace;color:var(--text-muted)}
+.gDlg{padding:14px;display:flex;flex-direction:column;gap:12px;text-align:center}
+.gDlg div{display:flex;justify-content:center;gap:14px}
+.gDlg span{padding:7px 20px;border-radius:999px;background:var(--surface-2);font-weight:700;font-size:13px}
+.gFlow{display:flex;align-items:center;justify-content:space-around;padding:12px 8px}
+.gFlow span{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11.5px;text-align:center;padding:6px 8px;line-height:1.35}
+.gFlow b{color:var(--text-muted)}
+.gStage{position:relative;height:120px;background:#2b2520;display:grid;place-items:center}
+.gPlay{color:#fff;opacity:.85}
+.gFab{position:absolute;right:14px;bottom:14px;width:42px;height:42px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center}
+.gFab.gHit{border-radius:50%}

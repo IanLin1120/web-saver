@@ -112,7 +112,10 @@ $('ytModeB').addEventListener('click', function(){
   if(isApp && NAT.has('buzz')) NAT.call('buzz', 12);
   var url = toMusic ? (YTB.last.music || YT_MUSIC) : (YTB.last.yt || YT_HOME);
   /* APK：YouTube 與 YouTube Music 各用一個瀏覽器，切換只是換顯示，不重新載入 */
-  if(isApp && NAT.has('ytSwitch')){ YTB.started = true; NAT.call('ytSwitch', toMusic, url); ytUpdateVisible(); }
+  /* 剛才在背景用 YouTube 讀過下載資訊（停在那部影片）：切到 YouTube 時回首頁 */
+  var home = !toMusic && YTB.bgUsed; if(!toMusic) YTB.bgUsed = false;
+  if(home) url = YT_HOME;
+  if(isApp && NAT.has('ytSwitch')){ YTB.started = true; NAT.call('ytSwitch', toMusic, url); if(home) NAT.call('ytLoad', YT_HOME); ytUpdateVisible(); }
   else ytEnsure(url);
 });
 $('ytMore').addEventListener('click', function(){

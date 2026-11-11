@@ -335,7 +335,7 @@ function renderLibList(){
       if(press === -1 || moved){ press = 0; return; }
       clearTimeout(press); press = 0;
       if(LV.selMode){ if(LV.sel.has(it.id)) LV.sel.delete(it.id); else LV.sel.add(it.id); el.classList.toggle('on'); renderSelBar(); }
-      else if(it.cat === 'audio') Music.playItem(it);
+      else if(it.cat === 'audio') Music.playItem(it, L);
       else Viewer.open(it, L);
     });
     el.addEventListener('pointercancel', function(){ clearTimeout(press); press = 0; });
@@ -368,7 +368,7 @@ function renderSelBar(){
   }}));
   bar.appendChild(h('button', {class: 'ib', html: icon('folder'), title: '移到資料夾', disabled: !n, onclick: function(){
     if(!oneCat){ toast('資料夾是依種類分開的，請只選同一種類的檔案', true); return; }
-    folderPicker(oneCat, '移到資料夾', function(fid){ LF.setItems(picked.map(function(x){ return x.id; }), fid); LV.sel.clear(); LV.selMode = false; toast('已移動'); renderLib(); }, {cur: LV.folder[oneCat] || ''});
+    folderPicker(oneCat, '移到資料夾', function(fid){ LF.setItems(picked.map(function(x){ return x.id; }), fid); LV.sel.clear(); LV.selMode = false; toast('已移動'); renderLib(); dupOnMove(picked, fid); }, {cur: LV.folder[oneCat] || ''});
   }}));
   var htmls = picked.filter(function(x){ return x.cat === 'html'; });
   if(htmls.length) bar.appendChild(h('button', {class: 'ib', html: icon('pdf'), title: '轉成 PDF', onclick: function(){ batchPdfDlg(htmls); }}));
@@ -691,6 +691,21 @@ on('libChanged', function(){
   });
   dupNext();
 });
+/* 把檔案移到另一個資料夾時：那個資料夾裡已經有檔名一樣（或大小完全一樣）的檔案，也提醒 */
+function dupOnMove(moved, fid){
+  if(CFG.dupAsk === false) return;
+  var ids = {}; moved.forEach(function(m){ ids[m.id] = 1; });
+  moved.forEach(function(nw){
+    var hit = null, nameHit = false;
+    (Lib.items || []).forEach(function(o){
+      if(ids[o.id] || areaOf(o) !== areaOf(nw) || LF.folderOf(o.id) !== (fid || '')) return;
+      if(dupKey(o.name) === dupKey(nw.name)){ if(!nameHit){ hit = o; nameHit = true; } }
+      else if(!hit && o.size === nw.size && nw.size > 50 * 1024 && dupExt(o.name) === dupExt(nw.name)) hit = o;
+    });
+    if(hit) DUP.queue.push({nw: nw, old: hit, name: nameHit, size: hit.size === nw.size, moved: true});
+  });
+  dupNext();
+}
 function dupNext(){
   if(DUP.busy || !DUP.queue.length) return;
   var d = DUP.queue.shift(), nw = Lib.byId(d.nw.id), old = Lib.byId(d.old.id);
@@ -700,14 +715,14 @@ function dupNext(){
   var verdict = d.name && d.size ? '檔名和大小都一樣，很可能是同一個檔案。' : d.name ? '只有檔名一樣、大小不同，可能是不同的檔案（或不同畫質／版本）。' : '檔名不同，但大小完全一樣，可能是同一個檔案。';
   var row = function(tag, it){ return h('div', {class: 'lrow', style: {cursor: 'default'}}, h('div', {class: 'th', style: Lib.thumb(it) ? {backgroundImage: 'url("' + Lib.thumb(it) + '")'} : {background: (CAT[areaOf(it)] || CAT.other).c}, html: Lib.thumb(it) ? '' : icon(areaIcon(areaOf(it)))}),
     h('div', {class: 't'}, h('b', {text: it.name}), h('div', {class: 'sub', text: tag + '・' + fmtSize(it.size) + '・' + new Date(it.time).toLocaleString('zh-TW', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'})}))); };
-  var body = h('div', null, h('div', {class: 'note', text: verdict}), h('div', {class: 'list'}, row('剛加入', nw), row('原本就有', old)));
+  var body = h('div', null, h('div', {class: 'note', text: verdict}), h('div', {class: 'list'}, row(d.moved ? '剛移過來' : '剛加入', nw), row(d.moved ? '這個資料夾原本就有' : '原本就有', old)));
   var s = openSheet({title: '可能是重複的檔案', icon: 'copy', body: body, onClose: done,
     foot: h('div', {style: {display: 'contents'}},
       h('button', {class: 'btn ghost', text: '都保留', onclick: function(){ s.close(); }}),
       h('button', {class: 'btn', html: icon('edit', 'sm') + '改檔名', onclick: async function(){
-        var n = await promptDlg('幫剛加入的檔案改檔名', nw.name.replace(/\.[a-z0-9]+$/i, ''));
+        var n = await promptDlg(d.moved ? '幫剛移過來的檔案改檔名' : '幫剛加入的檔案改檔名', nw.name.replace(/\.[a-z0-9]+$/i, ''));
         if(n){ await Lib.rename(nw, n); await Lib.refresh(); renderLib(); toast('已改檔名'); s.close(); }
       }}),
-      h('button', {class: 'btn pri', html: icon('trash', 'sm') + '刪除剛加入的', onclick: async function(){ s.close(); await Lib.trash([nw.id]); renderLib(); toast('已把剛加入的那個丟到垃圾桶'); }}))});
+      h('button', {class: 'btn pri', html: icon('trash', 'sm') + (d.moved ? '刪除移過來的' : '刪除剛加入的'), onclick: async function(){ s.close(); await Lib.trash([nw.id]); renderLib(); toast('已把' + (d.moved ? '移過來' : '剛加入') + '的那個丟到垃圾桶'); }}))});
   paintIcons(body);
 }

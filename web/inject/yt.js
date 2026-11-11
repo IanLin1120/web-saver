@@ -432,6 +432,7 @@
     var p = playerEl();
     /* Shorts 用 YouTube 自己的介面（愛心、留言、分享、訂閱都要能按），不蓋上 App 的播放控制 */
     var shorts = /^\/shorts\//.test(location.pathname) || /^music\./.test(location.hostname);   /* YouTube Music 也用它自己的播放介面 */
+    document.documentElement.classList.toggle('__wsshorts', /^\/shorts\//.test(location.pathname));
     if (O.skin === false || !videoId() || !p || shorts) {
       if (host) host.style.display = 'none';
       document.documentElement.classList.remove('__wsskin');
@@ -449,6 +450,7 @@
         'html.__wsfs .html5-video-container{position:absolute!important;inset:0!important;width:100%!important;height:100%!important}' +
         'html.__wsfs .html5-video-player video{position:absolute!important;left:0!important;top:0!important;width:100%!important;height:100%!important;object-fit:contain!important;transform:none!important}' +
         'html.__wsfs.__wsfill .html5-video-player video{object-fit:cover!important}' +
+        'html.__wsshorts #__ws_skin{display:none!important;pointer-events:none!important}' +
         'html.__wserr #__ws_skin{display:none!important}html.__wserr.__wsskin .ytm-player-error-overlay-renderer-host{display:block!important}';
       (document.head || document.documentElement).appendChild(skinCss);
     }
@@ -671,7 +673,8 @@
     var lastInfoId = '';
     function upd() {
       var pe = playerEl(), id = videoId();
-      if (!pe || !id || O.skin === false) { host.style.display = 'none'; setTimeout(function () { requestAnimationFrame(upd); }, 300); return; }
+      /* Shorts：控制層一律不顯示（以前這裡沒擋，從一般影片滑到 Shorts 時控制層可能又蓋回去，愛心、留言就按不到） */
+      if (!pe || !id || O.skin === false || /^\/shorts\//.test(location.pathname)) { host.style.display = 'none'; setTimeout(function () { requestAnimationFrame(upd); }, 300); return; }
       var r = isFs() ? {left: 0, top: 0, width: innerWidth, height: innerHeight, bottom: innerHeight} : pe.getBoundingClientRect();
       var ok = r.width > 80 && r.height > 60 && r.bottom > 30 && r.top < innerHeight - 30 && !document.documentElement.classList.contains('__wspip');
       host.style.display = ok ? 'block' : 'none';

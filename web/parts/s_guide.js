@@ -2,8 +2,32 @@
    軟體使用說明書：設定頁最上面可以隨時打開；第一次使用 App 時自動顯示，滑到最下面按確認才開始使用
    ============================================================ */
 var GUIDE_VER = 1;
+/* 示意圖：用 App 自己的圖示和配色畫的小畫面，標出要按的地方（.gHit = 重點） */
+function gI(n, sz){ return icon(n, sz || 'sm'); }
+function gNav(on){
+  var T = [['globe', '瀏覽'], ['video', 'YouTube'], ['sparkle', 'AI 摘要'], ['folder', '檔案庫'], ['gear', '設定']];
+  return '<div class="gFig"><div class="gNav">' + T.map(function(t, i){ return '<span class="' + (i === on ? 'on' : '') + '">' + gI(t[0]) + '<i>' + t[1] + '</i></span>'; }).join('') + '</div><em>App 最下面的五個分頁' + (on != null && on >= 0 ? '，點「' + T[on][1] + '」' : '') + '</em></div>';
+}
+function gBar(items, cap){ return '<div class="gFig"><div class="gBar">' + items.map(function(x){ return typeof x === 'string' ? x : '<span class="gB' + (x.hit ? ' gHit' : '') + (x.wide ? ' wide' : '') + '">' + (x.ic ? gI(x.ic) : '') + (x.t ? '<i>' + x.t + '</i>' : '') + (x.n ? '<u>' + x.n + '</u>' : '') + '</span>'; }).join('') + '</div><em>' + cap + '</em></div>'; }
+function gRows(rows, cap){ return '<div class="gFig"><div class="gRows">' + rows.map(function(r){ return '<div class="gRow' + (r.hit ? ' gHit' : '') + '">' + gI(r.ic) + '<span><b>' + r.t + '</b>' + (r.s ? '<small>' + r.s + '</small>' : '') + '</span>' + (r.n ? '<u>' + r.n + '</u>' : '<s>›</s>') + '</div>'; }).join('') + '</div><em>' + cap + '</em></div>'; }
+function gMini(title, sub, cap){ return '<div class="gFig"><div class="gMini"><span class="gArt">' + gI('audio') + '</span><span class="gT"><b>' + title + '</b><small>' + sub + '</small></span>' + gI('pause') + gI('fwd') + '<span class="gHit gX">' + gI('x') + '</span></div><em>' + cap + '</em></div>'; }
+var G_FIG = {
+  intro: function(){ return gNav(-1); },
+  perm: function(){ return '<div class="gFig"><div class="gDlg"><b>要允許「網頁擷取」傳送通知嗎？</b><div><span>不允許</span><span class="gHit">允許</span></div></div><em>手機跳出這種詢問時，選「允許」</em></div>'; },
+  browse: function(){ return gBar([{ic: 'back'}, {ic: 'home'}, {t: '輸入網址或關鍵字', wide: 1}, {ic: 'grid', hit: 1, n: '1'}], '① 右上角的「功能選單」：擷取網頁、下載影片、收藏、無痕模式都在裡面'); },
+  yt: function(){ return gNav(1) + '<div class="gFig"><div class="gStage"><span class="gPlay">' + gI('play', '') + '</span><span class="gFab gHit">' + gI('download') + '</span></div><em>看影片時，按可以拖曳的「⬇」懸浮按鈕就能下載</em></div>'; },
+  music: function(){ return gBar([{ic: 'back'}, {ic: 'home'}, {ic: 'reload'}, {ic: 'mic', hit: 1, n: '2'}, '<span class="gSeg"><i>' + gI('video') + '</i><i class="on gHit">' + gI('audio') + '</i><u>1</u></span>', {ic: 'more'}], '① 切到音符就是 YouTube Music　② 麥克風是「聽歌辨識」') +
+    gMini('歌名', '歌手（有同步歌詞時顯示正在唱的那句）', '播放時下方的小播放列：點一下打開播放面板，最右邊 ✕ 停止播放'); },
+  ai: function(){ return gBar([{ic: 'back'}, {t: 'AI 摘要', wide: 1}, {t: '● Gemini', hit: 1, n: '1'}, {ic: 'more'}], '① 在「AI 摘要」分頁，點右上角顯示 AI 名稱的按鈕，打開「AI 設定」') +
+    '<div class="gFig"><div class="gForm"><label>AI 引擎</label><div class="gSeg2"><i>Claude</i><i class="on">Gemini</i></div><label>Gemini API 金鑰</label><div class="gInp gHit">AIzaSy･･････････････<u>2</u></div></div><em>② 引擎選「Gemini」，把複製的金鑰貼到這一格</em></div>'; },
+  lib: function(){ return gBar([{ic: 'reload', n: '1'}, {ic: 'plus', hit: 1, n: '2'}, {t: '搜尋檔名、網址', wide: 1}, {ic: 'sort'}, {ic: 'check', n: '3'}], '① 重新整理　② 匯入手機裡的檔案　③ 多選（也可以長按檔案）'); },
+  watch: function(){ return gRows([{ic: 'film', t: '圖片與影片下載', s: '設定頁裡的這一區'}, {ic: 'download', t: '其他 App 下載自動搬回', s: 'Snaptube、Quetta 等下載完自動搬進檔案庫', hit: 1, n: '1'}], '① 設定 → 圖片與影片下載 → 其他 App 下載自動搬回') +
+    '<div class="gFig"><div class="gFlow"><span>' + gI('video') + '<i>YouTube<br>下載面板</i></span><b>→</b><span>' + gI('download') + '<i>交給其他<br>App 下載</i></span><b>→</b><span class="gHit">' + gI('folder') + '<i>自動搬回<br>檔案庫</i></span></div><em>設定好之後的流程</em></div>'; },
+  lock: function(){ return gRows([{ic: 'lock', t: '密碼鎖與指紋', s: '設定 → 隱私與安全', hit: 1}], '在這裡設定 6 位數解鎖密碼') + '<div class="gFig"><div class="gPin"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div><em>解鎖時輸入 6 位數，或用指紋</em></div>'; },
+  upd: function(){ return gRows([{ic: 'reload', t: '版本與更新', s: '檢查新版本、分享 App 下載連結', hit: 1}], '設定 → 版本與更新'); }
+};
 var GUIDE = [
-  {ic: 'info', t: '這套 App 可以做什麼', open: true, html:
+  {ic: 'info', fig: 'intro', t: '這套 App 可以做什麼', open: true, html:
     '<p>「網頁擷取」把常用的幾件事放在同一個 App，下面五個分頁各管一件事：</p>' +
     '<ul>' +
     '<li><b>瀏覽</b>：內建瀏覽器，擋廣告，可以把整個網頁存成離線檔、下載網頁裡的圖片和影片。</li>' +
@@ -14,7 +38,7 @@ var GUIDE = [
     '</ul>' +
     '<p class="gTip">下面每一段點一下標題就能展開。之後想再看，到「設定」最上面的「軟體使用說明書」。</p>'},
 
-  {ic: 'shield', t: '第一次使用：會問你的權限', open: true, html:
+  {ic: 'shield', fig: 'perm', t: '第一次使用：會問你的權限', open: true, html:
     '<p>用到某個功能時，手機才會跳出詢問，選「允許」就好。不用的功能可以不允許，其他功能不受影響。</p>' +
     '<table class="gTbl">' +
     '<tr><th>權限</th><th>用在哪裡</th></tr>' +
@@ -28,7 +52,7 @@ var GUIDE = [
     '</table>' +
     '<p class="gTip">省電設定：有些手機會把背景的 App 關掉。如果關螢幕後音樂或下載會中斷，請到手機的「設定 → 應用程式 → 網頁擷取 → 電池」選「不限制」。</p>'},
 
-  {ic: 'globe', t: '瀏覽：上網、存網頁、下載圖片影片', html:
+  {ic: 'globe', fig: 'browse', t: '瀏覽：上網、存網頁、下載圖片影片', html:
     '<p>在上方輸入網址或關鍵字就能上網，廣告會自動擋掉。右上角的「功能選單」（格子圖示）裡有這些功能：</p>' +
     '<ul>' +
     '<li><b>擷取網頁</b>：把整個網頁連同圖片存成一個離線檔，放進檔案庫的「網頁」，沒網路也能看。</li>' +
@@ -40,7 +64,7 @@ var GUIDE = [
     '<p><b>記住帳號密碼</b>：登入網站時，下方會問要不要儲存密碼，下次自動填入。第一次儲存前要先設定 6 位數的解鎖密碼。</p>' +
     '<p class="gTip">在瀏覽器點到 YouTube 或 YouTube Music 的連結，會自動交給「YouTube」分頁打開。</p>'},
 
-  {ic: 'video', t: 'YouTube：無廣告、背景播放、下載', html:
+  {ic: 'video', fig: 'yt', t: 'YouTube：無廣告、背景播放、下載', html:
     '<ol>' +
     '<li>點下方的「YouTube」分頁，就是沒有廣告的 YouTube。可以登入自己的 Google 帳號看訂閱內容。</li>' +
     '<li><b>背景播放</b>：切到別的 App 或關螢幕，聲音會繼續播；回到主畫面時會變成小視窗（子母畫面）。</li>' +
@@ -49,7 +73,7 @@ var GUIDE = [
     '<li>右上角「⋮」可以調整播放器設定：預設畫質、播放速度、自動跳過贊助片段等。</li>' +
     '</ol>'},
 
-  {ic: 'audio', t: 'YouTube Music：聽音樂、歌詞、聽歌辨識', html:
+  {ic: 'audio', fig: 'music', t: 'YouTube Music：聽音樂、歌詞、聽歌辨識', html:
     '<ol>' +
     '<li>在 YouTube 分頁上方，有一個「影片／音符」的切換鈕，切到音符就是 YouTube Music。</li>' +
     '<li>點任何一首歌就會播放，並打開播放面板：封面、進度條、上一首／下一首、隨機、循環、喜歡、播放佇列。</li>' +
@@ -59,7 +83,7 @@ var GUIDE = [
     '<li>手機的通知列和快速面板也會顯示正在播的歌，可以直接在那裡控制。</li>' +
     '</ol>'},
 
-  {ic: 'sparkle', t: 'AI 摘要：影片逐字稿、摘要、章節、發問（要申請金鑰）', html:
+  {ic: 'sparkle', fig: 'ai', t: 'AI 摘要：影片逐字稿、摘要、章節、發問（要申請金鑰）', html:
     '<p>把 YouTube 影片交給 AI 看，幫你整理重點。<b>要先申請一組免費的 Gemini 金鑰（API Key）</b>，只要做一次：</p>' +
     '<ol>' +
     '<li>用瀏覽器打開 <b>aistudio.google.com</b>，登入你的 Google 帳號。</li>' +
@@ -76,7 +100,7 @@ var GUIDE = [
     '</ul>' +
     '<p class="gTip">金鑰只存在你的手機裡。Gemini 免費額度每天有上限，用完隔天會恢復；模型清單裡標「需付費」的不要選就不會被收費。「AI 設定」裡也可以改用 Claude（需要自己的 Claude 訂閱或 API 金鑰），不設定也沒關係。</p>'},
 
-  {ic: 'folder', t: '檔案庫：播放、閱讀、編輯、整理', html:
+  {ic: 'folder', fig: 'lib', t: '檔案庫：播放、閱讀、編輯、整理', html:
     '<ul>' +
     '<li><b>分類</b>：影片、音樂庫、網頁、圖片、PDF、Word、Excel、PPT、文字檔、字幕、壓縮檔。點上方的分類就會打開。</li>' +
     '<li><b>匯入手機裡的檔案</b>：按「＋」，可以一次選很多個，App 會依副檔名自動分到對的分類。</li>' +
@@ -88,7 +112,7 @@ var GUIDE = [
     '<li><b>傳到電腦</b>：「設定 → 儲存與匯出 → Wi-Fi 傳到電腦」，電腦和手機連同一個 Wi-Fi，用電腦的瀏覽器就能下載檔案。</li>' +
     '</ul>'},
 
-  {ic: 'download', t: '其他 App 下載自動搬回（Snaptube 等）', html:
+  {ic: 'download', fig: 'watch', t: '其他 App 下載自動搬回（Snaptube 等）', html:
     '<p>有些影片用其他下載 App（例如 Snaptube、Quetta）比較好抓。設定一次之後，用它們下載完的影片、音樂、字幕會<b>自動搬進這個 App 的檔案庫</b>，原本的檔案會刪掉，不佔兩份空間。</p>' +
     '<ol>' +
     '<li>先在手機裝好那個下載 App，並用它隨便下載一個檔案（這樣它的下載資料夾才會出現）。</li>' +
@@ -98,7 +122,7 @@ var GUIDE = [
     '</ol>' +
     '<p class="gTip">App 回到前景時會檢查一次；交給其他 App 下載後的 3 小時內，每 15 秒也會檢查一次。想馬上檢查，按檔案庫的「重新整理」。</p>'},
 
-  {ic: 'lock', t: '上鎖與安全', html:
+  {ic: 'lock', fig: 'lock', t: '上鎖與安全', html:
     '<ul>' +
     '<li>到「設定 → 隱私與安全 → 密碼鎖與指紋」設定一組 6 位數密碼，可以再開啟指紋解鎖。</li>' +
     '<li>可以鎖住：已儲存的帳號密碼、檔案庫的整個分類（例如影片）、單一資料夾、我的收藏。</li>' +
@@ -107,7 +131,7 @@ var GUIDE = [
     '</ul>' +
     '<p class="gTip">請記住解鎖密碼。密碼只存在這支手機，忘記了沒有人能幫你找回，上鎖的內容就打不開了。</p>'},
 
-  {ic: 'reload', t: '更新 App', html:
+  {ic: 'reload', fig: 'upd', t: '更新 App', html:
     '<ul>' +
     '<li>到「設定 → 版本與更新」可以檢查新版本，小更新會直接套用，大更新會下載新的安裝檔，按「安裝」即可（第一次要允許「安裝未知的應用程式」）。</li>' +
     '<li>同一頁可以分享 App 的下載連結給朋友。</li>' +
@@ -130,7 +154,8 @@ function openGuide(first){
     var d = h('details', {class: 'gSec'});
     if(g.open || !first && i < 1) d.open = true;
     d.appendChild(h('summary', {html: '<span class="gIc">' + icon(g.ic) + '</span><b>' + esc(g.t) + '</b><span class="gChev">' + icon('chevR', 'sm') + '</span>'}));
-    d.appendChild(h('div', {class: 'gBody', html: g.html}));
+    var fig = ''; try{ fig = g.fig && G_FIG[g.fig] ? G_FIG[g.fig]() : ''; }catch(e){}
+    d.appendChild(h('div', {class: 'gBody', html: fig + g.html}));
     body.appendChild(d);
   });
   var ok = false;
