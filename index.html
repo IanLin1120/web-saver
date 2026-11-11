@@ -4,7 +4,7 @@
 <script>/* 線上更新開機程式：手機上若已下載比 APK 內建更新的介面版本，就改用新版（存在 IndexedDB）。
    新版連續兩次沒有正常開啟 → 自動退回 APK 內建版本。網址加上 #builtin 也會強制使用內建版本。 */
 (function () {
-  var B = '1.9.27'; if (!window.__OTA) window.APP_BUILTIN = B;
+  var B = '1.9.28'; if (!window.__OTA) window.APP_BUILTIN = B;
   if (window.__OTA || location.hash.indexOf('builtin') >= 0) return;
   var v = null; try { v = JSON.parse(localStorage.getItem('ws.ota') || 'null'); } catch (e) {}
   function gt(a, b) { a = String(a).split('.').map(Number); b = String(b).split('.').map(Number); for (var i = 0; i < Math.max(a.length, b.length); i++) { var p = a[i] || 0, q = b[i] || 0; if (p !== q) return p > q; } return false; }
@@ -4451,7 +4451,7 @@ var qrcode = function() {
 /* ============================================================
    核心：工具函式、圖示、主題、面板（sheet）、提示、原生橋接、頁面切換
    ============================================================ */
-const APP_VERSION = '1.9.27';
+const APP_VERSION = '1.9.28';
 var GH = {user: 'IanLin1120', repo: 'web-saver',
   get pages(){ return 'https://' + this.user.toLowerCase() + '.github.io/' + this.repo + '/'; },
   get web(){ return 'https://github.com/' + this.user + '/' + this.repo; }};
@@ -6885,7 +6885,7 @@ function exportSheet(items){
     opt('folder', '存到指定資料夾…', tn ? '目前：' + esc(tn) + '（可存到 SD 卡、USB 隨身碟、雲端硬碟資料夾）' : '自己選位置：SD 卡、USB 隨身碟、雲端硬碟…', function(){ NAT.call('libExport', ids, 'tree'); });
     if(tn) opt('edit', '換一個資料夾再存', '重新選擇要存放的位置', function(){ NAT.call('libExport', ids, 'pickTree'); });
     opt('share', '分享／傳送', 'LINE、Gmail、Google 雲端硬碟、Quick Share（傳到電腦或其他手機）…', function(){ NAT.call('libExport', ids, 'share'); });
-    opt('wifi', '無線傳到電腦／其他手機', '掃 QR Code 或輸入網址就能下載；同一個網路、手機熱點、USB 都可以', openWifi);
+    opt('wifi', '無線傳到電腦／其他手機', '掃 QR Code 或輸入網址就能下載；同一個網路、熱點、USB，或經過中繼站跨網路傳', function(){ openWifi(items); });
     if(items.length === 1) opt('open', '用其他 App 開啟', '例如用 Chrome 開 HTML、用相簿開圖片', function(){ NAT.call('libExport', ids, 'open'); });
     if(items.length > 1) opt('zip', '打包成 ZIP（存回檔案庫）', '合併成一個壓縮檔，再用上面的方式匯出', function(){ zipItems(items); });
   } else {
@@ -6918,11 +6918,22 @@ function qrSvg(text, px){
 }
 var WIFI_KIND = {wifi: ['wifi', 'Wi-Fi', '對方連到同一台分享器（Wi-Fi 或網路線都可以）'], hotspot: ['wifi', '手機熱點', '對方連到這支手機開的熱點'], usb: ['link', 'USB 網路共用', '用傳輸線接電腦'],
   eth: ['link', '有線網路', '對方連到同一台分享器'], bt: ['link', '藍牙網路共用', '對方用藍牙連到這支手機'], p2p: ['wifi', 'Wi-Fi Direct', '對方用 Wi-Fi Direct 連到這支手機']};
-function openWifi(){
-  var body = h('div'), sel = 0;
-  var s = openSheet({title: '無線傳到電腦／其他手機', icon: 'wifi', body: body, tall: true});
+function openWifi(items){
+  if(!Array.isArray(items)) items = null;
+  var body = h('div'), sel = 0, mode = 'lan', stopRelay = null;
+  var s = openSheet({title: '無線傳到電腦／其他手機', icon: 'wifi', body: body, tall: true, onClose: function(){ if(stopRelay) stopRelay(); }});
+  var MODES = [['lan', 'wifi', '同一個網路'], ['gh', 'link', 'GitHub 中繼'], ['pipe', 'globe', '公用中繼']];
   function draw(){
+    if(stopRelay){ stopRelay(); stopRelay = null; }
     body.textContent = '';
+    body.appendChild(h('div', {class: 'chips', style: {marginBottom: '10px'}}, MODES.map(function(m){
+      return h('button', {class: 'chip' + (mode === m[0] ? ' pri' : ''), html: icon(m[1], 'sm') + m[2], onclick: function(){ if(mode !== m[0]){ mode = m[0]; draw(); } }}); })));
+    if(mode !== 'lan'){
+      body.appendChild(h('div', {class: 'sub', style: {marginBottom: '8px'}, html: mode === 'gh'
+        ? '兩邊<b>不用在同一個網路</b>。檔案加密後暫存到<b>你自己的 GitHub</b>，對方隨時可以下載，傳完刪除暫存。'
+        : '兩邊<b>不用在同一個網路</b>。檔案加密後經過<b>公開的中繼站</b>即時轉送，不會存下來；兩邊要同時在線。'}));
+      stopRelay = relayPane(body, mode, items, draw); paintIcons(body); return;
+    }
     var r = NAT.json('wifiStart');
     if(!r || r.ok === false){
       body.appendChild(h('div', {class: 'note err', text: '無法啟動：' + (r && r.err || '請確認手機已連上 Wi-Fi')}));
@@ -6934,7 +6945,7 @@ function openWifi(){
     if(sel >= nets.length) sel = 0;
     var cur = nets[sel], K = WIFI_KIND[cur.kind] || WIFI_KIND.wifi;
     if(nets.length > 1) body.appendChild(h('div', {class: 'chips', style: {marginBottom: '8px'}}, nets.map(function(n, i){ var k = WIFI_KIND[n.kind] || WIFI_KIND.wifi;
-      return h('button', {class: 'chip' + (i === sel ? ' on' : ''), html: icon(k[0], 'sm') + k[1], onclick: function(){ sel = i; draw(); }}); })));
+      return h('button', {class: 'chip' + (i === sel ? ' pri' : ''), html: icon(k[0], 'sm') + k[1], onclick: function(){ sel = i; draw(); }}); })));
     body.appendChild(h('div', {class: 'sub', html: '① ' + esc(K[2]) + '（目前用：<b>' + esc(K[1]) + '</b>）<br>② 用對方的相機掃這個 QR Code，或在瀏覽器網址列輸入下面的網址：'}));
     var qr = qrSvg(cur.url, 210);
     if(qr) body.appendChild(h('div', {class: 'wifiQr', html: qr}));
@@ -6948,7 +6959,7 @@ function openWifi(){
       '<p><b>同一台分享器</b>：不一定都要用 Wi-Fi。電腦插網路線、手機連 Wi-Fi，只要是同一台分享器（同一個家用／公司網路）就可以。</p>' +
       '<p><b>手機熱點</b>：沒有共同的網路時，打開這支手機的「個人熱點」，讓電腦或另一支手機連進來，再按上面的「重新整理」，選「手機熱點」。傳檔走的是熱點本身，不會用到行動網路流量。</p>' +
       '<p><b>USB 傳輸線</b>：用線接電腦，在手機開「USB 網路共用」，再按「重新整理」，選「USB 網路共用」。</p>' +
-      '<p>手機只用行動網路、對方在完全不同的網路（例如人在別的地方）時，沒辦法這樣直接傳：電信的行動網路不允許外面的裝置連進手機。</p>'})));
+      '<p><b>完全不同的網路</b>（對方人在別的地方、手機只有行動網路）：改用上面的「GitHub 中繼」或「公用中繼」分頁。</p>'})));
     paintIcons(body);
   }
   draw();
@@ -8106,7 +8117,7 @@ function renderSettings(){
       return h('div', {class: 'setRow wrap'}, h('span', {class: 'ic', html: icon('download')}), h('div', {class: 'grow'}, h('b', {text: '同時下載數量'}), h('div', {class: 'sub', text: 'YouTube、一般影片、音樂可以同時下載、互不干擾；超過的自動排隊（背景錄製會依序進行）'})), sel);
     })() : null,
     isApp ? swRow('同時存一份到手機「下載/網頁擷取」', '每次擷取或下載完成，自動複製一份到手機公開的下載資料夾', 'autoExport') : null,
-    isApp ? h('div', {class: 'setRow', onclick: openWifi}, h('span', {class: 'ic', html: icon('wifi')}), h('div', {class: 'grow'}, h('b', {text: '無線傳到電腦／其他手機'}), h('div', {class: 'sub', text: '電腦用瀏覽器直接下載檔案庫的原始檔案'})), h('span', {class: 'chev', text: '›'})) : null,
+    isApp ? h('div', {class: 'setRow', onclick: function(){ openWifi(); }}, h('span', {class: 'ic', html: icon('wifi')}), h('div', {class: 'grow'}, h('b', {text: '無線傳到電腦／其他手機'}), h('div', {class: 'sub', text: '掃 QR Code 用瀏覽器下載；不同網路可以走 GitHub 或公用中繼'})), h('span', {class: 'chev', text: '›'})) : null,
     h('div', {class: 'setRow', onclick: function(){ showView('lib'); }}, h('span', {class: 'ic', html: icon('folder')}), h('div', {class: 'grow'}, h('b', {text: '開啟檔案庫'}), h('div', {class: 'sub', text: '查看空間使用、分類、匯出'})), h('span', {class: 'chev', text: '›'})),
     h('div', {class: 'setRow', onclick: bmBackup}, h('span', {class: 'ic', html: icon('books')}), h('div', {class: 'grow'}, h('b', {text: '收藏備份／還原'}), h('div', {class: 'sub', text: BM.items.length + ' 個收藏・' + BM.folders.length + ' 個收藏夾'})), h('span', {class: 'chev', text: '›'}))
   ]));
@@ -13019,6 +13030,8 @@ var G_FIG = {
   watch: function(){ return gRows([{ic: 'film', t: '圖片與影片下載', s: '設定頁裡的這一區'}, {ic: 'download', t: '其他 App 下載自動搬回', s: 'Snaptube、Quetta 等下載完自動搬進檔案庫', hit: 1, n: '1'}], '① 設定 → 圖片與影片下載 → 其他 App 下載自動搬回') +
     '<div class="gFig"><div class="gFlow"><span>' + gI('video') + '<i>YouTube<br>下載面板</i></span><b>→</b><span>' + gI('download') + '<i>交給其他<br>App 下載</i></span><b>→</b><span class="gHit">' + gI('folder') + '<i>自動搬回<br>檔案庫</i></span></div><em>設定好之後的流程</em></div>'; },
   lock: function(){ return gRows([{ic: 'lock', t: '密碼鎖與指紋', s: '設定 → 隱私與安全', hit: 1}], '在這裡設定 6 位數解鎖密碼') + '<div class="gFig"><div class="gPin"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div><em>解鎖時輸入 6 位數，或用指紋</em></div>'; },
+  relay: function(){ return '<div class="gFig"><div class="gFlow"><span>' + gI('folder') + '<i>你的手機<br>加密</i></span><b>→</b><span class="gHit">' + gI('globe') + '<i>中繼站<br>GitHub／公用</i></span><b>→</b><span>' + gI('download') + '<i>對方用瀏覽器<br>解密下載</i></span></div><em>兩邊不用在同一個網路</em></div>' +
+    '<div class="gFig"><div class="gBar"><span class="gB"><i>同一個網路</i></span><span class="gB gHit"><i>GitHub 中繼</i><u>1</u></span><span class="gB gHit"><i>公用中繼</i><u>2</u></span></div><em>傳檔面板最上面選要用哪一種</em></div>'; },
   upd: function(){ return gRows([{ic: 'reload', t: '版本與更新', s: '檢查新版本、分享 App 下載連結', hit: 1}], '設定 → 版本與更新'); }
 };
 var GUIDE = [
@@ -13105,9 +13118,29 @@ var GUIDE = [
     '<li><b>Word／Excel／PPT／文字檔</b>：點開就能看，按「編輯」可以改文字或儲存格再存檔；PPT 可以「投影播放」。啟用巨集的 Excel 可以看巨集程式碼，巨集會完整保留，但手機上不能執行。</li>' +
     '<li><b>整理</b>：長按檔案可以多選，再移到資料夾、改檔名、刪除。刪除的檔案會先進垃圾桶。</li>' +
     '<li><b>重複檔案提醒</b>：新加入的檔案跟已有的檔名一樣或大小一樣時，會問你要都保留、改檔名還是刪除。</li>' +
-    '<li><b>傳到電腦或其他手機</b>：「設定 → 儲存與匯出 → 無線傳到電腦／其他手機」。對方掃畫面上的 QR Code（或輸入網址）就能用瀏覽器下載。兩邊要在同一台分享器底下（Wi-Fi 或網路線都可以）；沒有共同的網路時，打開這支手機的「個人熱點」讓對方連進來，或用 USB 網路共用。</li>' +
+    '<li><b>傳到電腦或其他手機</b>：「設定 → 儲存與匯出 → 無線傳到電腦／其他手機」。對方掃畫面上的 QR Code（或輸入網址）就能用瀏覽器下載。兩邊要在同一台分享器底下（Wi-Fi 或網路線都可以）；沒有共同的網路時，打開這支手機的「個人熱點」讓對方連進來，或用 USB 網路共用。對方在完全不同的網路時，改用中繼站（見「跨網路傳檔」）。</li>' +
     '</ul>'},
 
+  {ic: 'share', fig: 'relay', t: '跨網路傳檔：GitHub 中繼、公用中繼', html:
+    '<p>對方和你不在同一個網路（例如人在別的地方、你只有行動網路）時，檔案可以先經過一台「中繼站」再到對方。有兩種可以選：</p>' +
+    '<table class="gTbl"><tr><th></th><th>GitHub 中繼</th><th>公用中繼</th></tr>' +
+    '<tr><td>檔案經過哪裡</td><td>你自己的 GitHub 帳號</td><td>別人架設的公開中繼站（預設 ppng.io）</td></tr>' +
+    '<tr><td>會不會存下來</td><td>暫存，傳完刪除</td><td>不會，只是即時經過</td></tr>' +
+    '<tr><td>對方什麼時候下載</td><td>隨時（刪除之前）</td><td>要和你同時在線，你的畫面要開著</td></tr>' +
+    '<tr><td>事前準備</td><td>要有 GitHub 帳號和權杖</td><td>不用</td></tr></table>' +
+    '<p>兩種都會先在手機把檔案<b>加密</b>，解密用的金鑰只在你給對方的連結裡，中繼站和其他人都打不開。</p>' +
+    '<p><b>怎麼用</b></p><ol>' +
+    '<li>到<b>檔案庫</b>長按勾選要傳的檔案 → 按「匯出／分享」→「無線傳到電腦／其他手機」。</li>' +
+    '<li>在最上面選「<b>GitHub 中繼</b>」或「<b>公用中繼</b>」。</li>' +
+    '<li>把畫面上的 QR Code 給對方掃，或按「傳給對方」把連結用 LINE 等傳過去。對方用瀏覽器打開就能下載，不用裝 App。</li></ol>' +
+    '<p><b>GitHub 中繼：第一次要設定權杖</b></p><ol>' +
+    '<li>用瀏覽器登入 <b>github.com</b>（沒有帳號要先免費註冊）。</li>' +
+    '<li>右上角頭像 → <b>Settings</b> → 左邊最下面 <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Tokens (classic)</b>。</li>' +
+    '<li>按 <b>Generate new token (classic)</b>。Note 隨便填（例如「網頁擷取傳檔」），Expiration 選你要的期限，下面的權限只勾 <b>public_repo</b>。</li>' +
+    '<li>按最下面的 <b>Generate token</b>，複製 <b>ghp_</b> 開頭的那一串（只會顯示這一次）。</li>' +
+    '<li>回到 App 的「GitHub 中繼」分頁貼上，按「儲存並檢查」。App 會在你的 GitHub 自動建立一個叫 <b>web-saver-relay</b> 的公開倉庫當中繼站。</li></ol>' +
+    '<p><b>GitHub 中繼：傳完刪除</b>　對方下載完後，按「<b>對方收到了，刪除暫存</b>」就會把 GitHub 上的暫存刪掉。忘了按也沒關係，60 分鐘後 App 會自動刪（App 要有開）。</p>' +
+    '<div class="gTip">檔案很大（超過 300 MB）時，經過中繼會很慢，建議還是用同一個網路或手機熱點直接傳。公用中繼是別人的免費服務，偶爾可能連不上，連不上時改用 GitHub 中繼。</div>'},
   {ic: 'download', fig: 'watch', t: '其他 App 下載自動搬回（Snaptube 等）', html:
     '<p>有些影片用其他下載 App（例如 Snaptube、Quetta）比較好抓。設定一次之後，用它們下載完的影片、音樂、字幕會<b>自動搬進這個 App 的檔案庫</b>，原本的檔案會刪掉，不佔兩份空間。</p>' +
     '<ol>' +
@@ -13168,6 +13201,199 @@ function openGuide(first){
 }
 /* 第一次使用（還沒按過確認）：App 開好後自動顯示 */
 setTimeout(function(){ if(lsGet('ws.guideSeen', 0) < GUIDE_VER && !Sheets.stack.length) openGuide(true); }, 900);
+
+/* ============================================================
+   跨網路傳檔（中繼）
+   兩邊不在同一個網路時，檔案先經過一台「中繼站」再到對方：
+   - GitHub 中繼：加密後暫存到使用者自己 GitHub 的 web-saver-relay 倉庫的一個暫時分支，傳完刪掉分支
+   - 公用中繼：經過公開的 piping 伺服器即時轉送（不落地），兩邊要同時在線
+   兩種都先在手機用 AES-GCM 加密，金鑰只放在網址的 # 後面（不會送到任何伺服器），對方用 get.html 解密
+   ============================================================ */
+var RELAY = {
+  PAGE: 'https://ianlin1120.github.io/web-saver/get.html',
+  API: 'https://api.github.com', RAW: 'https://raw.githubusercontent.com', REPO: 'web-saver-relay',
+  PIPE: 'https://ppng.io', CHUNK: 6 * 1024 * 1024, KEEP_MIN: 60,
+  cfg: Object.assign({gh: '', login: '', pipe: ''}, lsGet('ws.relay', {})),
+  save: function(){ lsSet('ws.relay', this.cfg); }
+};
+function rlB64u(u8){ var s = ''; for(var i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+function rlRand(n){ var a = new Uint8Array(n); crypto.getRandomValues(a); return a; }
+function rlId(){ var a = rlRand(10), s = ''; for(var i = 0; i < a.length; i++) s += 'abcdefghijkmnpqrstuvwxyz23456789'[a[i] % 32]; return s; }
+async function rlKey(){ var raw = rlRand(16); return {raw: raw, key: await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt'])}; }
+async function rlEnc(key, buf){ var iv = rlRand(12), ct = new Uint8Array(await crypto.subtle.encrypt({name: 'AES-GCM', iv: iv}, key, buf)), out = new Uint8Array(12 + ct.length); out.set(iv); out.set(ct, 12); return out; }
+function rlBlobB64(u8){ return new Promise(function(res, rej){ var fr = new FileReader(); fr.onload = function(){ res(String(fr.result).split(',')[1] || ''); }; fr.onerror = function(){ rej(new Error('讀取失敗')); }; fr.readAsDataURL(new Blob([u8])); }); }
+function rlManifest(items){ return {v: 1, cs: RELAY.CHUNK, files: items.map(function(it){ return {n: it.name, s: it.size || 0, c: Math.max(1, Math.ceil((it.size || 0) / RELAY.CHUNK))}; })}; }
+
+/* ---------- GitHub ---------- */
+async function rlGh(path, method, body, tok){
+  var r = await fetch(RELAY.API + path, {method: method || 'GET', headers: {'Authorization': 'Bearer ' + (tok || RELAY.cfg.gh), 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
+  if(r.status === 204) return {};
+  var j = null; try{ j = await r.json(); }catch(e){}
+  if(!r.ok){ var e = new Error(r.status === 401 ? 'GitHub 權杖無效或已過期' : r.status === 403 ? 'GitHub 拒絕：權杖沒有需要的權限（要勾選 public_repo），或暫時超過用量' : (j && j.message) || ('GitHub 錯誤 ' + r.status)); e.status = r.status; throw e; }
+  return j || {};
+}
+/* 檢查權杖、確認（或建立）中繼用的倉庫 */
+async function rlGhSetup(tok){
+  var u = await rlGh('/user', 'GET', null, tok);
+  if(!u.login) throw new Error('讀不到 GitHub 帳號');
+  var repo = null;
+  try{ repo = await rlGh('/repos/' + u.login + '/' + RELAY.REPO, 'GET', null, tok); }catch(e){ if(e.status !== 404) throw e; }
+  if(!repo){
+    await rlGh('/user/repos', 'POST', {name: RELAY.REPO, description: '網頁擷取 App 跨網路傳檔的暫存中繼（內容皆已加密，傳完自動刪除）', private: false, auto_init: true, has_issues: false, has_wiki: false}, tok);
+    await sleep(1500);
+  } else if(repo.private) throw new Error('「' + RELAY.REPO + '」是私人倉庫，對方會下載不到。請到 GitHub 把它改成公開（裡面的檔案都有加密）');
+  return u.login;
+}
+async function rlGhSend(items, onStep, sig){
+  var login = RELAY.cfg.login || (RELAY.cfg.login = await rlGhSetup(RELAY.cfg.gh)); RELAY.save();
+  var base = '/repos/' + login + '/' + RELAY.REPO + '/git', k = await rlKey(), id = rlId(), tree = [], total = 0, done = 0;
+  items.forEach(function(it){ total += it.size || 0; });
+  async function put(path, u8){
+    var b = await rlGh(base + '/blobs', 'POST', {content: await rlBlobB64(u8), encoding: 'base64'});
+    tree.push({path: path, mode: '100644', type: 'blob', sha: b.sha});
+  }
+  var man = rlManifest(items);
+  for(var i = 0; i < items.length; i++){
+    var bl = await Lib.blob(items[i]); man.files[i].s = bl.size; man.files[i].c = Math.max(1, Math.ceil(bl.size / RELAY.CHUNK));
+    for(var c = 0; c < man.files[i].c; c++){
+      if(sig && sig.aborted) throw new Error('已取消');
+      var part = await bl.slice(c * RELAY.CHUNK, (c + 1) * RELAY.CHUNK).arrayBuffer();
+      await put(i + '/' + c, await rlEnc(k.key, part));
+      done += part.byteLength; onStep && onStep(done, Math.max(total, done), items[i].name);
+    }
+  }
+  await put('m', await rlEnc(k.key, new TextEncoder().encode(JSON.stringify(man))));
+  var t = await rlGh(base + '/trees', 'POST', {tree: tree});
+  var cm = await rlGh(base + '/commits', 'POST', {message: 'transfer ' + id, tree: t.sha, parents: []});
+  await rlGh(base + '/refs', 'POST', {ref: 'refs/heads/t-' + id, sha: cm.sha});
+  var pend = lsGet('ws.relayPend', []); pend.push({id: id, login: login, at: Date.now()}); lsSet('ws.relayPend', pend);
+  return {id: id, url: RELAY.PAGE + '#g/' + login + '/' + id + '/' + rlB64u(k.raw) + (RELAY.RAW !== 'https://raw.githubusercontent.com' ? '/' + rlB64u(new TextEncoder().encode(RELAY.RAW)) : '')};
+}
+async function rlGhDelete(id){
+  var pend = lsGet('ws.relayPend', []), p = pend.filter(function(x){ return x.id === id; })[0];
+  if(!p) return true;
+  try{ await rlGh('/repos/' + p.login + '/' + RELAY.REPO + '/git/refs/heads/t-' + id, 'DELETE'); }
+  catch(e){ if(e.status !== 404 && e.status !== 422) return false; }
+  lsSet('ws.relayPend', lsGet('ws.relayPend', []).filter(function(x){ return x.id !== id; }));
+  return true;
+}
+/* 忘了按刪除、或 App 中途被關掉：超過保留時間的暫存，下次開 App 自動刪 */
+function rlSweep(){
+  if(!RELAY.cfg.gh) return;
+  lsGet('ws.relayPend', []).forEach(function(p){ if(Date.now() - p.at > RELAY.KEEP_MIN * 60000) rlGhDelete(p.id); });
+}
+setTimeout(rlSweep, 6000); setInterval(rlSweep, 5 * 60000);
+
+/* ---------- 公用中繼（piping）：每個檔案一條連線，對方來拿的時候才開始傳 ---------- */
+async function rlPipeSend(items, onState, sig){
+  var srv = (RELAY.cfg.pipe || RELAY.PIPE).replace(/\/+$/, ''), k = await rlKey(), id = rlId() + rlId();
+  var url = RELAY.PAGE + '#p/' + id + '/' + rlB64u(k.raw) + (srv !== RELAY.PIPE ? '/' + rlB64u(new TextEncoder().encode(srv)) : '');
+  var man = rlManifest(items), blobs = [];
+  for(var i = 0; i < items.length; i++){ var b = await Lib.blob(items[i]); blobs.push(b); man.files[i].s = b.size; man.files[i].c = Math.max(1, Math.ceil(b.size / RELAY.CHUNK)); }
+  async function put(name, body){
+    var r = await fetch(srv + '/ws-' + id + '-' + name, {method: 'PUT', body: body, signal: sig, headers: {'Content-Type': 'application/octet-stream'}});
+    if(!r.ok) throw new Error('中繼站回應 ' + r.status);
+    await r.text();
+  }
+  var run = (async function(){
+    onState('wait');
+    await put('m', new Blob([await rlEnc(k.key, new TextEncoder().encode(JSON.stringify(man)))]));
+    for(var i = 0; i < items.length; i++){
+      onState('enc', i, items[i].name);
+      var parts = [];
+      for(var c = 0; c < man.files[i].c; c++){
+        var e = await rlEnc(k.key, await blobs[i].slice(c * RELAY.CHUNK, (c + 1) * RELAY.CHUNK).arrayBuffer()), len = new Uint8Array(4);
+        new DataView(len.buffer).setUint32(0, e.length);
+        parts.push(new Blob([len, e]));
+      }
+      onState('send', i, items[i].name);
+      await put(String(i), new Blob(parts));
+    }
+    onState('done');
+  })();
+  return {url: url, run: run};
+}
+
+/* ---------- 畫面：放在「無線傳到電腦／其他手機」面板裡 ---------- */
+function relayPane(body, mode, items, redraw){
+  var ctl = new AbortController(), alive = true;
+  var total = (items || []).reduce(function(a, it){ return a + (it.size || 0); }, 0);
+  function stop(){ alive = false; try{ ctl.abort(); }catch(e){} }
+  function qrBox(url){
+    var qr = qrSvg(url, 210); if(qr) body.appendChild(h('div', {class: 'wifiQr', html: qr}));
+    body.appendChild(h('div', {class: 'wifiUrl', style: {fontSize: '12.5px'}, text: url}));
+  }
+  if(!window.crypto || !crypto.subtle){ body.appendChild(h('div', {class: 'note err', text: '這支手機的系統元件不支援加密，無法使用中繼傳檔。'})); return stop; }
+  if(!items || !items.length){
+    body.appendChild(h('div', {class: 'note', html: '中繼傳檔一次傳「選好的檔案」：<br>到<b>檔案庫</b>長按（或按右上角多選）勾選要傳的檔案 → 按「匯出／分享」→「無線傳到電腦／其他手機」，再選這個分頁。'}));
+    return stop;
+  }
+  var head = h('div', {class: 'sub', text: '要傳 ' + items.length + ' 個檔案（' + fmtSize(total) + '）'}); body.appendChild(head);
+  if(total > 300 * 1024 * 1024) body.appendChild(h('div', {class: 'note err', text: '檔案超過 300 MB，經過中繼會很慢、也比較容易失敗。大檔案建議用「同一個網路／熱點」直接傳。'}));
+
+  if(mode === 'gh'){
+    if(!RELAY.cfg.gh){
+      var inp = h('input', {style: {width: '100%', margin: '8px 0'}, type: 'password', placeholder: 'ghp_… 貼上 GitHub 權杖', autocomplete: 'off'});
+      body.appendChild(h('div', {class: 'note', html: '<b>第一次使用要先貼上你的 GitHub 權杖</b>（只存在這支手機）：<br>① 用瀏覽器登入 github.com → 右上角頭像 → Settings → 最下面 Developer settings → Personal access tokens → <b>Tokens (classic)</b> → Generate new token (classic)<br>② Note 隨便填（例如「網頁擷取傳檔」），Expiration 選你要的期限，權限只勾 <b>public_repo</b><br>③ 按 Generate token，複製 <b>ghp_</b> 開頭的那串貼到下面'}));
+      body.appendChild(inp);
+      body.appendChild(h('div', {class: 'btn-row'}, h('button', {class: 'btn pri', html: icon('check', 'sm') + '儲存並檢查', onclick: async function(){
+        var t = inp.value.trim(); if(!t){ toast('請先貼上權杖', true); return; }
+        this.disabled = true; toast('檢查中…');
+        try{ RELAY.cfg.login = await rlGhSetup(t); RELAY.cfg.gh = t; RELAY.save(); toast('✓ 已連上 GitHub：' + RELAY.cfg.login); redraw(); }
+        catch(e){ this.disabled = false; toast(e.message || '檢查失敗', true); }
+      }})));
+      body.appendChild(h('div', {class: 'note', html: 'App 會在你的 GitHub 自動建立一個公開倉庫 <b>' + RELAY.REPO + '</b> 當中繼站。檔案上傳前會先在手機加密，別人就算看到倉庫也打不開；傳完會把暫存刪掉。'}));
+      paintIcons(body); return stop;
+    }
+    var st = h('div', {class: 'note', text: '按「開始上傳」後，檔案會加密並暫存到你的 GitHub（' + (RELAY.cfg.login || '') + '/' + RELAY.REPO + '）。'}); body.appendChild(st);
+    var bar = h('div', {class: 'btn-row'}); body.appendChild(bar);
+    var go = h('button', {class: 'btn pri', html: icon('share', 'sm') + '開始上傳', onclick: async function(){
+      go.disabled = true; st.textContent = '準備中…';
+      try{
+        var r = await rlGhSend(items, function(d, t, name){ if(alive) st.textContent = '上傳中 ' + Math.round(d / t * 100) + '%（' + fmtSize(d) + ' / ' + fmtSize(t) + '）・' + name; }, ctl.signal);
+        if(!alive){ rlGhDelete(r.id); return; }
+        bar.textContent = ''; st.className = 'note'; st.innerHTML = '<b>✓ 上傳完成。</b>把下面的 QR Code 或網址給對方，對方在任何網路都能下載。<br>對方下載完之後請按「對方收到了，刪除暫存」；沒按的話 ' + RELAY.KEEP_MIN + ' 分鐘後也會自動刪除。';
+        qrBox(r.url);
+        body.appendChild(h('div', {class: 'btn-row'},
+          h('button', {class: 'btn', html: icon('copy', 'sm') + '複製網址', onclick: function(){ copyText(r.url); }}),
+          h('button', {class: 'btn', html: icon('share', 'sm') + '傳給對方', onclick: function(){ if(isApp && NAT.has('shareText')) NAT.call('shareText', r.url); else if(navigator.share) navigator.share({url: r.url}).catch(function(){}); else copyText(r.url); }}),
+          h('button', {class: 'btn dang', html: icon('trash', 'sm') + '對方收到了，刪除暫存', onclick: async function(){ this.disabled = true; var ok = await rlGhDelete(r.id); toast(ok ? '✓ 已刪除 GitHub 上的暫存' : '刪除失敗，稍後會自動再試', !ok); if(ok) redraw(); else this.disabled = false; }})));
+        paintIcons(body);
+      }catch(e){ go.disabled = false; st.className = 'note err'; st.textContent = '上傳失敗：' + (e.message || e); }
+    }});
+    bar.appendChild(go);
+    bar.appendChild(h('button', {class: 'btn', text: '更換權杖', onclick: function(){ RELAY.cfg.gh = ''; RELAY.cfg.login = ''; RELAY.save(); redraw(); }}));
+    var pend = lsGet('ws.relayPend', []);
+    if(pend.length) body.appendChild(h('div', {class: 'note'}, h('span', {text: 'GitHub 上還有 ' + pend.length + ' 份之前的暫存。 '}),
+      h('button', {class: 'btn sm', text: '全部刪除', onclick: async function(){ this.disabled = true; for(var i = 0; i < pend.length; i++) await rlGhDelete(pend[i].id); toast('✓ 已清除'); redraw(); }})));
+    paintIcons(body); return stop;
+  }
+
+  /* 公用中繼 */
+  var st2 = h('div', {class: 'note', text: '準備中…'}); body.appendChild(st2);
+  rlPipeSend(items, function(s, i, name){
+    if(!alive) return;
+    st2.className = 'note';
+    st2.textContent = s === 'wait' ? '等待對方打開連結…（這個畫面要開著）' : s === 'enc' ? '加密中（' + (i + 1) + '/' + items.length + '）・' + name
+      : s === 'send' ? '傳送中（' + (i + 1) + '/' + items.length + '）・' + name + '　對方那邊按下載後才會開始傳' : '✓ 全部傳完了';
+    if(s === 'done') buzz(20);
+  }, ctl.signal).then(function(r){
+    if(!alive) return;
+    body.appendChild(h('div', {class: 'sub', html: '把 QR Code 或網址給對方。檔案是<b>即時轉送</b>：對方打開連結、按下載時才開始傳，所以傳完之前這個畫面要開著；每個檔案只能下載一次。'}));
+    qrBox(r.url);
+    body.appendChild(h('div', {class: 'btn-row'},
+      h('button', {class: 'btn', html: icon('copy', 'sm') + '複製網址', onclick: function(){ copyText(r.url); }}),
+      h('button', {class: 'btn', html: icon('share', 'sm') + '傳給對方', onclick: function(){ if(isApp && NAT.has('shareText')) NAT.call('shareText', r.url); else if(navigator.share) navigator.share({url: r.url}).catch(function(){}); else copyText(r.url); }})));
+    var pi = h('input', {style: {width: '100%', margin: '8px 0'}, placeholder: RELAY.PIPE, value: RELAY.cfg.pipe || ''});
+    body.appendChild(h('details', {class: 'note'}, h('summary', {html: '<b>中繼站是誰的？可以換嗎？</b>'}), h('div', null,
+      h('p', {html: '預設用公開的免費中繼站 <b>ppng.io</b>（開源的 Piping Server，別人架設的）。檔案只是「經過」不會存下來，而且在手機就已加密，中繼站看不到內容。它是別人的免費服務，偶爾可能連不上。'}),
+      h('p', {text: '如果你有自己架的 Piping Server，可以在這裡換成它的網址：'}), pi,
+      h('div', {class: 'btn-row'}, h('button', {class: 'btn sm', text: '套用', onclick: function(){ var v = pi.value.trim().replace(/\/+$/, ''); if(v && !/^https:\/\//.test(v)){ toast('網址要用 https:// 開頭', true); return; } RELAY.cfg.pipe = v; RELAY.save(); redraw(); }})))));
+    paintIcons(body);
+    r.run.catch(function(e){ if(!alive) return; st2.className = 'note err'; st2.textContent = '傳送失敗：' + ((e && e.message) || e) + '（中繼站可能暫時連不上，可以改用 GitHub 中繼）'; });
+  }).catch(function(e){ if(alive){ st2.className = 'note err'; st2.textContent = '無法開始：' + ((e && e.message) || e); } });
+  return stop;
+}
 
 /* ============================================================
    啟動、返回鍵、原生事件接線
