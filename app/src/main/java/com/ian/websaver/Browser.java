@@ -519,6 +519,8 @@ final class Browser {
     }
 
     void show(boolean on) {
+        /* 背景的那一個 YouTube／Music（不是目前使用中的）永遠不顯示，避免蓋在其他分頁上面 */
+        if (on && "yt".equals(tag) && a.yt != null && a.yt != this && (this == a.ytYt || this == a.ytMu)) on = false;
         boolean was = shown && wv.getVisibility() == View.VISIBLE;
         shown = on;
         if (!on && fs) fullscreen(false, false);

@@ -188,7 +188,8 @@ public class Bridge {
         if (t == a.yt) { t.load(url); return; }
         try { t.wv.onResume(); } catch (Throwable e) { /* ignore */ }
         t.bgQuiet = true;
-        t.load(url);
+        t.show(false);              /* 一定保持隱藏：只在背景載入，不能蓋到任何畫面上 */
+        t.wv.loadUrl(url);
     } }); }
     @JavascriptInterface public void ytBgPause() { ui(new Runnable() { @Override public void run() {
         Browser t = a.ytYt; if (t == null || t == a.yt) return;
