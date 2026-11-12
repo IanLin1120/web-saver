@@ -30,7 +30,7 @@ cp "$OUT/base.apk" "$OUT/unsigned.apk"
 (cd "$OUT" && zip -q -j unsigned.apk classes.dex)
 LD_LIBRARY_PATH="$SDK/bin" "$SDK/bin/zipalign" -p -f 4 "$OUT/unsigned.apk" "$OUT/aligned.apk"
 
-NAME="琥珀瀏覽器_v${VER}.apk"
+NAME="Terra瀏覽器_v${VER}.apk"
 java -cp "$SDK/uber.jar" com.android.apksigner.ApkSignerTool sign \
   --ks "$KS" --ks-pass "pass:$KS_PASS" --ks-key-alias "$KEY_ALIAS" --key-pass "pass:$KEY_PASS" \
   --min-sdk-version 26 --v4-signing-enabled false --out "$OUT/signed.apk" "$OUT/aligned.apk" 2>&1 | grep -v 'Picked up' || true

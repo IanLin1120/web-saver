@@ -422,7 +422,7 @@ final class Browser {
 
         @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
             if (isPopup || !r.isForMainFrame()) return;
-            if (httpFallback(v, r.getUrl().toString())) return;
+            if (httpFallback(v, r.getUrl().toString(), false)) return;
             String desc = String.valueOf(e.getDescription());
             showError(v, r.getUrl().toString(), desc);
         }
@@ -430,7 +430,7 @@ final class Browser {
         /* 網址沒打 http:// 或 https:// 時 App 會先試 https；伺服器的 https 壞掉（5xx）或連不上時，自動改用 http 再試一次 */
         @Override public void onReceivedHttpError(WebView v, WebResourceRequest r, android.webkit.WebResourceResponse resp) {
             if (isPopup || !r.isForMainFrame() || resp == null || resp.getStatusCode() < 500) return;
-            httpFallback(v, r.getUrl().toString());
+            httpFallback(v, r.getUrl().toString(), true);
         }
 
         /* 網頁把記憶體用光、顯示程序被系統收掉時：預設行為是整個 App 一起閃退。這裡改成只重建這個分頁、重新載入 */
@@ -545,13 +545,21 @@ final class Browser {
     }
 
     volatile String httpsAuto = "";
-    boolean httpFallback(final WebView v, String url) {
+    private String altTried = "";
+    /* 主網頁打不開（連不上，或伺服器回 5xx）時，換另一種通訊協定再試一次：
+       https 壞掉的網站改用 http；只有 https 能用的網站（輸入的是 http://）改用 https。每個網址只換一次，避免來回跳。 */
+    boolean httpFallback(final WebView v, String url, boolean httpStatus) {
         try {
-            if (httpsAuto.isEmpty() || !url.startsWith("https://") || !hostOf(url).equals(httpsAuto)) return false;
-            httpsAuto = "";
-            final String u = "http://" + url.substring(8);
+            if (url.equals(altTried)) return false;
+            /* 伺服器有回應（5xx）時：http → https 一律試；https → http 只在網址是 App 自動補上 https 的時候才試 */
+            if (httpStatus && url.startsWith("https://") && !hostOf(url).equals(httpsAuto)) return false;
+            final String u;
+            if (url.startsWith("https://")) u = "http://" + url.substring(8);
+            else if (url.startsWith("http://")) u = "https://" + url.substring(7);
+            else return false;
+            altTried = u; httpsAuto = "";
             v.post(new Runnable() { @Override public void run() { v.loadUrl(u); } });
-            MainActivity.toast("這個網站的 https 打不開，改用 http 開啟");
+            MainActivity.toast(u.startsWith("https://") ? "這個網站的 http 打不開，改用 https 開啟" : "這個網站的 https 打不開，改用 http 開啟");
             return true;
         } catch (Throwable t) { return false; }
     }

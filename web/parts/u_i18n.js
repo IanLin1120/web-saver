@@ -78,10 +78,10 @@ function i18nWatch(){
 /* ---------- 交給 Gemini 翻一批文字：回傳同樣長度的陣列 ---------- */
 async function trBatch(list, langName, kind, sig){
   var prompt = '你是專業的在地化翻譯。把下面 JSON 陣列裡的每一項翻譯成「' + langName + '」。\n' +
-    (kind === 'ui' ? '這些是一套手機 App（瀏覽器、琥珀瀏覽器、YouTube 下載、AI 摘要、檔案庫）介面上的文字：按鈕、選單、提示、說明。用該語言的 App 慣用說法，簡短自然；有些是句子的片段（前後會接數字或檔名），照片段翻，不要補字。\n'
+    (kind === 'ui' ? '這些是一套手機 App（瀏覽器、Terra 瀏覽器、YouTube 下載、AI 摘要、檔案庫）介面上的文字：按鈕、選單、提示、說明。用該語言的 App 慣用說法，簡短自然；有些是句子的片段（前後會接數字或檔名），照片段翻，不要補字。\n'
       : kind === 'html' ? '這些是 App 使用說明書的 HTML 片段：只翻譯文字，所有 HTML 標籤、屬性、class 原樣保留，不要增減標籤。\n'
       : '這些是一個網頁上依出現順序排列的文字片段（相鄰幾項可能是同一句話被粗體或連結切開的部分，請照上下文翻得前後連貫）。翻得準確、通順、符合該語言的自然說法；專有名詞、程式碼、網址、已經是目標語言的文字保持原樣。\n') +
-    '規則：保留原有的標點風格、數字、符號、emoji、App 名稱「琥珀瀏覽器」翻成 Amber Browser（日文、韓文等可用該語言的「琥珀」）；英文品牌名（YouTube、Gemini、GitHub、Wi-Fi、QR Code、APK、PDF…）和 {n} 這類佔位符；不要加任何解釋。\n' +
+    '規則：保留原有的標點風格、數字、符號、emoji、App 名稱「Terra 瀏覽器」裡的 Terra 不要翻譯（例如英文寫 Terra Browser）；英文品牌名（YouTube、Gemini、GitHub、Wi-Fi、QR Code、APK、PDF…）和 {n} 這類佔位符；不要加任何解釋。\n' +
     '只回傳一個 JSON 陣列（字串陣列），長度和順序必須和輸入完全一樣（' + list.length + ' 項）。\n\n' + JSON.stringify(list);
   for(var tries = 0; ; tries++){
     try{
@@ -187,7 +187,6 @@ var PTR_COLLECT = "(function(zhSkip){var W=window.__wsTr=window.__wsTr||{nodes:[
   "W.on=true;return JSON.stringify({start:start,texts:out,title:document.title||''});})";
 var PTR_SET = "(function(start,arr){var W=window.__wsTr;if(!W)return 0;for(var i=0;i<arr.length;i++){var n=W.nodes[start+i],o=W.orig[start+i];if(!n||arr[i]==null)continue;var a=/^\\s*/.exec(o)[0],b=/\\s*$/.exec(o)[0];n.nodeValue=a+arr[i]+b;}return 1;})";
 var PTR_RESTORE = "(function(){var W=window.__wsTr;if(!W)return 0;for(var i=0;i<W.nodes.length;i++){try{W.nodes[i].nodeValue=W.orig[i];}catch(e){}}window.__wsTr=null;return 1;})()";
-function ptrRun(js){ return new Promise(function(res){ var ev = 'ptr' + uid(); on(ev, function(v){ delete BUS[ev]; res(v); }); NAT.call('brRun', js, ev); setTimeout(function(){ res(null); }, 15000); }); }
 function pageTranslateMenu(){
   if(!isApp || !NAT.has('brRun')){ toast('網頁翻譯需要 APK 版', true); return; }
   if(PTR.busy){ menu('網頁翻譯', [['x', '停止翻譯', function(){ try{ PTR.ctl.abort(); }catch(e){} }]]); return; }
@@ -201,8 +200,7 @@ async function pageTranslate(){
   var url = BR.url, zh = /^zh/.test(I18N.lang), name = I18N.name();
   try{
     toast('讀取網頁文字…');
-    var d = await ptrRun(PTR_COLLECT + '(' + (I18N.lang === 'zh-TW' ? 'true' : 'false') + ')');
-    if(typeof d === 'string'){ try{ d = JSON.parse(d); }catch(e){ d = null; } }
+    var d = await brRun(PTR_COLLECT + '(' + (I18N.lang === 'zh-TW' ? 'true' : 'false') + ')');
     if(!d || !d.texts){ toast('讀不到這個網頁的文字', true); return; }
     if(!d.texts.length){ toast(PTR.on ? '沒有新的內容需要翻譯' : '這個網頁沒有需要翻譯的文字（已經是' + I18N.label() + '）'); return; }
     PTR.on = true; PTR.url = url;

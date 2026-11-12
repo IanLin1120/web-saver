@@ -68,7 +68,7 @@ jobs:
         run: |
           VER=$(cat VERSION | tr -d '[:space:]')
           SRC=$(ls app/build/outputs/apk/release/*.apk | head -n1)
-          NAME="琥珀瀏覽器_v${VER}.apk"
+          NAME="Terra瀏覽器_v${VER}.apk"
           mkdir -p apk
           cp "$SRC" "apk/$NAME"
           cp web/dist/index.html index.html

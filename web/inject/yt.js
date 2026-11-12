@@ -1115,7 +1115,7 @@
     X + 'yt-button-shape button.yt-spec-button-shape-next--filled,' + X + 'a.yt-spec-button-shape-next--filled,' + X + 'ytmusic-chip-cloud-chip-renderer[is-selected] a{color:' + C.accFg + '!important}',
     X + 'ytmusic-guide-renderer yt-button-shape button,' + X + 'tp-yt-app-drawer yt-button-shape button{background:' + C.s2 + '!important;border:1px solid ' + C.line + '!important}',
     X + '.wsMuDark{color:' + C.fg + '!important}',
-    /* 使用琥珀瀏覽器的播放介面：藏起 YouTube Music 自己的播放列與播放頁（按鈕還在，由 App 控制） */
+    /* 使用Terra 瀏覽器的播放介面：藏起 YouTube Music 自己的播放列與播放頁（按鈕還在，由 App 控制） */
     'html.wsMuOwn ytmusic-player-bar,html.wsMuOwn #player-bar-background{position:fixed!important;left:-200vw!important;bottom:0!important;opacity:0!important;pointer-events:none!important}',
     /* YouTube Music 播放頁的展開／收合不要動畫（瞬間完成），收合的那一小段時間整頁透明（最多 2.5 秒，時間到一定恢復） */
     /* YouTube Music 自己認為播放頁「已收合」（player-ui-state 不是 PLAYER_PAGE_OPEN）時，播放頁一律不顯示：收合動畫、偶爾卡住沒消失的情況都看不到 */

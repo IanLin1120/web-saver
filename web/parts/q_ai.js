@@ -5,7 +5,7 @@
      請求交給它用 window.claude 的 sample 處理，消耗的是你的 Claude 月訂閱額度。
    · API 金鑰：直接呼叫 Anthropic API（自己付費）。
    ============================================================ */
-var AI_DEFAULT_URL = 'https://claude.ai/artifact/P8NBBFX1guznTq38525KZW';     /* 琥珀瀏覽器 AI 工作頁（可選模型） */
+var AI_DEFAULT_URL = 'https://claude.ai/artifact/P8NBBFX1guznTq38525KZW';     /* Terra 瀏覽器 AI 工作頁（可選模型） */
 var AI_OLD_URL = 'https://claude.ai/artifact/GrGKSNbfMi5K2saoWNStz9';        /* AI 全能翻譯的網頁版（舊，不能選模型） */
 var AICFG = Object.assign({engine: 'sub', url: '', subModel: 'default', effort: '', key: '', model: 'claude-sonnet-5-5', gkey: '', gmodel: 'gemini-3.8-flash', gmode: 'video', gfast: true, gfallback: true, listen: true, auto: true, lang: 'zh'}, lsGet('ws.aiCfg', {}));
 function aiSaveCfg(){ lsSet('ws.aiCfg', AICFG); }
@@ -833,7 +833,7 @@ function aiStartPage(){
     var go = function(){ var v = inp.value.trim(), id = YT.idOf(v) || (/^[\w-]{11}$/.test(v) ? v : ''); if(id) aiOpenVideo(id, {auto: true}); else toast('這不是 YouTube 影片網址', true); };
     pg.appendChild(h('div', {class: 'card glass aiHero'},
       h('div', {class: 'aiHeroT', html: icon('sparkle') + '<b>YouTube 影片 AI 洞察</b>'}),
-      h('div', {class: 'sub', text: '在 YouTube App 按「分享」→「AI 摘要（琥珀瀏覽器）」就會自動分析；也可以在這裡貼上網址。'}),
+      h('div', {class: 'sub', text: '在 YouTube App 按「分享」→「AI 摘要（Terra 瀏覽器）」就會自動分析；也可以在這裡貼上網址。'}),
       h('div', {class: 'aiIn'}, inp,
         h('button', {class: 'ib', html: icon('copy'), title: '貼上', onclick: async function(){ try{ var t = await navigator.clipboard.readText(); if(t){ inp.value = t.trim(); go(); } }catch(e){ inp.focus(); } }}),
         h('button', {class: 'btn pri', html: icon('sparkle', 'sm') + '開始', onclick: go}))));
@@ -929,7 +929,7 @@ function aiPickGModel(){
 }
 var aiRefreshSettings = function(){};
 
-/* 從 YouTube App「分享」→「AI 摘要（琥珀瀏覽器）」 */
+/* 從 YouTube App「分享」→「AI 摘要（Terra 瀏覽器）」 */
 on('shareAi', function(u){
   u = String(u || '');
   var id = YT.idOf(u);
@@ -1014,7 +1014,7 @@ function aiSettings(){
     if(AICFG.engine === 'sub'){
       var l = aiEngLabel();
       body.appendChild(h('div', {class: 'card glass', style: {marginTop: '10px'}},
-        h('div', {class: 'sub', html: '用你的 <b>Claude 月訂閱額度</b>，不用另外付費。App 在背景開著你 claude.ai 上的「琥珀瀏覽器 AI 工作頁」，把分析交給它。第一次要在 App 裡登入 claude.ai，再到工作頁按「授權並測試」→「允許」。'}),
+        h('div', {class: 'sub', html: '用你的 <b>Claude 月訂閱額度</b>，不用另外付費。App 在背景開著你 claude.ai 上的「Terra 瀏覽器 AI 工作頁」，把分析交給它。第一次要在 App 裡登入 claude.ai，再到工作頁按「授權並測試」→「允許」。'}),
         h('div', {class: 'aiStat ' + l[1], text: '狀態：' + l[0]}),
         h('div', {class: 'btn-row'},
           h('button', {class: 'btn pri', text: '登入 Claude', onclick: function(){ NAT.call('openClaude', 'https://claude.ai/login'); }}),
@@ -1053,7 +1053,7 @@ function aiSettings(){
     var lc = h('input', {type: 'checkbox', checked: AICFG.listen !== false, onchange: function(){ AICFG.listen = this.checked; aiSaveCfg(); }});
     body.appendChild(h('label', {class: 'setRow aiSw', style: {marginTop: '10px'}}, h('div', {class: 'grow'}, h('b', {text: '沒有字幕時自動用 AI 聽寫'}), h('div', {class: 'sub', text: '讀不到字幕就讓 Gemini 看影片產生完整逐字稿（有設定金鑰才會）'})), lc));
     var ac = h('input', {type: 'checkbox', checked: AICFG.auto !== false, onchange: function(){ AICFG.auto = this.checked; aiSaveCfg(); }});
-    body.appendChild(h('label', {class: 'setRow aiSw', style: {marginTop: '8px'}}, h('div', {class: 'grow'}, h('b', {text: '分享進來就自動分析'}), h('div', {class: 'sub', text: '從 YouTube 分享到「AI 摘要（琥珀瀏覽器）」或貼上網址時，直接開始產生摘要與章節'})), ac));
+    body.appendChild(h('label', {class: 'setRow aiSw', style: {marginTop: '8px'}}, h('div', {class: 'grow'}, h('b', {text: '分享進來就自動分析'}), h('div', {class: 'sub', text: '從 YouTube 分享到「AI 摘要（Terra 瀏覽器）」或貼上網址時，直接開始產生摘要與章節'})), ac));
     H('摘要與回答的語言');
     body.appendChild(segOf([['zh', '繁體中文'], ['en', 'English'], ['same', '跟影片相同']], AICFG.lang, function(v){ AICFG.lang = v; aiSaveCfg(); }));
     paintIcons(body);

@@ -416,7 +416,7 @@ function exportSheet(items){
   var sh = openSheet({title: '匯出 ' + items.length + ' 個檔案（' + fmtSize(total) + '）', icon: 'share', body: h('div', null, h('div', {class: 'sub', style: {marginBottom: '10px'}, text: '以原本的格式與檔案大小輸出，不會重新壓縮。'}), list)});
   function opt(ic, t, sub, fn){ list.appendChild(h('div', {class: 'opt', onclick: function(){ sh.close(); setTimeout(fn, 80); }}, h('span', {class: 'oi', html: icon(ic)}), h('div', {class: 'grow'}, h('b', {text: t}), h('div', {class: 'sub', html: sub})), h('span', {class: 'chev', text: '›', style: {color: 'var(--text-muted)', fontSize: '22px'}}))); }
   if(isApp){
-    opt('inbox', '存到手機「下載」資料夾', '位置：下載/琥珀瀏覽器。用 USB 連接電腦時，在「內部儲存空間/Download/琥珀瀏覽器」就找得到', function(){ NAT.call('libExport', ids, 'downloads'); });
+    opt('inbox', '存到手機「下載」資料夾', '位置：下載/網頁擷取。用 USB 連接電腦時，在「內部儲存空間/Download/網頁擷取」就找得到', function(){ NAT.call('libExport', ids, 'downloads'); });
     var tn = NAT.call('treeName');
     opt('folder', '存到指定資料夾…', tn ? '目前：' + esc(tn) + '（可存到 SD 卡、USB 隨身碟、雲端硬碟資料夾）' : '自己選位置：SD 卡、USB 隨身碟、雲端硬碟…', function(){ NAT.call('libExport', ids, 'tree'); });
     if(tn) opt('edit', '換一個資料夾再存', '重新選擇要存放的位置', function(){ NAT.call('libExport', ids, 'pickTree'); });
@@ -426,7 +426,7 @@ function exportSheet(items){
     if(items.length > 1) opt('zip', '打包成 ZIP（存回檔案庫）', '合併成一個壓縮檔，再用上面的方式匯出', function(){ zipItems(items); });
   } else {
     opt('download', items.length > 1 ? '下載到這台裝置（逐一下載）' : '下載到這台裝置', '存到瀏覽器的下載資料夾', async function(){ for(var i = 0; i < items.length; i++){ downloadBlob(await Lib.blob(items[i]), items[i].name); await sleep(350); } });
-    if(items.length > 1) opt('zip', '打包成 ZIP 下載', '一次下載全部', async function(){ toast('打包中…'); var z = new JSZip(); for(var i = 0; i < items.length; i++) z.file(items[i].name, await Lib.blob(items[i])); downloadBlob(await z.generateAsync({type: 'blob'}), '琥珀瀏覽器_' + items.length + '個檔案.zip'); });
+    if(items.length > 1) opt('zip', '打包成 ZIP 下載', '一次下載全部', async function(){ toast('打包中…'); var z = new JSZip(); for(var i = 0; i < items.length; i++) z.file(items[i].name, await Lib.blob(items[i])); downloadBlob(await z.generateAsync({type: 'blob'}), 'Terra 瀏覽器_' + items.length + '個檔案.zip'); });
     if(navigator.canShare) opt('share', '分享', '透過系統分享傳送檔案', async function(){
       try{ var fs = []; for(var i = 0; i < items.length; i++){ var b = await Lib.blob(items[i]); fs.push(new File([b], items[i].name, {type: b.type})); } await navigator.share({files: fs}); }catch(e){ if(e.name !== 'AbortError') toast('這個瀏覽器無法分享檔案', true); }
     });
@@ -438,10 +438,10 @@ on('export', function(d){
   else toast('匯出失敗：' + (d.err || '未知錯誤'), true);
 });
 async function zipItems(items){
-  if(isApp && NAT.has('libZip')){ NAT.call('libZip', JSON.stringify(items.map(function(x){ return x.id; })), '琥珀瀏覽器_' + items.length + '個檔案'); toast('打包中…'); return; }
+  if(isApp && NAT.has('libZip')){ NAT.call('libZip', JSON.stringify(items.map(function(x){ return x.id; })), 'Terra 瀏覽器_' + items.length + '個檔案'); toast('打包中…'); return; }
   toast('打包中…');
   var z = new JSZip(); for(var i = 0; i < items.length; i++) z.file(items[i].name, await Lib.blob(items[i]));
-  await Lib.addBlob(await z.generateAsync({type: 'blob', compression: 'STORE'}), '琥珀瀏覽器_' + items.length + '個檔案.zip', {});
+  await Lib.addBlob(await z.generateAsync({type: 'blob', compression: 'STORE'}), 'Terra 瀏覽器_' + items.length + '個檔案.zip', {});
   toast('✓ 已打包成 ZIP');
 }
 function qrSvg(text, px){

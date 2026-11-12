@@ -40,7 +40,7 @@
     </queries>
 
     <application
-        android:label="琥珀瀏覽器"
+        android:label="Terra 瀏覽器"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@style/AppTheme"
@@ -61,7 +61,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <intent-filter android:label="用琥珀瀏覽器開啟">
+            <intent-filter android:label="用Terra 瀏覽器開啟">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
@@ -90,7 +90,7 @@
             android:name=".DownloadAlias"
             android:targetActivity=".MainActivity"
             android:exported="true"
-            android:label="用琥珀瀏覽器下載">
+            android:label="用Terra 瀏覽器下載">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -101,7 +101,7 @@
             android:name=".AiAlias"
             android:targetActivity=".MainActivity"
             android:exported="true"
-            android:label="AI 摘要（琥珀瀏覽器）">
+            android:label="AI 摘要（Terra 瀏覽器）">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />

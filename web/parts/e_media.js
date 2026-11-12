@@ -390,7 +390,7 @@ async function startScreenRec(){
 async function srecBegin(){
   if(!NAT.call('dndOk')){
     var go = await new Promise(function(res){
-      dialog('允許勿擾設定', '錄影時要自動開啟勿擾模式、擋掉通知橫幅，需要先允許「琥珀瀏覽器」變更勿擾設定（只要設定一次）。<br><br>按「去設定」後，在清單裡打開「琥珀瀏覽器」，回來再按一次 ●。',
+      dialog('允許勿擾設定', '錄影時要自動開啟勿擾模式、擋掉通知橫幅，需要先允許「Terra 瀏覽器」變更勿擾設定（只要設定一次）。<br><br>按「去設定」後，在清單裡打開「Terra 瀏覽器」，回來再按一次 ●。',
         [['去設定', function(){ NAT.call('dndSettings'); res(false); }], ['這次不用勿擾', function(){ res(true); }], ['取消', function(){ res(false); }, '']]);
     });
     if(!go) return;

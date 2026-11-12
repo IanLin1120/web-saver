@@ -1,4 +1,4 @@
-# 琥珀瀏覽器（Web Saver）
+# Terra 瀏覽器（Web Saver）
 
 像瀏覽器一樣開網頁，去除廣告後把乾淨的內容存成**單一離線 HTML**（類似 SingleFile）或 **PDF**；偵測頁面上的圖片與影片，可選格式、解析度另外下載或打包成 ZIP。Android APK（原生 WebView 瀏覽器＋網頁介面）＋網頁版，附「版本與更新」系統。
 

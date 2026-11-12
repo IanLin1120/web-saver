@@ -224,7 +224,7 @@ function ytOrient(){
 window.addEventListener('resize', function(){ clearTimeout(ytOrient.t); ytOrient.t = setTimeout(ytOrient, 250); });
 
 /* ---------- 從其他 App 分享進來 ---------- */
-/* 「用琥珀瀏覽器下載」：YouTube 連結 → 在 YouTube 分頁打開並直接跳出下載面板；其他網址 → 打開並偵測媒體 */
+/* 「用Terra 瀏覽器下載」：YouTube 連結 → 在 YouTube 分頁打開並直接跳出下載面板；其他網址 → 打開並偵測媒體 */
 on('shareDl', function(u){
   u = String(u || '');
   var id = YT.idOf(u);

@@ -141,12 +141,12 @@ final class WifiServer {
             if (path.equals("/") || path.equals("/index.html")) {
                 JSONArray items = new JSONArray(lib.listJson());
                 StringBuilder sb = new StringBuilder();
-                sb.append("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>琥珀瀏覽器・Wi-Fi 傳輸</title>")
+                sb.append("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Terra 瀏覽器・Wi-Fi 傳輸</title>")
                   .append("<style>body{margin:0;font:15px/1.5 -apple-system,'Microsoft JhengHei','Noto Sans TC',sans-serif;background:#efe5d3;color:#3a2e22}")
                   .append(".w{max-width:900px;margin:0 auto;padding:24px}h1{color:#a2613a;margin:0 0 4px}.s{color:#7d6c57;font-size:13px}")
                   .append(".r{display:flex;align-items:center;gap:12px;background:#f9f3e5;border:1px solid #d8c5a3;border-radius:14px;padding:10px 14px;margin:8px 0}")
                   .append(".r b{flex:1;word-break:break-all}.t{font-size:11px;background:#a2613a;color:#fff;border-radius:99px;padding:1px 8px}a.b{background:#a2613a;color:#fff;text-decoration:none;padding:7px 14px;border-radius:99px;font-weight:700;white-space:nowrap}")
-                  .append("a.all{display:inline-block;margin:14px 0;background:#6f7d4c}</style><div class=w><h1>📁 琥珀瀏覽器・檔案庫</h1><div class=s>")
+                  .append("a.all{display:inline-block;margin:14px 0;background:#6f7d4c}</style><div class=w><h1>📁 Terra 瀏覽器・檔案庫</h1><div class=s>")
                   .append(items.length()).append(" 個檔案・按「下載」取得原始檔案（格式與大小不變）</div><a class='b all' href='/all.zip?k=").append(key).append("'>⬇ 全部打包下載（ZIP）</a>");
                 for (int i = items.length() - 1; i >= 0; i--) {
                     JSONObject o = items.getJSONObject(i);

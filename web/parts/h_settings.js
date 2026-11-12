@@ -6,7 +6,7 @@ function card(ic, title, kids, id){
 }
 function renderSettings(){
   var P = $('setPage'); P.textContent = '';
-  P.appendChild(h('h2', {class: 'pt', html: '<span class="logo">' + icon('gear') + '</span><span>設定<small>琥珀瀏覽器 v' + APP_VERSION + (isApp ? '・APK v' + (Upd.apk() || '?') : '・網頁版') + '</small></span>'}));
+  P.appendChild(h('h2', {class: 'pt', html: '<span class="logo">' + icon('gear') + '</span><span>設定<small>Terra 瀏覽器 v' + APP_VERSION + (isApp ? '・APK v' + (Upd.apk() || '?') : '・網頁版') + '</small></span>'}));
 
   /* 軟體使用說明書 */
   P.appendChild(card('books', '軟體使用說明書', [
@@ -64,7 +64,7 @@ function renderSettings(){
   ]));
 
   /* 擷取 */
-  P.appendChild(card('download', '琥珀瀏覽器（SingleFile）', [
+  P.appendChild(card('download', 'Terra 瀏覽器（SingleFile）', [
     h('div', {class: 'field'}, h('div', {class: 'lbl'}, '預設輸出格式'), segRow([['html', 'HTML'], ['pdf', 'PDF'], ['both', 'HTML＋PDF']], 'cap.format')),
     swRow('移除廣告', null, 'cap.removeAds'),
     swRow('預設只擷取文章（閱讀模式）', '只保留主要內容與圖片，版面乾淨、檔案最小', 'cap.reader'),
@@ -123,7 +123,7 @@ function renderSettings(){
       [1, 2, 3, 4, 5, 6].forEach(function(n){ var o = h('option', {value: n}, n + ' 個' + (n === 3 ? '（建議）' : '')); if(n === cur) o.selected = true; sel.appendChild(o); });
       return h('div', {class: 'setRow wrap'}, h('span', {class: 'ic', html: icon('download')}), h('div', {class: 'grow'}, h('b', {text: '同時下載數量'}), h('div', {class: 'sub', text: 'YouTube、一般影片、音樂可以同時下載、互不干擾；超過的自動排隊（背景錄製會依序進行）'})), sel);
     })() : null,
-    isApp ? swRow('同時存一份到手機「下載/琥珀瀏覽器」', '每次擷取或下載完成，自動複製一份到手機公開的下載資料夾', 'autoExport') : null,
+    isApp ? swRow('同時存一份到手機「下載/網頁擷取」', '每次擷取或下載完成，自動複製一份到手機公開的下載資料夾', 'autoExport') : null,
     isApp ? h('div', {class: 'setRow', onclick: function(){ openWifi(); }}, h('span', {class: 'ic', html: icon('wifi')}), h('div', {class: 'grow'}, h('b', {text: '無線傳到電腦／其他手機'}), h('div', {class: 'sub', text: '掃 QR Code 用瀏覽器下載；不同網路可以走 GitHub 或公用中繼'})), h('span', {class: 'chev', text: '›'})) : null,
     h('div', {class: 'setRow', onclick: function(){ showView('lib'); }}, h('span', {class: 'ic', html: icon('folder')}), h('div', {class: 'grow'}, h('b', {text: '開啟檔案庫'}), h('div', {class: 'sub', text: '查看空間使用、分類、匯出'})), h('span', {class: 'chev', text: '›'})),
     h('div', {class: 'setRow', onclick: bmBackup}, h('span', {class: 'ic', html: icon('books')}), h('div', {class: 'grow'}, h('b', {text: '收藏備份／還原'}), h('div', {class: 'sub', text: BM.items.length + ' 個收藏・' + BM.folders.length + ' 個收藏夾'})), h('span', {class: 'chev', text: '›'}))
@@ -145,7 +145,7 @@ function renderSettings(){
 
   /* 關於 */
   P.appendChild(card('info', '關於', [
-    h('div', {class: 'sub', style: {lineHeight: '1.75'}, html: '琥珀瀏覽器：像瀏覽器一樣開網頁，去除廣告後把乾淨的內容存成單一離線 HTML（圖片、樣式、字型全部包在一個檔案裡，類似 SingleFile）或 PDF；也能偵測頁面上的圖片與影片，選擇格式與解析度另外下載或打包成 ZIP。所有檔案只存在你的手機，不會上傳。'}),
+    h('div', {class: 'sub', style: {lineHeight: '1.75'}, html: 'Terra 瀏覽器：像瀏覽器一樣開網頁，去除廣告後把乾淨的內容存成單一離線 HTML（圖片、樣式、字型全部包在一個檔案裡，類似 SingleFile）或 PDF；也能偵測頁面上的圖片與影片，選擇格式與解析度另外下載或打包成 ZIP。所有檔案只存在你的手機，不會上傳。'}),
     h('div', {class: 'btn-row'}, h('button', {class: 'btn sm', html: icon('github', 'sm') + 'GitHub', onclick: function(){ openExternal(GH.web); }}),
       h('button', {class: 'btn sm', text: '重設所有設定', onclick: async function(){ if(await confirmDlg('重設所有設定？', '外觀、瀏覽、擷取、下載設定會恢復預設（收藏、檔案與密碼不受影響）。', '重設', true)){ CFG = deepMerge(CFG_DEF, {}); saveCfg(); applyTheme(); pushNativeCfg(); renderSettings(); toast('已重設'); } }}))
   ]));
@@ -157,8 +157,8 @@ function bmBackup(){
   menu('收藏備份／還原', [
     ['download', '匯出收藏（JSON 檔）', async function(){
       var blob = new Blob([JSON.stringify({app: 'web-saver', v: 1, folders: BM.folders, items: BM.items}, null, 1)], {type: 'application/json'});
-      if(isApp){ var it = await Lib.addBlob(blob, '琥珀瀏覽器_收藏備份_' + new Date().toISOString().slice(0, 10) + '.json', {}); exportSheet([it]); }
-      else downloadBlob(blob, '琥珀瀏覽器_收藏備份.json');
+      if(isApp){ var it = await Lib.addBlob(blob, 'Terra 瀏覽器_收藏備份_' + new Date().toISOString().slice(0, 10) + '.json', {}); exportSheet([it]); }
+      else downloadBlob(blob, 'Terra 瀏覽器_收藏備份.json');
     }, false, '可存到下載資料夾或分享到雲端'],
     ['inbox', '從 JSON 檔還原（合併）', function(){
       var inp = h('input', {type: 'file', accept: '.json,application/json', style: {display: 'none'}});

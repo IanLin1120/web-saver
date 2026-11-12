@@ -45,7 +45,7 @@ shell = R('shell.html')
 assert shell.startswith('<body>')
 html = ('<!DOCTYPE html>\n<html lang="zh-Hant">\n<head>\n<script>' + R('ota_boot.js').replace('__VER__', ver) + '</script>\n'
   '<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">\n'
-  '<meta name="theme-color" content="#efe5d3">\n<title>琥珀瀏覽器</title>\n'
+  '<meta name="theme-color" content="#efe5d3">\n<title>Terra 瀏覽器</title>\n'
   '<link rel="icon" href="icon-192.png">\n<style>' + R('app.css') + '</style>\n<style>' + R('vendor', 'katex.css') + '</style>\n</head>\n' +
   shell.replace('</body>', '') + '\n' + vend +
   '<script>window.PDF_WORKER_URL = URL.createObjectURL(new Blob([' + worker + '], {type: "text/javascript"}));</script>\n' +

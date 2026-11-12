@@ -165,7 +165,7 @@ public class KeepAlive extends Service {
         Intent open = new Intent(this, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent pi = PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, CH_RUN) : new Notification.Builder(this);
-        b.setSmallIcon(android.R.drawable.stat_sys_download).setContentTitle("琥珀瀏覽器").setContentText(sb.length() == 0 ? "背景執行中" : sb.toString())
+        b.setSmallIcon(android.R.drawable.stat_sys_download).setContentTitle("Terra 瀏覽器").setContentText(sb.length() == 0 ? "背景執行中" : sb.toString())
             .setContentIntent(pi).setOngoing(true).setOnlyAlertOnce(true);
         boolean rec;
         synchronized (TASKS) { rec = TASKS.containsKey("srec"); }
@@ -175,7 +175,7 @@ public class KeepAlive extends Service {
         }
         if (media() && sess != null && !mTitle.isEmpty()) {
             /* 媒體樣式通知：封面、歌名、歌手、上一首／播放暫停／下一首；系統的快速面板與鎖定畫面也會顯示 */
-            b.setSmallIcon(android.R.drawable.ic_media_play).setContentTitle(mTitle).setContentText(mArtist.isEmpty() ? "琥珀瀏覽器" : mArtist)
+            b.setSmallIcon(android.R.drawable.ic_media_play).setContentTitle(mTitle).setContentText(mArtist.isEmpty() ? "Terra 瀏覽器" : mArtist)
                 .setVisibility(Notification.VISIBILITY_PUBLIC);
             if (mArt != null) b.setLargeIcon(mArt);
             b.addAction(new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.ic_media_previous), "上一首", act("prev", 5)).build());

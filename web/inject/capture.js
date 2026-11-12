@@ -1,4 +1,4 @@
-/* 琥珀瀏覽器核心（類似 SingleFile）：把目前頁面（或解析好的文件）連同樣式、圖片、字型打包成單一 HTML 檔。
+/* Terra 瀏覽器核心（類似 SingleFile）：把目前頁面（或解析好的文件）連同樣式、圖片、字型打包成單一 HTML 檔。
    用法：WSCapture.run(doc, opts, io) → Promise<{html, title, url, stats}>
    io.fetch(url, kind) → Promise<{mime, b64}|{mime, text}|null>   kind: 'css' | 'img' | 'font' | 'bin'
    io.progress(pct, msg)
@@ -478,7 +478,7 @@
       bn.innerHTML = '📄 離線保存於 ' + esc(new Date().toLocaleString('zh-TW', {hour12: false})) + '　原網址：<a style="color:#a2613a" target="_blank" rel="noopener" href="' + esc(url) + '">' + esc(url) + '</a>';
       var body = R.querySelector('body'); if (body) body.insertBefore(bn, body.firstChild);
     }
-    var html = '<!DOCTYPE html>\n<!-- 由「琥珀瀏覽器」於 ' + new Date().toISOString() + ' 儲存，原網址 ' + url.replace(/--/g, '%2D%2D') + ' -->\n' + R.outerHTML;
+    var html = '<!DOCTYPE html>\n<!-- 由「Terra 瀏覽器」於 ' + new Date().toISOString() + ' 儲存，原網址 ' + url.replace(/--/g, '%2D%2D') + ' -->\n' + R.outerHTML;
     progress(96, '完成');
     return {html: html, title: title, url: url, stats: {resources: pool.stats().total, removed: removed, bytes: html.length}};
   }

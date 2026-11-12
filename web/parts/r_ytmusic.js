@@ -337,7 +337,7 @@ function ytmuListen(force){
     NAT.call('ytTap', 'start:' + SEC_N);
     return;
   }
-  if(!NAT.call('micStart')){ view('無法使用麥克風', '請到手機設定允許「琥珀瀏覽器」使用麥克風'); return; }
+  if(!NAT.call('micStart')){ view('無法使用麥克風', '請到手機設定允許「Terra 瀏覽器」使用麥克風'); return; }
   recOn = true;
   countdown('用麥克風聽周圍的聲音（正在播的不會暫停）');
 }

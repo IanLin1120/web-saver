@@ -269,7 +269,7 @@ final class Lock {
             }
             PendingIntent pi = PendingIntent.getActivity(c, 9, new Intent(c, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(c, "sec") : new Notification.Builder(c);
-            b.setSmallIcon(android.R.drawable.ic_dialog_alert).setContentTitle("有人在動你的琥珀瀏覽器").setContentText("密碼連續輸錯 " + (n * 3) + " 次以上，已拍下 " + n + " 張照片，請確認").setAutoCancel(true).setContentIntent(pi);
+            b.setSmallIcon(android.R.drawable.ic_dialog_alert).setContentTitle("有人在動你的Terra 瀏覽器").setContentText("密碼連續輸錯 " + (n * 3) + " 次以上，已拍下 " + n + " 張照片，請確認").setAutoCancel(true).setContentIntent(pi);
             nm.notify(4242, b.build());
         } catch (Throwable t) { /* ignore */ }
     }
