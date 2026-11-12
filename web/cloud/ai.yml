@@ -1,0 +1,19 @@
+name: AI 摘要
+on:
+  push:
+    paths: ['jobs/**']
+  workflow_dispatch:
+concurrency:
+  group: ai
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 run.py
+        env:
+          GEMINI_KEY: ${{ secrets.GEMINI_KEY }}

@@ -105,7 +105,7 @@ public class Bridge {
                 b.wv.clearCache(true);
                 b.wv.clearHistory();
                 b.wv.clearFormData();
-                if (clearCookies) { android.webkit.CookieManager.getInstance().removeAllCookies(null); android.webkit.WebStorage.getInstance().deleteAllData(); }
+                if (clearCookies) { android.webkit.CookieManager.getInstance().removeAllCookies(null); clearWebStorage(); }
             }
         } });
     }
@@ -291,11 +291,27 @@ public class Bridge {
 
     @JavascriptInterface public void brFill(final String user) { ui(new Runnable() { @Override public void run() { a.br.fill(user); } }); }
 
+    /** 只清「網站」的儲存資料；App 自己的介面（file://）裡的設定、收藏、AI 記錄不能一起被清掉 */
+    static void clearWebStorage() {
+        try {
+            final WebStorage ws = WebStorage.getInstance();
+            ws.getOrigins(new android.webkit.ValueCallback<java.util.Map>() {
+                @Override public void onReceiveValue(java.util.Map m) {
+                    if (m == null) return;
+                    for (Object k : m.keySet()) {
+                        String o = String.valueOf(k);
+                        if (o.startsWith("http://") || o.startsWith("https://")) ws.deleteOrigin(o);
+                    }
+                }
+            });
+        } catch (Throwable t) { /* ignore */ }
+    }
+
     @JavascriptInterface public void clearData(final String what) {
         ui(new Runnable() {
             @Override public void run() {
                 if (what.contains("cache")) { a.br.wv.clearCache(true); Util.deleteTree(Lib.get(a).tmp); Lib.get(a).tmp.mkdirs(); }
-                if (what.contains("cookies")) { CookieManager.getInstance().removeAllCookies(null); CookieManager.getInstance().flush(); WebStorage.getInstance().deleteAllData(); }
+                if (what.contains("cookies")) { CookieManager.getInstance().removeAllCookies(null); CookieManager.getInstance().flush(); clearWebStorage(); }
                 if (what.contains("history")) a.br.wv.clearHistory();
                 MainActivity.toast("已清除");
                 MainActivity.emit("lib", "");
@@ -821,6 +837,33 @@ public class Bridge {
     @JavascriptInterface public String aiTake(String id) { return AiHttp.take(id); }
     @JavascriptInterface public void aiCancel(String id) { AiHttp.cancel(id); }
     @JavascriptInterface public void aiLabel(String s) { AiHttp.setLabel(a, s); }
+    /* ---------- AI 摘要的資料（逐字稿、摘要、對話）：一部影片一個檔，放在 App 自己的資料夾，不受瀏覽器儲存空間上限影響 ---------- */
+    private java.io.File aiDir() { java.io.File d = new java.io.File(a.getFilesDir(), "aidb"); if (!d.exists()) d.mkdirs(); return d; }
+    private static String safeId(String id) { return id == null ? "" : id.replaceAll("[^A-Za-z0-9_-]", ""); }
+    @JavascriptInterface public String aiDbGet(String id) {
+        try { java.io.File f = new java.io.File(aiDir(), safeId(id) + ".json"); return f.exists() ? Util.readText(new java.io.FileInputStream(f)) : ""; } catch (Throwable t) { return ""; }
+    }
+    @JavascriptInterface public boolean aiDbPut(String id, String json) {
+        try {
+            java.io.File f = new java.io.File(aiDir(), safeId(id) + ".json"), tmp = new java.io.File(aiDir(), safeId(id) + ".tmp");
+            Util.writeText(tmp, json == null ? "" : json);
+            if (f.exists()) f.delete();
+            return tmp.renameTo(f);
+        } catch (Throwable t) { return false; }
+    }
+    @JavascriptInterface public void aiDbDel(String id) { try { new java.io.File(aiDir(), safeId(id) + ".json").delete(); } catch (Throwable t) { /* ignore */ } }
+    @JavascriptInterface public String aiDbSizes() {
+        JSONObject o = new JSONObject();
+        try { java.io.File[] fs = aiDir().listFiles(); if (fs != null) for (java.io.File f : fs) if (f.getName().endsWith(".json")) o.put(f.getName().substring(0, f.getName().length() - 5), f.length()); } catch (Throwable t) { /* ignore */ }
+        return o.toString();
+    }
+    /* App 介面的設定與記錄（瀏覽器儲存空間）另外備份一份到檔案：被清掉時可以還原 */
+    @JavascriptInterface public boolean lsBackup(String json) {
+        try { java.io.File f = new java.io.File(a.getFilesDir(), "ls_backup.json"), tmp = new java.io.File(a.getFilesDir(), "ls_backup.tmp"); Util.writeText(tmp, json == null ? "" : json); if (f.exists()) f.delete(); return tmp.renameTo(f); } catch (Throwable t) { return false; }
+    }
+    @JavascriptInterface public String lsRestore() {
+        try { java.io.File f = new java.io.File(a.getFilesDir(), "ls_backup.json"); return f.exists() ? Util.readText(new java.io.FileInputStream(f)) : ""; } catch (Throwable t) { return ""; }
+    }
     @JavascriptInterface public void aiNotice(String head, String text) { KeepAlive.notice(a, head, text); }
     @JavascriptInterface public void aiNoticeOpen(String head, String text, String id) { KeepAlive.notice(a, head, text, id); }
     @JavascriptInterface public boolean appVisible() { return MainActivity.visible; }

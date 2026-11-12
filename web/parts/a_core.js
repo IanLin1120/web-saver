@@ -11,7 +11,7 @@ function qs(s, r){ return (r || document).querySelector(s); }
 function qsa(s, r){ return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); }
 function lsGet(k, d){ try{ var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } }
-function lsSet(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function lsSet(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} if(typeof lsBackupSoon === 'function') lsBackupSoon(); }
 function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function fmtSize(b){
@@ -177,6 +177,29 @@ var NAT = {
   has: function(fn){ return !!(window.WSB && typeof window.WSB[fn] === 'function'); },
   json: function(fn){ var r = NAT.call.apply(null, arguments); try{ return JSON.parse(r); }catch(e){ return null; } }
 };
+/* ---------- 設定與記錄的備份 ----------
+   App 的設定、收藏、AI 記錄清單都放在瀏覽器的儲存空間（localStorage）。「清除 Cookie／網站資料」會把它一起清掉，
+   所以：① 每次有變動就備份一份到 App 自己的檔案；② 啟動時發現是空的就從備份還原；③ 清除網站資料前後自動保留、寫回。 */
+function lsSnapshot(){ var o = {}; try{ for(var i = 0; i < localStorage.length; i++){ var k = localStorage.key(i); if(k && k.indexOf('ws.') === 0 && k.indexOf('ws.ai.') !== 0) o[k] = localStorage.getItem(k); } }catch(e){} return o; }
+function lsPutBack(o){ var n = 0; try{ Object.keys(o || {}).forEach(function(k){ if(localStorage.getItem(k) == null){ localStorage.setItem(k, o[k]); n++; } }); }catch(e){} return n; }
+var lsBackupT = 0;
+function lsBackupSoon(){ if(!isApp || !NAT.has('lsBackup')) return; clearTimeout(lsBackupT); lsBackupT = setTimeout(function(){ try{ var o = lsSnapshot(); if(Object.keys(o).length) NAT.call('lsBackup', JSON.stringify(o)); }catch(e){} }, 3000); }
+(function(){
+  if(!isApp || !NAT.has('lsRestore')) return;
+  try{
+    var has = false; for(var i = 0; i < localStorage.length; i++){ var k = localStorage.key(i); if(k && k.indexOf('ws.') === 0 && k !== 'ws.lang'){ has = true; break; } }
+    if(!has){ var b = NAT.call('lsRestore'); if(b){ var n = lsPutBack(JSON.parse(b)); if(n) window.__lsRestored = n; } }
+  }catch(e){}
+  /* 會清掉網站資料的操作：先留一份，清完寫回去 */
+  var call0 = NAT.call;
+  NAT.call = function(fn, x, y){
+    var wipe = (fn === 'clearData' && String(x).indexOf('cookies') >= 0) || (fn === 'brIncog' && x === false && y === true);
+    var snap = wipe ? lsSnapshot() : null;
+    var r = call0.apply(NAT, arguments);
+    if(snap){ [600, 2000, 5000].forEach(function(ms){ setTimeout(function(){ lsPutBack(snap); }, ms); }); }
+    return r;
+  };
+})();
 document.documentElement.classList.add(isApp ? 'is-app' : 'is-web');
 
 /* ---------- 事件匯流排（原生事件 → 各模組） ---------- */

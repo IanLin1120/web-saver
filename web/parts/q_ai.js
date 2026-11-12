@@ -306,6 +306,25 @@ async function aiLoadBest(tracks, first, tr){
   }
   throw last || new Error('讀不到字幕');
 }
+/* 聽寫的題目與結果整理（手機和雲端共用） */
+function aiListenSegs(len){ var SEG = 600, segs = []; if(len > SEG * 1.3){ for(var a = 0; a < len; a += SEG) segs.push([a, Math.min(len, a + SEG)]); } else segs.push(null); return segs; }
+function aiListenPrompt(c){
+  return '請完整聽寫這部影片' + (c ? '從 ' + aiTs(c[0]) + ' 到 ' + aiTs(c[1]) + ' 這一段' : '') + '的所有語音內容：用影片原本說的語言逐字寫出，不要摘要、不要翻譯、不要省略。' +
+      '每一句話（或每 5~15 秒）一筆；t 是這句話在「整部影片」裡開始的時間，格式 m:ss 或 h:mm:ss。沒有人說話但畫面有重要內容時，用「［畫面：…］」簡短描述。' +
+      '只回傳 JSON：{"cues":[{"t":"0:05","text":"…"}]}';
+}
+function aiListenSeg(v, c){
+  var L = ((v && v.cues) || []).map(function(x){ return {s: aiParseTs(x.t || x.time || 0), t: String(x.text || '').trim()}; }).filter(function(x){ return x.t; });
+    /* 有些模型給的是這一段的相對時間：加回段落起點 */
+    if(c && c[0] > 0 && L.length && L[0].s < c[0] - 30) L.forEach(function(x){ x.s += c[0]; });
+  return L;
+}
+function aiListenJoin(res){
+  var all = [].concat.apply([], res);
+  all.sort(function(a, b){ return a.s - b.s; });
+  all.forEach(function(x, i){ x.e = all[i + 1] ? all[i + 1].s : x.s + 5; });
+  return all;
+}
 /* AI 聽寫：沒有字幕時，讓 Gemini 直接看 YouTube 影片，把說的話完整寫成逐字稿（長片分段） */
 async function aiListen(id, len, step){
   if(!AICFG.gkey) throw aiErr('nogkey', '沒有字幕的影片要用 Gemini「看」影片產生逐字稿，請先設定 Gemini API 金鑰（免費申請）。');
@@ -316,25 +335,82 @@ async function aiListen(id, len, step){
   step('AI 正在看影片並聽寫逐字稿' + (segs.length > 1 ? '（分 ' + segs.length + ' 段同時處理）' : '') + '…');
   /* 各段同時送出：總時間約等於最慢的那一段 */
   var res = await Promise.all(segs.map(async function(c){
-    var prompt = '請完整聽寫這部影片' + (c ? '從 ' + aiTs(c[0]) + ' 到 ' + aiTs(c[1]) + ' 這一段' : '') + '的所有語音內容：用影片原本說的語言逐字寫出，不要摘要、不要翻譯、不要省略。' +
-      '每一句話（或每 5~15 秒）一筆；t 是這句話在「整部影片」裡開始的時間，格式 m:ss 或 h:mm:ss。沒有人說話但畫面有重要內容時，用「［畫面：…］」簡短描述。' +
-      '只回傳 JSON：{"cues":[{"t":"0:05","text":"…"}]}';
+    var prompt = aiListenPrompt(c);
     var v = await aiAskGemini(prompt, {video: id, clip: c, fps: 0.25, step: step});
-    var L = ((v && v.cues) || []).map(function(x){ return {s: aiParseTs(x.t || x.time || 0), t: String(x.text || '').trim()}; }).filter(function(x){ return x.t; });
-    /* 有些模型給的是這一段的相對時間：加回段落起點 */
-    if(c && c[0] > 0 && L.length && L[0].s < c[0] - 30) L.forEach(function(x){ x.s += c[0]; });
+    var L = aiListenSeg(v, c);
     done++; if(segs.length > 1) step('AI 聽寫中：已完成 ' + done + '／' + segs.length + ' 段…');
     return L;
   }));
-  var all = [].concat.apply([], res);
-  all.sort(function(a, b){ return a.s - b.s; });
-  all.forEach(function(x, i){ x.e = all[i + 1] ? all[i + 1].s : x.s + 5; });
+  var all = aiListenJoin(res);
   if(!all.length) throw new Error('AI 沒有聽到任何語音內容');
   return all;
 }
 
 /* ---------- 快取與記錄 ---------- */
-function aiHist(){ return lsGet('ws.aiHist', []); }
+/* 每部影片的資料（逐字稿、摘要、對話）：APK 存成 App 資料夾裡的檔案（沒有容量上限、全部保留）；網頁版仍放 localStorage */
+var AIDB = {app: isApp && NAT.has('aiDbPut'), mem: {}};
+function aiDbGet(id){
+  if(!AIDB.app) return lsGet('ws.ai.' + id, null);
+  var s = AIDB.mem[id]; if(s === undefined){ s = NAT.call('aiDbGet', id) || ''; AIDB.mem[id] = s; }
+  if(!s) return null;
+  try{ return JSON.parse(s); }catch(e){ return null; }
+}
+function aiDbSet(id, o){
+  if(!AIDB.app){ lsSet('ws.ai.' + id, o); return; }
+  var s = JSON.stringify(o); AIDB.mem[id] = s; NAT.call('aiDbPut', id, s); AIDB.sizes = null;
+}
+function aiDbDel(id){
+  if(!AIDB.app){ try{ localStorage.removeItem('ws.ai.' + id); }catch(e){} return; }
+  delete AIDB.mem[id]; NAT.call('aiDbDel', id); AIDB.sizes = null;
+}
+function aiBytes(v){ if(v == null) return 0; try{ return new Blob([typeof v === 'string' ? v : JSON.stringify(v)]).size; }catch(e){ return 0; } }
+/* 一部影片佔的空間：逐字稿、摘要（含章節）、對話 */
+function aiSizeOf(id){ var c = aiDbGet(id) || {}; return {tr: c.cues && c.cues.length ? aiBytes(c.cues) : 0, ins: c.ins ? aiBytes(c.ins) : 0, chat: c.chat && c.chat.length ? aiBytes(c.chat) : 0, all: aiBytes(c)}; }
+function aiSizeAll(){
+  if(AIDB.app){ if(!AIDB.sizes) AIDB.sizes = NAT.json('aiDbSizes') || {}; var t = 0, n = 0; Object.keys(AIDB.sizes).forEach(function(k){ if(k.charAt(0) === '_') return; t += AIDB.sizes[k]; n++; }); return {bytes: t, n: n}; }
+  var t2 = 0, n2 = 0; try{ for(var i = 0; i < localStorage.length; i++){ var k = localStorage.key(i); if(k && k.indexOf('ws.ai.') === 0){ t2 += aiBytes(localStorage.getItem(k)); n2++; } } }catch(e){}
+  return {bytes: t2, n: n2};
+}
+/* 舊版放在 localStorage 的資料搬過來（搬完從 localStorage 移除，空出空間） */
+(function(){
+  if(!AIDB.app) return;
+  try{
+    var keys = []; for(var i = 0; i < localStorage.length; i++){ var k = localStorage.key(i); if(k && k.indexOf('ws.ai.') === 0) keys.push(k); }
+    keys.forEach(function(k){ var id = k.slice(6), v = localStorage.getItem(k); if(v && NAT.call('aiDbPut', id, v)) localStorage.removeItem(k); });
+  }catch(e){}
+  try{ var n = aiHistRecover(); if(n) setTimeout(function(){ toast('找回 ' + n + ' 部之前從清單消失的分析記錄'); if(curView === 'ai' && !AI.id) aiRender(); }, 2500); }catch(e){}
+})();
+/* 分析過的影片清單：localStorage 一份、App 資料夾的檔案一份。讀的時候兩邊合併，
+   避免其中一份被清掉或讀不到時，下一次存檔把整份清單蓋成只剩一部（舊版的 bug） */
+function aiHist(){
+  var L = lsGet('ws.aiHist', null);
+  if(!Array.isArray(L)) L = [];
+  if(!AIDB.app) return L;
+  if(AIDB.histF === undefined){ var f = aiDbGet('_hist'); AIDB.histF = Array.isArray(f) ? f : []; }
+  var F = AIDB.histF, have = {}, add = [];
+  L.forEach(function(x){ have[x.id] = 1; });
+  F.forEach(function(x){ if(x && x.id && !have[x.id] && !(AIDB.gone && AIDB.gone[x.id])){ add.push(x); have[x.id] = 1; } });
+  if(add.length){ L = L.concat(add); try{ localStorage.setItem('ws.aiHist', JSON.stringify(L)); }catch(e){} }
+  return L;
+}
+function aiHistSet(L){
+  lsSet('ws.aiHist', L);
+  if(AIDB.app){ var have = {}; L.forEach(function(x){ have[x.id] = 1; }); (AIDB.histF || []).forEach(function(x){ if(x && !have[x.id]) (AIDB.gone = AIDB.gone || {})[x.id] = 1; }); AIDB.histF = L.slice(); aiDbSet('_hist', L); }
+}
+/* 清單裡沒有、但資料還在的影片：加回清單（救回之前被蓋掉的記錄） */
+function aiHistRecover(){
+  if(!AIDB.app) return 0;
+  var S = NAT.json('aiDbSizes') || {}, hist = aiHist(), have = {}, n = 0;
+  hist.forEach(function(x){ have[x.id] = 1; });
+  Object.keys(S).forEach(function(id){
+    if(id.charAt(0) === '_' || have[id]) return;
+    var c = aiDbGet(id); if(!c || !c.info) return;
+    hist.push({id: id, title: c.info.title || id, author: c.info.author || '', channelId: c.info.channelId || '', pub: c.info.pub || '', len: c.info.len || 0, ins: !!(c.ins && c.ins.overview), t: c.t || Date.now(), t0: c.t || Date.now()});
+    n++;
+  });
+  if(n){ hist.sort(function(a, b){ return (b.t0 || b.t || 0) - (a.t0 || a.t || 0); }); aiHistSet(hist); }
+  return n;
+}
 function aiSaveCache(){
   if(!AI.id || !AI.info) return;
   var info = Object.assign({}, AI.info); delete info.prog;
@@ -342,13 +418,11 @@ function aiSaveCache(){
   var all = aiHist(), old = all.filter(function(x){ return x.id === AI.id; })[0] || {};
   var hist = all.filter(function(x){ return x.id !== AI.id; });
   hist.unshift(Object.assign({}, old, {id: AI.id, title: AI.info.title, author: AI.info.author, channelId: AI.info.channelId || old.channelId || '', pub: AI.info.pub || old.pub || '', len: AI.info.len, ins: !!AI.ins, t: old.t0 ? Date.now() : Date.now(), t0: old.t0 || Date.now()}));
-  /* 逐字稿只留最近 15 部（其他要用時重新抓） */
-  hist.forEach(function(x, i){ if(i >= 15){ var c = lsGet('ws.ai.' + x.id, null); if(c && c.cues){ delete c.cues; lsSet('ws.ai.' + x.id, c); } } });
   o.cues = AI.cues;
-  lsSet('ws.ai.' + AI.id, o);
-  lsSet('ws.aiHist', hist.slice(0, 300));
+  aiDbSet(AI.id, o);
+  aiHistSet(hist.slice(0, 5000));
 }
-function aiForget(id){ try{ localStorage.removeItem('ws.ai.' + id); }catch(e){} lsSet('ws.aiHist', aiHist().filter(function(x){ return x.id !== id; })); }
+function aiForget(id){ aiDbDel(id); aiHistSet(aiHist().filter(function(x){ return x.id !== id; })); }
 
 /* ---------- 開啟影片 ---------- */
 var AI_LISTEN_TRACK = {lang: 'ai', kind: 'ai', name: 'AI 聽寫（Gemini）', url: ''};
@@ -358,16 +432,16 @@ Object.defineProperty(AI, 'gen', {get: function(){ return !!(AIJOB[AI.id] && AIJ
 function aiJob(id){ return AIJOB[id] || (AIJOB[id] = {}); }
 function aiBusyAny(){ return Object.keys(AIJOB).some(function(k){ return AIJOB[k].gen || AIJOB[k].listen; }); }
 function aiCacheMerge(id, patch){
-  var c = lsGet('ws.ai.' + id, null) || {};
+  var c = aiDbGet(id) || {};
   Object.assign(c, patch, {t: Date.now()});
-  lsSet('ws.ai.' + id, c);
+  aiDbSet(id, c);
   var hist = aiHist(), i = hist.findIndex(function(x){ return x.id === id; });
-  if(i >= 0){ if(patch.ins) hist[i].ins = true; lsSet('ws.aiHist', hist); }
+  if(i >= 0){ if(patch.ins) hist[i].ins = true; aiHistSet(hist); }
 }
 function aiNotifyDone(id, what){
   if(!isApp || !NAT.has('aiNotice')) return;
   if(NAT.call('appVisible') && curView === 'ai' && AI.id === id) return;
-  var c = lsGet('ws.ai.' + id, null), t = (c && c.info && c.info.title) || id;
+  var c = aiDbGet(id), t = (c && c.info && c.info.title) || id;
   if(NAT.has('aiNoticeOpen')) NAT.call('aiNoticeOpen', what, t, id); else NAT.call('aiNotice', what, t);
 }
 /* 點通知：直接打開那部影片的摘要 */
@@ -379,7 +453,7 @@ async function aiOpenVideo(id, opts){
   if(!id) return;
   if(curView !== 'ai' && !opts.bg) showView('ai');
   aiEngStart();
-  var c = lsGet('ws.ai.' + id, null);
+  var c = aiDbGet(id);
   var vNow = $('aiVid'); if(vNow) vNow.pause();
   AI.id = id; AI.info = c && c.info || {id: id, title: '', author: ''}; AI.ins = c && c.ins || null; AI.chat = c && c.chat || [];
   AI.cues = c && c.cues || []; AI.track = c && c.track || null; AI.tr = c && c.tr || ''; AI.tracks = []; AI.err = ''; AI.exp = false;
@@ -451,12 +525,26 @@ async function aiSwitchTrack(t, tr){
 }
 
 /* ---------- 產生洞察／對話 ---------- */
-function aiVideoBlock(maxChars, video){
-  var I = AI.info || {};
+function aiVideoBlock(maxChars, video, info, cues){
+  var I = info || AI.info || {}; var C = cues || AI.cues || [];
   return '影片標題：' + (I.title || '') + '\n頻道：' + (I.author || '') + '\n長度：' + aiTs(I.len || 0) +
     (I.desc ? '\n說明欄：\n' + String(I.desc).slice(0, 1500) : '') +
     (video ? '\n\n（請直接觀看附上的影片：畫面與聲音都要看，時間碼以影片為準）' :
-    '\n\n逐字稿（每行開頭是時間碼）：\n' + (AI.cues.length ? aiTranscriptText(AI.cues, maxChars) : '（這部影片沒有字幕，只有標題與說明欄可參考）'));
+    '\n\n逐字稿（每行開頭是時間碼）：\n' + (C.length ? aiTranscriptText(C, maxChars) : '（這部影片沒有字幕，只有標題與說明欄可參考）'));
+}
+function aiInsPrompt(video, info, cues){
+  cues = cues || [];
+  return '你是 YouTube 影片內容分析助理。請只根據' + (video ? '影片本身' : '下面提供的影片資訊與逐字稿') + '分析，不要編造影片沒有的內容。所有文字用' + aiLangName() + '撰寫。\n' +
+    (cues.length || video ? '' : '注意：這部影片沒有逐字稿，只能根據標題與說明欄推測，請在 overview 第一句註明「此影片無字幕，以下根據標題與說明推測」。\n') +
+    '只回傳 JSON，格式：\n{"overview":"總覽，2~4 段，段落之間用 \\n\\n 分隔","keyPoints":["重點，5~8 條，每條一句"],"details":["詳細說明，4~10 條，要具體（數字、人名、地名、例子）"],' +
+    '"chapters":[{"start":開始秒數(整數),"end":結束秒數(整數),"title":"章節標題（20 字內）","summary":"2~3 句摘要","points":["這段的要點 2~4 條"]}],"tags":["3~6 個關鍵詞"],"questions":["3 個看完後值得追問的問題"]}\n' +
+    '章節依時間順序涵蓋整部影片（通常 4~12 個），start 必須對應' + (video ? '影片裡的實際時間' : '逐字稿裡的時間碼') + '。\n\n' + aiVideoBlock(null, video, info, cues);
+}
+/* 把 AI 回傳的摘要整理成固定格式（手機和雲端共用） */
+function aiInsFinish(v, model, video, engine){
+  v.chapters = (v.chapters || []).map(function(c){ return {start: Math.max(0, Math.round(+c.start || 0)), end: Math.round(+c.end || 0), title: String(c.title || ''), summary: String(c.summary || ''), points: (c.points || []).map(String)}; }).sort(function(a, b){ return a.start - b.start; });
+  v.t = Date.now(); v.engine = engine || AICFG.engine; v.model = model || (AICFG.engine === 'api' ? AICFG.model : AICFG.engine === 'sub' ? AICFG.subModel : AICFG.gmodel); v.video = video;
+  return v;
 }
 async function aiGenerate(){
   var id = AI.id, J = aiJob(id);
@@ -465,18 +553,13 @@ async function aiGenerate(){
   J.gen = true; J.msg = video ? 'Gemini 正在看整部影片分析（不用播放，可以關螢幕或切到別的 App）…' : 'AI 正在讀完整份逐字稿，通常要 20～90 秒…';
   AI.tab = 'sum'; aiRender();
   if(isApp) NAT.call('aiLabel', 'AI 摘要分析中');
-  var prompt = '你是 YouTube 影片內容分析助理。請只根據' + (video ? '影片本身' : '下面提供的影片資訊與逐字稿') + '分析，不要編造影片沒有的內容。所有文字用' + aiLangName() + '撰寫。\n' +
-    (AI.cues.length || video ? '' : '注意：這部影片沒有逐字稿，只能根據標題與說明欄推測，請在 overview 第一句註明「此影片無字幕，以下根據標題與說明推測」。\n') +
-    '只回傳 JSON，格式：\n{"overview":"總覽，2~4 段，段落之間用 \\n\\n 分隔","keyPoints":["重點，5~8 條，每條一句"],"details":["詳細說明，4~10 條，要具體（數字、人名、地名、例子）"],' +
-    '"chapters":[{"start":開始秒數(整數),"end":結束秒數(整數),"title":"章節標題（20 字內）","summary":"2~3 句摘要","points":["這段的要點 2~4 條"]}],"tags":["3~6 個關鍵詞"],"questions":["3 個看完後值得追問的問題"]}\n' +
-    '章節依時間順序涵蓋整部影片（通常 4~12 個），start 必須對應' + (video ? '影片裡的實際時間' : '逐字稿裡的時間碼') + '。\n\n' + aiVideoBlock(null, video);
+  var prompt = aiInsPrompt(video, AI.info, AI.cues);
   var step = function(m){ J.msg = m; if(AI.id === id) aiRenderPane(); };
   try{
     var v = await aiAsk(prompt, video ? {video: id, fps: (AI.info.len || 0) > 2400 ? 0.2 : 0.5, step: step} : {step: step});
     if(!v || typeof v !== 'object' || !v.overview) throw aiErr('fail', 'AI 回傳的內容不完整，請再試一次');
     var model = v._model;
-    v.chapters = (v.chapters || []).map(function(c){ return {start: Math.max(0, Math.round(+c.start || 0)), end: Math.round(+c.end || 0), title: String(c.title || ''), summary: String(c.summary || ''), points: (c.points || []).map(String)}; }).sort(function(a, b){ return a.start - b.start; });
-    v.t = Date.now(); v.engine = AICFG.engine; v.model = model || (AICFG.engine === 'api' ? AICFG.model : AICFG.engine === 'sub' ? AICFG.subModel : AICFG.gmodel); v.video = video;
+    aiInsFinish(v, model, video);
     aiCacheMerge(id, {ins: v});
     if(AI.id === id){ AI.ins = v; }
     if(typeof buzz === 'function') buzz(30);
@@ -683,7 +766,7 @@ function aiPaneTr(p, f){
       h('div', {class: 'sub', style: {marginTop: '6px'}, text: '可以讓 AI（Gemini）直接看影片，把說的話完整聽寫成逐字稿，再做摘要與章節；不用播放影片，在背景完成。'}),
       h('div', {class: 'btn-row', style: {justifyContent: 'center'}},
         h('button', {class: 'btn pri', html: icon('sparkle', 'sm') + 'AI 看影片聽寫', onclick: aiListenNow}),
-        nt ? null : h('button', {class: 'btn', html: icon('reload', 'sm') + '再試一次', onclick: function(){ var c = lsGet('ws.ai.' + AI.id, null); if(c){ delete c.cues; lsSet('ws.ai.' + AI.id, c); } aiOpenVideo(AI.id); }}))));
+        nt ? null : h('button', {class: 'btn', html: icon('reload', 'sm') + '再試一次', onclick: function(){ var c = aiDbGet(AI.id); if(c){ delete c.cues; aiDbSet(AI.id, c); } aiOpenVideo(AI.id); }}))));
     aiCta(f); return;
   }
   var bar = h('div', {class: 'aiTrBar'});
@@ -836,17 +919,21 @@ function aiStartPage(){
   var hist = aiHist();
   if(!AIV.ch){
     var inp = h('input', {type: 'url', placeholder: '貼上 YouTube 影片網址…', onkeydown: function(e){ if(e.key === 'Enter') go(); }});
-    var go = function(){ var v = inp.value.trim(), id = YT.idOf(v) || (/^[\w-]{11}$/.test(v) ? v : ''); if(id) aiOpenVideo(id, {auto: true}); else toast('這不是 YouTube 影片網址', true); };
+    var go = function(){ var v = inp.value.trim(), id = YT.idOf(v) || (/^[\w-]{11}$/.test(v) ? v : ''); if(!id){ toast('這不是 YouTube 影片網址', true); return; } if(typeof CLOUD !== 'undefined' && CLOUD.cfg.ok && CLOUD.cfg.auto){ inp.value = ''; clSubmit([{id: id}]); return; } aiOpenVideo(id, {auto: true}); };
     pg.appendChild(h('div', {class: 'card glass aiHero'},
       h('div', {class: 'aiHeroT', html: icon('sparkle') + '<b>YouTube 影片 AI 洞察</b>'}),
       h('div', {class: 'sub', text: '在 YouTube App 按「分享」→「AI 摘要（Terra 瀏覽器）」就會自動分析；也可以在這裡貼上網址。'}),
       h('div', {class: 'aiIn'}, inp,
         h('button', {class: 'ib', html: icon('copy'), title: '貼上', onclick: async function(){ try{ var t = await navigator.clipboard.readText(); if(t){ inp.value = t.trim(); go(); } }catch(e){ inp.focus(); } }}),
         h('button', {class: 'btn pri', html: icon('sparkle', 'sm') + '開始', onclick: go}))));
+    if(hist.length){ var SA = aiSizeAll(); pg.appendChild(h('div', {class: 'aiStor'}, h('span', {html: icon('folder', 'sm')}),
+      h('div', {class: 'grow'}, h('b', {text: '逐字稿與摘要共佔 ' + fmtSize(SA.bytes)}), h('small', {text: '共 ' + hist.length + ' 部影片・全部保留在手機裡，不會自動刪除'})))); }
     var running = Object.keys(AIJOB).filter(function(k){ return AIJOB[k].gen || AIJOB[k].listen; });
-    if(running.length){
+    var cpend = typeof CLOUD !== 'undefined' ? Object.keys(CLOUD.pend).filter(function(k){ return running.indexOf(k) < 0; }) : [];
+    if(running.length || cpend.length){
       pg.appendChild(h('h3', {class: 'aiH3', text: '分析中'}));
-      running.forEach(function(k){ var c = lsGet('ws.ai.' + k, null); pg.appendChild(aiVidRow({id: k, title: (c && c.info && c.info.title) || k, author: c && c.info && c.info.author, len: c && c.info && c.info.len}, AIJOB[k].msg || '分析中…')); });
+      cpend.forEach(function(k){ var P = CLOUD.pend[k], c = aiDbGet(k); pg.appendChild(aiVidRow({id: k, title: (c && c.info && c.info.title) || P.title || k, len: c && c.info && c.info.len}, 'GitHub 雲端處理中・交出 ' + fmtDate(P.t))); });
+      running.forEach(function(k){ var c = aiDbGet(k); pg.appendChild(aiVidRow({id: k, title: (c && c.info && c.info.title) || k, author: c && c.info && c.info.author, len: c && c.info && c.info.len}, AIJOB[k].msg || '分析中…')); });
     }
     if(!hist.length){ pg.appendChild(h('div', {class: 'empty'}, h('div', {text: '還沒有分析過的影片。'}))); paintIcons(sc); return sc; }
     var groups = {};
@@ -905,24 +992,28 @@ function aiVidRow(x, busy){
 }
 function aiVidMenu(x){
   var ch = aiChKey(x), mine = aiFolders()[ch] || [];
+  var sz = aiSizeOf(x.id);
   menu(x.title || x.id, [
+    ['info', '佔用空間 ' + fmtSize(sz.all), function(){ toast('逐字稿 ' + fmtSize(sz.tr) + '・摘要與章節 ' + fmtSize(sz.ins) + (sz.chat ? '・對話 ' + fmtSize(sz.chat) : '')); }, false,
+      (sz.tr ? '逐字稿 ' + fmtSize(sz.tr) : '沒有逐字稿') + '・' + (sz.ins ? '摘要與章節 ' + fmtSize(sz.ins) : '沒有摘要') + (sz.chat ? '・對話 ' + fmtSize(sz.chat) : '')],
     ['folder', '移到資料夾…', function(){
       var items = [['folder', '頻道最上層（' + ch + '）', function(){ aiMoveVid(x.id, ''); }]].concat(mine.map(function(f){ return [x.folder === f.id ? 'check' : 'folder', f.name, function(){ aiMoveVid(x.id, f.id); }]; }));
       items.push(['folderPlus', '新增資料夾並移入…', async function(){ var n = await promptDlg('新增資料夾', '', '資料夾名稱'); if(!n) return; var F = aiFolders(), f = {id: 'f' + uid(), name: n}; (F[ch] = F[ch] || []).push(f); lsSet('ws.aiFolders', F); aiMoveVid(x.id, f.id); }]);
       menu('移到資料夾', items);
     }],
     ['ytplay', '在 YouTube 分頁開啟', function(){ ytOpen('https://m.youtube.com/watch?v=' + x.id); }],
+    typeof CLOUD !== 'undefined' ? ['link', CLOUD.cfg.ok ? '交給 GitHub 雲端重新分析' : 'GitHub 雲端執行…', function(){ if(CLOUD.cfg.ok) clSubmit([x], {redo: true}); else clSettings(); }] : null,
     ['trash', '刪除這部的分析', async function(){ if(await confirmDlg('刪除分析？', '這部影片的逐字稿、摘要與對話會被刪除。', '刪除', true)){ aiForget(x.id); aiRender(); } }, true]
   ]);
 }
-function aiMoveVid(id, folder){ var hist = aiHist(); hist.forEach(function(x){ if(x.id === id) x.folder = folder; }); lsSet('ws.aiHist', hist); toast('✓ 已移動'); aiRender(); }
+function aiMoveVid(id, folder){ var hist = aiHist(); hist.forEach(function(x){ if(x.id === id) x.folder = folder; }); aiHistSet(hist); toast('✓ 已移動'); aiRender(); }
 function aiFolderMenu(ch, f){
   menu(f.name, [
     ['edit', '重新命名', async function(){ var n = await promptDlg('重新命名', f.name, '資料夾名稱'); if(!n) return; var F = aiFolders(); (F[ch] || []).forEach(function(x){ if(x.id === f.id) x.name = n; }); lsSet('ws.aiFolders', F); aiRender(); }],
     ['trash', '刪除資料夾（影片移回頻道）', async function(){
       if(!(await confirmDlg('刪除資料夾？', '「' + f.name + '」裡的影片會移回頻道最上層，不會被刪除。', '刪除', true))) return;
       var F = aiFolders(); F[ch] = (F[ch] || []).filter(function(x){ return x.id !== f.id; }); lsSet('ws.aiFolders', F);
-      var hist = aiHist(); hist.forEach(function(x){ if(x.folder === f.id) x.folder = ''; }); lsSet('ws.aiHist', hist); aiRender();
+      var hist = aiHist(); hist.forEach(function(x){ if(x.folder === f.id) x.folder = ''; }); aiHistSet(hist); aiRender();
     }, true]
   ]);
 }
@@ -941,6 +1032,7 @@ on('shareAi', function(u){
   u = String(u || '');
   var id = YT.idOf(u);
   if(!id){ toast('分享進來的不是 YouTube 影片網址', true); return; }
+  if(typeof CLOUD !== 'undefined' && CLOUD.cfg.ok && CLOUD.cfg.auto){ showView('ai'); clSubmit([{id: id}]); return; }
   aiOpenVideo(id, {auto: true});
 });
 
@@ -999,10 +1091,11 @@ function aiExport(){
 /* ---------- 設定 ---------- */
 function aiMoreMenu(){
   menu('AI 摘要', [
-    AI.id ? ['reload', '重新讀取逐字稿', function(){ var c = lsGet('ws.ai.' + AI.id, null); if(c){ delete c.cues; lsSet('ws.ai.' + AI.id, c); } aiOpenVideo(AI.id); }] : null,
+    AI.id ? ['reload', '重新讀取逐字稿', function(){ var c = aiDbGet(AI.id); if(c){ delete c.cues; aiDbSet(AI.id, c); } aiOpenVideo(AI.id); }] : null,
     AI.id ? ['copy', '複製逐字稿', function(){ copyText(AI.cues.map(function(c){ return '[' + aiTs(c.s) + '] ' + c.t; }).join('\n')); }] : null,
     ['gear', 'AI 設定', aiSettings, false, '引擎、Claude 登入、輸出語言'],
-    ['trash', '清除所有 AI 記錄', async function(){ if(await confirmDlg('清除所有 AI 記錄？', '分析過的影片、摘要與對話都會刪除。', '清除', true)){ aiHist().forEach(function(x){ try{ localStorage.removeItem('ws.ai.' + x.id); }catch(e){} }); lsSet('ws.aiHist', []); AI.id = ''; aiRender(); } }, true]
+    ['link', 'GitHub 雲端執行', function(){ clSettings(); }, false, CLOUD.cfg.ok ? '已連接・等待 ' + Object.keys(CLOUD.pend).length + ' 部' : '手機關掉也能在雲端繼續分析'],
+    ['trash', '清除所有 AI 記錄', async function(){ if(await confirmDlg('清除所有 AI 記錄？', '分析過的影片、摘要與對話都會刪除。', '清除', true)){ aiHist().forEach(function(x){ aiDbDel(x.id); }); aiHistSet([]); AI.id = ''; aiRender(); } }, true]
   ]);
 }
 function aiSettings(){
@@ -1063,6 +1156,8 @@ function aiSettings(){
     body.appendChild(h('label', {class: 'setRow aiSw', style: {marginTop: '8px'}}, h('div', {class: 'grow'}, h('b', {text: '分享進來就自動分析'}), h('div', {class: 'sub', text: '從 YouTube 分享到「AI 摘要（Terra 瀏覽器）」或貼上網址時，直接開始產生摘要與章節'})), ac));
     H('摘要與回答的語言');
     body.appendChild(segOf([['zh', '繁體中文'], ['en', 'English'], ['same', '跟影片相同']], AICFG.lang, function(v){ AICFG.lang = v; aiSaveCfg(); }));
+    H('GitHub 雲端執行');
+    body.appendChild(h('div', {class: 'setRow', onclick: function(){ clSettings(); }}, h('span', {class: 'ic', html: icon('link')}), h('div', {class: 'grow'}, h('b', {text: CLOUD.cfg.ok ? '已連接：' + CLOUD.cfg.login : '把分析交給 GitHub 雲端'}), h('div', {class: 'sub', text: '手機關掉也會在雲端繼續跑，完成後自動取回'})), h('span', {class: 'chev', text: '›'})));
     paintIcons(body);
   }
   draw();
@@ -1082,10 +1177,10 @@ function aiFixScan(){
   var hist = aiHist(), out = [];
   hist.forEach(function(x, i){
     if(AIJOB[x.id] && (AIJOB[x.id].gen || AIJOB[x.id].listen)) return;
-    var c = lsGet('ws.ai.' + x.id, null) || {};
+    if(typeof CLOUD !== 'undefined' && CLOUD.pend[x.id]) return;
+    var c = aiDbGet(x.id) || {};
     var noIns = !(c.ins && c.ins.overview), noCh = !noIns && !(c.ins.chapters && c.ins.chapters.length);
-    /* 較舊的影片為了省空間不留逐字稿（打開時才重新讀），所以只有最近的才檢查逐字稿 */
-    var noTr = i < 15 && !(c.cues && c.cues.length);
+    var noTr = !(c.cues && c.cues.length);
     if(noIns || noCh || noTr) out.push({id: x.id, title: (c.info && c.info.title) || x.title || x.id, author: (c.info && c.info.author) || x.author || '', noIns: noIns, noCh: noCh, noTr: noTr});
   });
   return out;
@@ -1105,14 +1200,16 @@ function aiFixOpen(){
     }
     if(!L.length){ body.appendChild(h('div', {class: 'note', text: '✓ 全部影片都有逐字稿、摘要和章節，沒有未完成的。'})); return; }
     body.appendChild(h('div', {class: 'sub', style: {marginBottom: '8px'}, text: '找到 ' + L.length + ' 部未完成的影片。按「開始補齊」會照順序一部一部重新執行；每一部做完才做下一部。'}));
-    body.appendChild(h('div', {class: 'btn-row'}, h('button', {class: 'btn pri', html: icon('sparkle', 'sm') + '開始補齊（' + L.length + ' 部）', onclick: function(){ s.close(); aiFixRun(L); }})));
+    body.appendChild(h('div', {class: 'btn-row', style: {flexWrap: 'wrap'}}, h('button', {class: 'btn pri', html: icon('sparkle', 'sm') + '在手機上補齊（' + L.length + ' 部）', onclick: function(){ s.close(); aiFixRun(L); }}),
+      h('button', {class: 'btn', html: icon('link', 'sm') + (CLOUD.cfg.ok ? '交給 GitHub 雲端補齊' : '設定 GitHub 雲端…'), onclick: function(){ s.close(); if(CLOUD.cfg.ok) clSubmit(L); else clSettings(); }})));
+    body.appendChild(h('div', {class: 'sub', style: {margin: '4px 0 8px'}, text: '交給 GitHub 雲端：手機關螢幕、App 完全關掉也會繼續跑，完成後打開 App 就會取回結果。'}));
     var list = h('div', {class: 'list'});
     L.forEach(function(x){
       list.appendChild(h('div', {class: 'lrow', onclick: function(){ s.close(); aiOpenVideo(x.id); }}, h('div', {class: 'grow'}, h('b', {class: 'ell2', 'data-i18n-skip': '', text: x.title}),
         h('div', {class: 'sub', text: [x.noTr ? '沒有逐字稿' : '', x.noIns ? '沒有摘要與章節' : '', x.noCh ? '沒有章節' : ''].filter(Boolean).join('・')}))));
     });
     body.appendChild(list);
-    body.appendChild(h('div', {class: 'note', text: '執行中可以關螢幕或切到別的 App；但如果把 App 從最近使用清單滑掉（完全關閉），工作會中斷，下次再按「檢查未完成」可以接著做。'}));
+    body.appendChild(h('div', {class: 'note', text: '在手機上補齊：可以關螢幕或切到別的 App；但如果把 App 從最近使用清單滑掉（完全關閉），工作會中斷，下次再按「檢查未完成」可以接著做。'}));
     paintIcons(body);
   }
   draw();
@@ -1127,17 +1224,17 @@ async function aiFixRun(L){
     var x = L[i]; AIFIX.cur = x.title; AIFIX.curId = x.id; AIFIX.lastErr = null;
     if(curView === 'ai' && !AI.id) aiRender();
     try{
-      if(x.noCh){ var c0 = lsGet('ws.ai.' + x.id, null); if(c0){ delete c0.ins; lsSet('ws.ai.' + x.id, c0); } }
+      if(x.noCh){ var c0 = aiDbGet(x.id); if(c0){ delete c0.ins; aiDbSet(x.id, c0); } }
       await aiOpenVideo(x.id, {auto: true, bg: true});
       /* 等這一部的聽寫和分析都結束（最多 20 分鐘） */
       var t0 = Date.now(); await wait(1500);
       while(busy(x.id) && Date.now() - t0 < 20 * 60000) await wait(2000);
-      var c = lsGet('ws.ai.' + x.id, null) || {};
+      var c = aiDbGet(x.id) || {};
       /* 有逐字稿但還沒分析（例如不是「直接看影片」模式、剛剛才聽寫完）：補跑一次摘要 */
       if(!(c.ins && c.ins.overview) && !AIFIX.lastErr && AI.id === x.id && !busy(x.id)){
         aiGenerate(); await wait(1500);
         while(busy(x.id) && Date.now() - t0 < 25 * 60000) await wait(2000);
-        c = lsGet('ws.ai.' + x.id, null) || {};
+        c = aiDbGet(x.id) || {};
       }
       if(c.ins && c.ins.overview) AIFIX.ok++;
       else {

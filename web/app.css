@@ -941,3 +941,6 @@ html[lang]:not([lang^="zh"]) #nav button i{font-size:11px;font-weight:700}
 .aiH3Row{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .aiH3Row .aiH3{margin:0;flex:1;min-width:0}
 .aiH3Row .btn{flex:none}
+
+.aiStor{display:flex;align-items:center;gap:10px;margin:12px 4px 2px;padding:10px 14px;border-radius:16px;background:var(--surface-2);border:1px solid var(--border-soft)}
+.aiStor b{display:block;font-size:14px}.aiStor small{color:var(--text-muted);font-size:12px}

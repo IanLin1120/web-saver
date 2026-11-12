@@ -6,7 +6,7 @@ root = os.path.join(here, '..')
 ver = os.environ.get('VER') or open(os.path.join(root, 'VERSION')).read().strip()
 R = lambda *p: open(os.path.join(here, *p), encoding='utf-8').read()
 
-order = ['a_core', 'b_cfg', 'c_browser', 'd_capture', 'e_media', 'f_library', 'g_viewer', 'h_settings', 'i_update', 'j_audio', 'k_youtube', 'l_folders_music', 'm_lyrics', 'n_ytab', 'o_history', 'p_lock', 'q_ai', 'o_office', 'r_ytmusic', 's_guide', 't_relay', 'u_i18n', 'z_boot']
+order = ['a_core', 'b_cfg', 'c_browser', 'd_capture', 'e_media', 'f_library', 'g_viewer', 'h_settings', 'i_update', 'j_audio', 'k_youtube', 'l_folders_music', 'm_lyrics', 'n_ytab', 'o_history', 'p_lock', 'q_ai', 'o_office', 'r_ytmusic', 's_guide', 't_relay', 'v_cloud', 'u_i18n', 'z_boot']
 app = '\n'.join(R('parts', n + '.js') for n in order).replace('__VER__', ver)
 
 # 多國語言：把程式裡所有中文介面文字列成清單（I18N_SRC），App 切換語言時整批翻譯
@@ -34,6 +34,7 @@ for f in sorted(os.listdir(os.path.join(here, 'i18n'))) if os.path.isdir(os.path
     d = json.loads(R('i18n', f))
     if f.startswith('guide.'): _gpack[f[6:-5]] = d
     else: _pack[f[:-5]] = d
+app = 'window.CLOUD_FILES=' + json.dumps({'run': R('cloud', 'run.py'), 'yml': R('cloud', 'ai.yml')}, ensure_ascii=False) + ';\n' + app
 app = ('window.I18N_SRC=' + json.dumps(sorted(_src), ensure_ascii=False) + ';\nwindow.I18N_PACK=' + json.dumps(_pack, ensure_ascii=False)
        + ';\nwindow.I18N_GPACK=' + json.dumps(_gpack, ensure_ascii=False) + ';\n' + app)
 
@@ -44,7 +45,7 @@ ad_js = 'window.WS_AD=' + json.dumps({'hosts': hosts, 'css': css}, ensure_ascii=
 def inline(src):            # 避免 </script> 提早結束標籤
     return src.replace('</script', '<\\/script')
 
-vend = ''.join('<script>' + inline(R('vendor', n + '.js')) + '</script>\n' for n in ['jszip', 'pdf', 'lame.min', 'wme.min', 'mp3wasm', 'katex.min', 'qrcode', 'jsqr'])
+vend = ''.join('<script>' + inline(R('vendor', n + '.js')) + '</script>\n' for n in ['jszip', 'pdf', 'lame.min', 'wme.min', 'mp3wasm', 'katex.min', 'qrcode', 'jsqr', 'sealbox'])
 worker = json.dumps(R('vendor', 'pdf.worker.js')).replace('</', '<\\/')
 inject_src = {n: R('inject', n + '.js') for n in ['page', 'capture', 'reader', 'media', 'yt']}
 inject_js = 'window.WS_INJECT=' + json.dumps(inject_src, ensure_ascii=False).replace('</', '<\\/') + ';'
