@@ -16,8 +16,19 @@ var I18N = {
   spaced: function(){ return !/^(ja|zh-CN|th|ko)$/.test(this.lang); }
 };
 var HAN = /[㐀-鿿]/;
-function i18nLoad(){ I18N.dict = I18N.on() ? lsGet('ws.i18n.' + I18N.lang, {}) : {}; }
-function i18nSave(){ try{ lsSet('ws.i18n.' + I18N.lang, I18N.dict); }catch(e){} }
+/* 內建語言包（打包時放進來）：選了馬上能用，不需要金鑰。沒有內建的語言才用 Gemini 翻譯後存在手機裡 */
+function i18nBuiltin(l){ return !!(window.I18N_PACK && I18N_PACK[l || I18N.lang]); }
+function i18nLoad(){
+  if(!I18N.on()){ I18N.dict = {}; return; }
+  if(i18nBuiltin()){
+    var P = I18N_PACK[I18N.lang], D = {};
+    (window.I18N_SRC || []).forEach(function(s){ D[s] = P[s] != null ? P[s] : s; });
+    Object.keys(P).forEach(function(k){ D[k] = P[k]; });
+    I18N.dict = D; return;
+  }
+  I18N.dict = lsGet('ws.i18n.' + I18N.lang, {});
+}
+function i18nSave(){ if(i18nBuiltin()) return; try{ lsSet('ws.i18n.' + I18N.lang, I18N.dict); }catch(e){} }
 /* 介面文字的索引：第一個字 → 這個字開頭的所有文字（長的排前面） */
 function i18nIndex(){
   if(I18N.idx) return I18N.idx;
@@ -30,7 +41,7 @@ function i18nIndex(){
 function i18nText(v){
   if(!v || !HAN.test(v)) return v;
   var D = I18N.dict, t = v.trim();
-  if(D[t]) return v.replace(t, D[t]);
+  if(D[t] != null) return v.replace(t, D[t]);
   var idx = i18nIndex(), segs = [], i = 0, raw = '';
   while(i < v.length){
     var c = idx[v[i]], hit = null;
@@ -41,7 +52,7 @@ function i18nText(v){
   if(raw) segs.push([0, raw]);
   var left = segs.some(function(s){ return !s[0] && HAN.test(s[1]); }), out = '', ch = false, sp = I18N.spaced();
   segs.forEach(function(s, n){
-    var tr = s[0] && D[s[1]] && (!left || s[1].replace(/[^㐀-鿿]/g, '').length >= 4) ? D[s[1]] : null;
+    var tr = s[0] && D[s[1]] != null && (!left || s[1].replace(/[^㐀-鿿]/g, '').length >= 4) ? D[s[1]] : null;
     if(tr == null){ out += s[1]; return; }
     ch = true;
     if(sp && out && /[A-Za-z0-9%)\]]$/.test(out) && /^[A-Za-z0-9(]/.test(tr)) out += ' ';
@@ -114,7 +125,7 @@ async function trPool(chunks, worker, par){
 /* ---------- 介面語言：把還沒翻過的介面文字（和說明書）翻好存起來 ---------- */
 function i18nGuideKey(i){ return '\u0001g' + i + ':' + GUIDE[i].html.length; }
 async function i18nPrepare(onStep){
-  if(!I18N.on() || I18N.busy) return;
+  if(!I18N.on() || I18N.busy || i18nBuiltin()) return;
   I18N.busy = true;
   try{
     var lang = I18N.lang, name = I18N.name();
@@ -137,25 +148,32 @@ async function i18nPrepare(onStep){
     }, 2);
   } finally { I18N.busy = false; }
 }
-function i18nGuideHtml(i){ return (I18N.on() && I18N.dict[i18nGuideKey(i)]) || GUIDE[i].html; }
+function i18nGuideHtml(i){
+  if(!I18N.on()) return GUIDE[i].html;
+  var G = window.I18N_GPACK && I18N_GPACK[I18N.lang], g = G && G[i];
+  if(g && g.len === GUIDE[i].html.length) return g.html;
+  return I18N.dict[i18nGuideKey(i)] || GUIDE[i].html;
+}
 function openLang(){
   var body = h('div');
   var s = openSheet({title: '語言 Language', icon: 'globe', body: body, tall: true});
   function draw(){
     body.textContent = '';
-    body.appendChild(h('div', {class: 'sub', 'data-i18n-skip': '', style: {marginBottom: '10px', lineHeight: '1.6'}, html: '介面原文是繁體中文。選其他語言時，App 會用你的 Gemini 金鑰把介面和說明書翻好（第一次約 1～3 分鐘，之後就不用再翻）。<br>The UI is written in Traditional Chinese. Other languages are translated once with your Gemini API key and then stored on this phone.'}));
+    body.appendChild(h('div', {class: 'sub', 'data-i18n-skip': '', style: {marginBottom: '10px', lineHeight: '1.6'}, html: 'English、简体中文已內建，選了馬上切換。其他語言第一次選時會用你的 Gemini 金鑰翻譯一次（約 1～3 分鐘），之後就不用再翻。<br>English and 简体中文 are built in and switch instantly. Other languages are translated once with your Gemini API key and then stored on this phone.'}));
     var st = h('div', {class: 'note', style: {display: 'none'}}); body.appendChild(st);
     var list = h('div', {class: 'opts', 'data-i18n-skip': ''}); body.appendChild(list);
     I18N.LANGS.forEach(function(L){
-      var n = L[0] === 'zh-TW' ? '' : Object.keys(lsGet('ws.i18n.' + L[0], {})).length;
+      var bi = i18nBuiltin(L[0]), n = L[0] === 'zh-TW' || bi ? '' : Object.keys(lsGet('ws.i18n.' + L[0], {})).length;
       list.appendChild(h('div', {class: 'opt' + (I18N.lang === L[0] ? ' on' : ''), onclick: function(){ pick(L[0]); }}, h('span', {class: 'oi', html: icon(I18N.lang === L[0] ? 'check' : 'globe')}),
-        h('div', {class: 'grow'}, h('b', {text: L[1]}), n ? h('div', {class: 'sub', text: '✓ ' + n}) : null)));
+        h('div', {class: 'grow'}, h('b', {text: L[1]}), h('div', {class: 'sub', text: L[0] === 'zh-TW' ? '原文' : bi ? '✓ 內建・Built-in' : n ? '✓ 已翻譯・Translated' : 'Gemini 翻譯・AI translated on first use'}))));
     });
     paintIcons(body);
     async function pick(l){
       if(I18N.busy){ toast('翻譯進行中，請稍候'); return; }
       if(l === I18N.lang && l === 'zh-TW') return;
       if(l === 'zh-TW'){ lsSet('ws.lang', l); toast('重新載入…'); setTimeout(function(){ location.reload(); }, 400); return; }
+      /* 內建的語言：直接切換，重新載入讓整個畫面用新語言重畫 */
+      if(i18nBuiltin(l)){ lsSet('ws.lang', l); toast(I18N.label(l) + '…'); setTimeout(function(){ location.reload(); }, 300); return; }
       if(!AICFG.gkey){ toast('要先設定 Gemini 金鑰（AI 摘要 → AI 設定）才能翻譯介面', true, ['去設定', function(){ s.close(); showView('ai'); if(typeof aiSettings === 'function') aiSettings(); }]); return; }
       var was = I18N.lang;
       I18N.lang = l; lsSet('ws.lang', l); i18nLoad();

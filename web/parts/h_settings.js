@@ -14,7 +14,7 @@ function renderSettings(){
       h('div', {class: 'grow'}, h('b', {text: '打開說明書'}), h('div', {class: 'sub', text: '所有功能怎麼用、要允許哪些權限、AI 金鑰怎麼申請和設定、其他 App 下載自動搬回'})), h('span', {class: 'chev', text: '›'}))
 ,
     h('div', {class: 'setRow', onclick: function(){ openLang(); }}, h('span', {class: 'ic', html: icon('globe')}),
-      h('div', {class: 'grow'}, h('b', {'data-i18n-skip': '', text: '語言 Language'}), h('div', {class: 'sub', 'data-i18n-skip': '', text: I18N.label() + '・介面與說明書的語言'})), h('span', {class: 'chev', text: '›'}))
+      h('div', {class: 'grow'}, h('b', {'data-i18n-skip': '', text: '語言 Language'}), h('div', {class: 'sub', text: I18N.label() + '・介面與說明書的語言'})), h('span', {class: 'chev', text: '›'}))
   ]));
 
   /* 外觀 */

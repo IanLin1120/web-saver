@@ -920,3 +920,20 @@ details.note p{margin:8px 0 0}
 
 .hero .mark.markImg{background:none;box-shadow:none;padding:0}
 .hero .mark.markImg svg{width:100%;height:100%;display:block;filter:drop-shadow(0 6px 14px rgba(120,60,10,.3))}
+
+/* 下方分頁列：方正帶圓角的選取框，文字固定一行（各種語言都不會把形狀撐歪） */
+#nav{border-radius:26px;padding:6px;gap:4px}
+#nav button{border-radius:18px;padding:8px 2px 7px;gap:3px;min-width:0;overflow:hidden}
+#nav button i{font-style:normal;display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11.5px;line-height:1.25;letter-spacing:0}
+#nav button.on{box-shadow:0 2px 8px rgba(60,40,20,.18),inset 0 1px 0 rgba(255,255,255,.18)}
+html[lang]:not([lang^="zh"]) #nav button i{font-size:11px;font-weight:700}
+/* 說明書：表格在各種語言下都不會擠出畫面 */
+.gTbl{table-layout:fixed;word-break:break-word;overflow-wrap:anywhere}
+.gTbl td:first-child{white-space:normal;width:34%}
+.gTbl th:first-child{width:34%}
+.gNav span{min-width:0;flex:1;padding:6px 2px}
+.gNav span i{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-size:10.5px}
+.gBar{min-width:0;flex-wrap:nowrap;overflow:hidden}
+.gB i{overflow:hidden;text-overflow:ellipsis}
+.gFlow span{min-width:0;flex:1}
+.gSec summary{overflow-wrap:anywhere}

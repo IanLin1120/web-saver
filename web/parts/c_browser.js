@@ -347,7 +347,7 @@ function rememberRecent(u){
 function renderStart(){
   var sp = $('startPage'); sp.textContent = '';
   var sects = h('div', {class: 'sects'});
-  sp.appendChild(h('div', {class: 'hero'}, h('div', {class: 'mark markImg', html: APP_ICON_SVG}), h('h1', {text: 'Terra 瀏覽器'}), h('p', {'data-i18n-skip': '', text: 'Terra Browser'}), h('p', {text: '瀏覽、去廣告、翻譯、擷取網頁，影片音樂一鍵下載'})));
+  sp.appendChild(h('div', {class: 'hero'}, h('div', {class: 'mark markImg', html: APP_ICON_SVG}), h('h1', {text: 'Terra 瀏覽器'}), (typeof I18N !== 'undefined' && I18N.on() && I18N.lang !== 'zh-CN') ? null : h('p', {'data-i18n-skip': '', text: 'Terra Browser'}), h('p', {text: '瀏覽、去廣告、翻譯、擷取網頁，影片音樂一鍵下載'})));
   /* 首頁的大搜尋框：直接在這裡輸入文字或貼上網址，按「搜尋」或鍵盤的 Enter 就開啟 */
   var bigIn = h('input', {type: 'search', id: 'startIn', enterkeyhint: 'search', autocomplete: 'off', placeholder: '貼上網址或輸入關鍵字',
     onkeydown: function(e){ if(e.key === 'Enter'){ e.preventDefault(); go(); } },

@@ -27,7 +27,15 @@ for n in order:
         if _han.search(t): _add(t.replace("\\'", "'").replace('\\"', '"'))
 for m in re.finditer(r'>([^<>]+)<|(?:title|placeholder|aria-label)="([^"]+)"', R('shell.html')):
     _add(m.group(1) or m.group(2))
-app = 'window.I18N_SRC=' + json.dumps(sorted(_src), ensure_ascii=False) + ';\n' + app
+# 內建的語言包（web/i18n/<語言>.json：介面文字；guide.<語言>.json：說明書各章節）
+_pack, _gpack = {}, {}
+for f in sorted(os.listdir(os.path.join(here, 'i18n'))) if os.path.isdir(os.path.join(here, 'i18n')) else []:
+    if not f.endswith('.json'): continue
+    d = json.loads(R('i18n', f))
+    if f.startswith('guide.'): _gpack[f[6:-5]] = d
+    else: _pack[f[:-5]] = d
+app = ('window.I18N_SRC=' + json.dumps(sorted(_src), ensure_ascii=False) + ';\nwindow.I18N_PACK=' + json.dumps(_pack, ensure_ascii=False)
+       + ';\nwindow.I18N_GPACK=' + json.dumps(_gpack, ensure_ascii=False) + ';\n' + app)
 
 hosts = [l.strip().lower() for l in R('inject', 'adhosts.txt').splitlines() if l.strip() and not l.startswith('#') and '/' not in l]
 css = ','.join(l.strip() for l in R('inject', 'adcss.txt').splitlines() if l.strip() and not l.startswith('#'))
