@@ -5,6 +5,44 @@
   var B = window.WSPage;
   if (!B) return;
 
+  /* 一般網頁的影片：告訴 App 有沒有在播（子母畫面用），以及子母畫面時只顯示影片。YouTube 由 yt.js 處理 */
+  if (!/(^|\.)youtube(-nocookie)?\.com$/.test(location.hostname) && !window.__wsVidHook) {
+    window.__wsVidHook = 1;
+    var curV = null;
+    var rep = function (e) {
+      var v = e.target;
+      if (!v || v.tagName !== 'VIDEO') return;
+      var on = e.type === 'playing' || e.type === 'play';
+      if (on && (v.muted || v.videoWidth < 200)) { if (e.type === 'play') return; if (v.muted) return; }
+      if (on) curV = v; else if (curV !== v) return;
+      try { B.video(on && !v.paused, v.videoWidth || 0, v.videoHeight || 0); } catch (x) {}
+    };
+    ['play', 'playing', 'pause', 'ended', 'emptied'].forEach(function (t) { document.addEventListener(t, rep, true); });
+    window.addEventListener('pagehide', function () { try { B.video(false, 0, 0); } catch (x) {} });
+    var pst = null, anc = [];
+    window.__wsYTpip = function (on) {
+      var de = document.documentElement;
+      if (on) {
+        var v = curV && curV.isConnected ? curV : document.querySelector('video');
+        if (!v) return;
+        if (!pst) {
+          pst = document.createElement('style');
+          pst.textContent = 'html.__wspip,html.__wspip body{overflow:hidden!important;background:#000!important}' +
+            'html.__wspip video[data-wspip]{position:fixed!important;left:0!important;top:0!important;right:auto!important;bottom:auto!important;width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;margin:0!important;z-index:2147483647!important;background:#000!important;object-fit:contain!important;transform:none!important}' +
+            'html.__wspip .__wspipA{transform:none!important;filter:none!important;perspective:none!important;contain:none!important;will-change:auto!important;backdrop-filter:none!important}';
+          de.appendChild(pst);
+        }
+        v.setAttribute('data-wspip', '');
+        anc = []; for (var p = v.parentElement; p && p !== de; p = p.parentElement) { p.classList.add('__wspipA'); anc.push(p); }
+        de.classList.add('__wspip');
+      } else {
+        de.classList.remove('__wspip');
+        anc.forEach(function (p) { p.classList.remove('__wspipA'); }); anc = [];
+        var q = document.querySelectorAll('video[data-wspip]'); for (var i = 0; i < q.length; i++) q[i].removeAttribute('data-wspip');
+      }
+    };
+  }
+
   function adCss() {
     if (!cfg.ads) { var o = document.getElementById('__ws_adcss'); if (o) o.remove(); return; }
     if (document.getElementById('__ws_adcss') || !document.documentElement) return;

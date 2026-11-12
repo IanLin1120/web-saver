@@ -640,6 +640,13 @@ function openToolsMenu(){
   b(CFG.mode === 'desktop' ? 'monitor' : CFG.mode === 'reader' ? 'book' : 'phone', CFG.mode === 'desktop' ? '電腦版' : CFG.mode === 'reader' ? '閱讀模式' : '手機版', function(){ $('bMode').click(); }, {on: CFG.mode !== 'mobile'});
   b('sliders', '瀏覽設定', function(){ $('bQuick').click(); });
   b('sparkle', typeof PTR !== 'undefined' && PTR.on && PTR.url === BR.url ? '翻譯中／原文' : '翻譯網頁', function(){ pageTranslateMenu(); }, {dis: !page, on: typeof PTR !== 'undefined' && PTR.on && PTR.url === BR.url});
+  /* 懸浮下載按鈕的開關：不見了就關掉再開一次，會放回預設位置 */
+  if(isApp) b('download', '懸浮下載鈕', function(){
+    var on = !CFG.fab; setCfg('fab', on);
+    if(on && NAT.has('fabReset')) NAT.call('fabReset');
+    if(typeof fabSync === 'function'){ fabSync.k = null; fabSync(); }
+    toast(on ? '已顯示懸浮下載按鈕（放回右側預設位置）' : '已隱藏懸浮下載按鈕');
+  }, {on: !!CFG.fab});
   b('film', '下載影片', function(){ openMedia(); }, {dis: !page, n: BR.mediaN ? (BR.mediaN > 99 ? '99+' : BR.mediaN) : ''});
   b('download', '擷取網頁', function(){ openCapture(); }, {dis: !page});
   b('copy', '複製網址', function(){ copyText(BR.url); }, {dis: !page});

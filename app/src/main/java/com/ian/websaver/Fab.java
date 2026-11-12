@@ -102,8 +102,32 @@ final class Fab {
         boolean fs = (a.br != null && a.br.fs) || (a.yt != null && a.yt.fs);
         boolean vis = (want || ((FabIcon) btn).busy()) && !covered && !fs && !a.inPipNow;
         box.setVisibility(vis ? View.VISIBLE : View.GONE);
+        if (vis) {
+            /* 子母畫面、全螢幕之後網頁會被拉到最上層，按鈕就被蓋在下面看不到：每次顯示都重新放回最上層，並確認沒有跑出畫面 */
+            try {
+                box.bringToFront();
+                View p = (View) box.getParent();
+                if (p != null && p.getWidth() > 0 && box.getWidth() > 0) {
+                    if (box.getX() < 0 || box.getX() > p.getWidth() - box.getWidth()) box.setX(p.getWidth() - box.getWidth() - Util.dp(a, 6));
+                    if (box.getY() < 0 || box.getY() > p.getHeight() - box.getHeight()) box.setY(p.getHeight() * 0.62f);
+                }
+            } catch (Throwable t) { /* ignore */ }
+        }
         if (vis) box.bringToFront();
     }
 
     void refresh() { apply(); }
+    /** 按鈕不見時用：解除遮蓋狀態、放回預設位置 */
+    void reset() {
+        covered = false;
+        try {
+            View p = (View) box.getParent();
+            int w = p != null && p.getWidth() > 0 ? p.getWidth() : a.getResources().getDisplayMetrics().widthPixels;
+            int h = p != null && p.getHeight() > 0 ? p.getHeight() : a.getResources().getDisplayMetrics().heightPixels;
+            int bw = box.getWidth() > 0 ? box.getWidth() : Util.dp(a, 56);
+            box.setX(w - bw - Util.dp(a, 6)); box.setY(h * 0.62f);
+            a.prefs.edit().remove("fabX").remove("fabY").apply();
+        } catch (Throwable t) { /* ignore */ }
+        apply();
+    }
 }

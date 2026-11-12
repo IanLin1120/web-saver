@@ -1854,5 +1854,11 @@
 "🔒 已上鎖": "🔒 Locked",
 "🔒 已上鎖「": "🔒 Locked \"",
 "個": "",
-"筆": ""
+"筆": "",
+"在 YouTube 或瀏覽器看影片時，按 Home 鍵自動縮成小視窗（聽 YouTube Music 不會）；也可按播放器上的 ⧉": "While watching a video on YouTube or in the browser, pressing Home shrinks it into a small window (not while listening to YouTube Music); you can also tap ⧉ on the player",
+"已隱藏懸浮下載按鈕": "Floating download button hidden",
+"已顯示懸浮下載按鈕（放回右側預設位置）": "Floating download button shown (back at its default spot on the right)",
+"懸浮下載鈕": "Floating button",
+"瀏覽網頁時顯示可拖曳的 ⬇ 按鈕（彈出視窗裡也有），一點就開啟下載面板；也可以在瀏覽器右上角的功能選單開關": "Shows a draggable ⬇ button while browsing (also in pop-ups); one tap opens the download panel. It can also be toggled from the menu at the top right of the browser",
+"看影片時按 Home 鍵自動縮成小視窗": "Pressing Home while watching a video shrinks it into a small window"
 }

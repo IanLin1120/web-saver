@@ -710,7 +710,16 @@ final class Browser {
         a.updatePipParams();
     }
 
-    boolean wantsPip() { return ytOpts != null && ytOpts.optBoolean("pip", true) && videoPlaying && isShown() && isYt(curHost); }
+    /** 子母畫面只在「正在看影片」時觸發：YouTube 分頁看影片（不含 YouTube Music 聽歌），或瀏覽分頁的網頁影片 */
+    boolean wantsPip() {
+        JSONObject o = ytOpts != null ? ytOpts : (a.yt != null ? a.yt.ytOpts : null);
+        if (o != null && !o.optBoolean("pip", true)) return false;
+        if (!videoPlaying || !isShown() || hiddenBr) return false;
+        String h = curHost == null ? "" : curHost.toLowerCase();
+        if (h.startsWith("music.youtube.")) return false;
+        if (this == a.br) return vidW >= 200 && vidH >= 120;
+        return isYt(curHost);
+    }
 
     void pipMode(boolean on) {
         inPip = on;

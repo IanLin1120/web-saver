@@ -227,6 +227,7 @@ public class Bridge {
     }
 
     /** 懸浮下載按鈕 */
+    @JavascriptInterface public void fabReset() { ui(new Runnable() { @Override public void run() { a.fab.reset(); } }); }
     @JavascriptInterface public void fab(final boolean on, final String label) { ui(new Runnable() { @Override public void run() { a.fab.set(on, label); } }); }
 
     @JavascriptInterface public void brAutoHttps(String host) { a.br.httpsAuto = host == null ? "" : host; }

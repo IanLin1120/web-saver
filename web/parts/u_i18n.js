@@ -159,7 +159,7 @@ function openLang(){
   var s = openSheet({title: '語言 Language', icon: 'globe', body: body, tall: true});
   function draw(){
     body.textContent = '';
-    body.appendChild(h('div', {class: 'sub', 'data-i18n-skip': '', style: {marginBottom: '10px', lineHeight: '1.6'}, html: 'English、简体中文已內建，選了馬上切換。其他語言第一次選時會用你的 Gemini 金鑰翻譯一次（約 1～3 分鐘），之後就不用再翻。<br>English and 简体中文 are built in and switch instantly. Other languages are translated once with your Gemini API key and then stored on this phone.'}));
+    body.appendChild(h('div', {class: 'sub', 'data-i18n-skip': '', style: {marginBottom: '10px', lineHeight: '1.6'}, html: 'English、日本語、한국어、简体中文已內建，選了馬上切換。其他語言第一次選時會用你的 Gemini 金鑰翻譯一次（約 1～3 分鐘），之後就不用再翻。<br>English, 日本語, 한국어 and 简体中文 are built in and switch instantly. Other languages are translated once with your Gemini API key and then stored on this phone.'}));
     var st = h('div', {class: 'note', style: {display: 'none'}}); body.appendChild(st);
     var list = h('div', {class: 'opts', 'data-i18n-skip': ''}); body.appendChild(list);
     I18N.LANGS.forEach(function(L){
