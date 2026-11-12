@@ -229,6 +229,7 @@ public class Bridge {
     /** 懸浮下載按鈕 */
     @JavascriptInterface public void fab(final boolean on, final String label) { ui(new Runnable() { @Override public void run() { a.fab.set(on, label); } }); }
 
+    @JavascriptInterface public void brAutoHttps(String host) { a.br.httpsAuto = host == null ? "" : host; }
     @JavascriptInterface public void brLoad(final String url) { ui(new Runnable() { @Override public void run() { a.br.load(url); } }); }
 
     @JavascriptInterface public void brNav(final String what) {

@@ -1,3 +1,4 @@
+var APP_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFC55A"/><stop offset=".55" stop-color="#E8891C"/><stop offset="1" stop-color="#9C4710"/></linearGradient><radialGradient id="orb" cx=".36" cy=".3" r=".85"><stop offset="0" stop-color="#FFF3CC"/><stop offset=".38" stop-color="#FFC44D"/><stop offset=".78" stop-color="#E07F12"/><stop offset="1" stop-color="#A44C0C"/></radialGradient><linearGradient id="n1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFDF4"/><stop offset="1" stop-color="#FFE7B0"/></linearGradient><linearGradient id="n2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7A3A0C"/><stop offset="1" stop-color="#4A1F05"/></linearGradient><filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#5A2606" flood-opacity=".45"/></filter></defs><rect width="512" height="512" rx="116" fill="url(#bg)"/><path d="M0 116C0 52 52 0 116 0h280c64 0 116 52 116 116v60C380 120 150 110 0 210z" fill="#fff" opacity=".13"/><g filter="url(#sh)"><circle cx="256" cy="256" r="168" fill="url(#orb)"/><circle cx="256" cy="256" r="168" fill="none" stroke="#FFF1C4" stroke-opacity=".75" stroke-width="7"/></g><ellipse cx="204" cy="176" rx="74" ry="40" transform="rotate(-28 204 176)" fill="#fff" opacity=".38"/><g stroke="#8A3F0A" stroke-opacity=".5" stroke-width="7" stroke-linecap="round"><path d="M256 104v22M256 386v22M104 256h22M386 256h22"/></g><g transform="rotate(45 256 256)"><path d="M256 118l44 138h-88z" fill="url(#n1)"/><path d="M256 394l-44-138h88z" fill="url(#n2)"/></g><circle cx="256" cy="256" r="20" fill="#FFF6DC" stroke="#8A3F0A" stroke-width="7"/><circle cx="336" cy="330" r="7" fill="#FFF1C4" opacity=".7"/><circle cx="318" cy="352" r="4" fill="#FFF1C4" opacity=".6"/></svg>';
 /* ============================================================
    瀏覽頁：網址列、導覽、起始頁、收藏、快速設定、密碼提示
    APK：原生 WebView 疊在 #brArea 上；網頁版：透過代理讀取網頁，顯示在 iframe（不執行網頁程式）
@@ -34,7 +35,12 @@ function looksLikeUrl(s){
 function toUrl(s){
   s = (s || '').trim();
   if(!s) return '';
-  if(looksLikeUrl(s)) return /^[a-z]+:/i.test(s) ? s : 'https://' + s;
+  if(looksLikeUrl(s)){
+    if(/^[a-z]+:/i.test(s)) return s;
+    /* 沒打 http/https：先用 https；記下來，https 打不開時 App 會自動改試 http（有些公司內部網站只有 http） */
+    try{ if(isApp && NAT.has('brAutoHttps')) NAT.call('brAutoHttps', new URL('https://' + s).hostname); }catch(e){}
+    return 'https://' + s;
+  }
   return (SEARCH[CFG.search] || SEARCH.google)[1] + encodeURIComponent(s);
 }
 var urlIn = $('urlIn');
@@ -341,7 +347,7 @@ function rememberRecent(u){
 function renderStart(){
   var sp = $('startPage'); sp.textContent = '';
   var sects = h('div', {class: 'sects'});
-  sp.appendChild(h('div', {class: 'hero'}, h('div', {class: 'mark', text: '擷'}), h('h1', {text: '網頁擷取'}), h('p', {text: '瀏覽 → 去廣告 → 存成離線 HTML／PDF，圖片影片一鍵打包'})));
+  sp.appendChild(h('div', {class: 'hero'}, h('div', {class: 'mark markImg', html: APP_ICON_SVG}), h('h1', {text: '琥珀瀏覽器'}), h('p', {'data-i18n-skip': '', text: 'Amber Browser'}), h('p', {text: '瀏覽、去廣告、翻譯、擷取網頁，影片音樂一鍵下載'})));
   /* 首頁的大搜尋框：直接在這裡輸入文字或貼上網址，按「搜尋」或鍵盤的 Enter 就開啟 */
   var bigIn = h('input', {type: 'search', id: 'startIn', enterkeyhint: 'search', autocomplete: 'off', placeholder: '貼上網址或輸入關鍵字',
     onkeydown: function(e){ if(e.key === 'Enter'){ e.preventDefault(); go(); } },
@@ -633,6 +639,7 @@ function openToolsMenu(){
   b('scissors', '手動清理', function(){ $('bZap').click(); }, {dis: !page, on: BR.zap});
   b(CFG.mode === 'desktop' ? 'monitor' : CFG.mode === 'reader' ? 'book' : 'phone', CFG.mode === 'desktop' ? '電腦版' : CFG.mode === 'reader' ? '閱讀模式' : '手機版', function(){ $('bMode').click(); }, {on: CFG.mode !== 'mobile'});
   b('sliders', '瀏覽設定', function(){ $('bQuick').click(); });
+  b('sparkle', typeof PTR !== 'undefined' && PTR.on && PTR.url === BR.url ? '翻譯中／原文' : '翻譯網頁', function(){ pageTranslateMenu(); }, {dis: !page, on: typeof PTR !== 'undefined' && PTR.on && PTR.url === BR.url});
   b('film', '下載影片', function(){ openMedia(); }, {dis: !page, n: BR.mediaN ? (BR.mediaN > 99 ? '99+' : BR.mediaN) : ''});
   b('download', '擷取網頁', function(){ openCapture(); }, {dis: !page});
   b('copy', '複製網址', function(){ copyText(BR.url); }, {dis: !page});

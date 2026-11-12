@@ -422,8 +422,15 @@ final class Browser {
 
         @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
             if (isPopup || !r.isForMainFrame()) return;
+            if (httpFallback(v, r.getUrl().toString())) return;
             String desc = String.valueOf(e.getDescription());
             showError(v, r.getUrl().toString(), desc);
+        }
+
+        /* 網址沒打 http:// 或 https:// 時 App 會先試 https；伺服器的 https 壞掉（5xx）或連不上時，自動改用 http 再試一次 */
+        @Override public void onReceivedHttpError(WebView v, WebResourceRequest r, android.webkit.WebResourceResponse resp) {
+            if (isPopup || !r.isForMainFrame() || resp == null || resp.getStatusCode() < 500) return;
+            httpFallback(v, r.getUrl().toString());
         }
 
         /* 網頁把記憶體用光、顯示程序被系統收掉時：預設行為是整個 App 一起閃退。這裡改成只重建這個分頁、重新載入 */
@@ -535,6 +542,18 @@ final class Browser {
             MainActivity.emit("lib", "");
             MainActivity.toast("✓ 已存到檔案庫：" + nm);
         } catch (Throwable t) { MainActivity.toast("下載失敗：" + t.getMessage()); }
+    }
+
+    volatile String httpsAuto = "";
+    boolean httpFallback(final WebView v, String url) {
+        try {
+            if (httpsAuto.isEmpty() || !url.startsWith("https://") || !hostOf(url).equals(httpsAuto)) return false;
+            httpsAuto = "";
+            final String u = "http://" + url.substring(8);
+            v.post(new Runnable() { @Override public void run() { v.loadUrl(u); } });
+            MainActivity.toast("這個網站的 https 打不開，改用 http 開啟");
+            return true;
+        } catch (Throwable t) { return false; }
     }
 
     static String hostOf(String url) {

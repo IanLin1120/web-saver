@@ -128,6 +128,46 @@
     } catch (e) {}
   }
   function vid() { return document.querySelector('.html5-video-player video, video'); }
+  /* Shorts：在上方放大鏡的右邊放一顆下載按鈕（Shorts 沒有 App 的播放控制層）。
+     用畫面位置找出右上角那排按鈕：最右邊是「⋮」，它左邊那顆是搜尋；把下載鈕插在搜尋後面，搜尋就會往左讓位。
+     插不進去（版面不是並排）時，改成固定浮在搜尋鈕的左邊。 */
+  function shortsDl() {
+    var on = /^\/shorts\//.test(location.pathname), b = document.getElementById('__ws_sdl');
+    if (!on) { if (b) b.remove(); return; }
+    var W = innerWidth, list = [], els = document.querySelectorAll('button, a, [role="button"]');
+    for (var i = 0; i < els.length; i++) {
+      var e = els[i]; if (e.id === '__ws_sdl' || !e.querySelector('svg, yt-icon, c3-icon')) continue;
+      var r = e.getBoundingClientRect();
+      if (r.width < 20 || r.width > 80 || r.height < 20 || r.top < 0 || r.top > 90 || r.left < W * 0.55) continue;
+      if (list.some(function (x) { return x.e.contains(e) || e.contains(x.e); })) continue;
+      list.push({e: e, r: r});
+    }
+    list.sort(function (x, y) { return x.r.left - y.r.left; });
+    var srch = null;
+    for (var k = 0; k < list.length; k++) { var lb = (list[k].e.getAttribute('aria-label') || '') + (list[k].e.title || ''); if (/搜尋|搜索|search/i.test(lb)) srch = list[k]; }
+    if (!srch) srch = list.length >= 2 ? list[list.length - 2] : null;
+    if (!srch) { if (b && b.dataset.fix) return; if (b) b.remove(); return; }
+    if (b && b.isConnected && (b.dataset.fix || b.previousElementSibling === srch.e)) {
+      if (b.dataset.fix) { b.style.left = Math.max(4, srch.r.left - 46) + 'px'; b.style.top = (srch.r.top + (srch.r.height - 44) / 2) + 'px'; }
+      return;
+    }
+    if (b) b.remove();
+    b = document.createElement('button'); b.id = '__ws_sdl'; b.setAttribute('aria-label', '下載');
+    b.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg>';
+    b.setAttribute('style', 'all:unset;box-sizing:border-box;width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none;z-index:2147483000;-webkit-tap-highlight-color:transparent');
+    var fire = function (ev) { ev.preventDefault(); ev.stopPropagation(); try { B.ytDl(videoId()); } catch (x) {} };
+    b.addEventListener('click', fire, true);
+    b.addEventListener('pointerdown', function (ev) { ev.stopPropagation(); }, true);
+    b.addEventListener('touchstart', function (ev) { ev.stopPropagation(); }, {capture: true, passive: true});
+    srch.e.insertAdjacentElement('afterend', b);
+    var r2 = b.getBoundingClientRect();
+    /* 檢查有沒有真的排在搜尋鈕右邊同一排；沒有就改用固定位置 */
+    if (!(r2.width > 20 && Math.abs(r2.top - srch.r.top) < 30 && r2.left >= srch.r.left)) {
+      b.remove(); b.dataset.fix = '1';
+      b.style.position = 'fixed'; b.style.left = Math.max(4, srch.r.left - 46) + 'px'; b.style.top = (srch.r.top + (srch.r.height - 44) / 2) + 'px';
+      document.documentElement.appendChild(b);
+    }
+  }
   function videoId() { try { var u = new URL(location.href); return u.searchParams.get('v') || ((u.pathname.match(/\/(shorts|live)\/([\w-]{11})/) || [])[2]) || ''; } catch (e) { return ''; } }
   function toastIn(msg) {
     var pl = document.querySelector('.html5-video-player, #player-container-id') || document.body;
@@ -433,6 +473,7 @@
     /* Shorts 用 YouTube 自己的介面（愛心、留言、分享、訂閱都要能按），不蓋上 App 的播放控制 */
     var shorts = /^\/shorts\//.test(location.pathname) || /^music\./.test(location.hostname);   /* YouTube Music 也用它自己的播放介面 */
     document.documentElement.classList.toggle('__wsshorts', /^\/shorts\//.test(location.pathname));
+    try { shortsDl(); } catch (e) {}
     if (O.skin === false || !videoId() || !p || shorts) {
       if (host) host.style.display = 'none';
       document.documentElement.classList.remove('__wsskin');
@@ -1074,7 +1115,7 @@
     X + 'yt-button-shape button.yt-spec-button-shape-next--filled,' + X + 'a.yt-spec-button-shape-next--filled,' + X + 'ytmusic-chip-cloud-chip-renderer[is-selected] a{color:' + C.accFg + '!important}',
     X + 'ytmusic-guide-renderer yt-button-shape button,' + X + 'tp-yt-app-drawer yt-button-shape button{background:' + C.s2 + '!important;border:1px solid ' + C.line + '!important}',
     X + '.wsMuDark{color:' + C.fg + '!important}',
-    /* 使用網頁擷取的播放介面：藏起 YouTube Music 自己的播放列與播放頁（按鈕還在，由 App 控制） */
+    /* 使用琥珀瀏覽器的播放介面：藏起 YouTube Music 自己的播放列與播放頁（按鈕還在，由 App 控制） */
     'html.wsMuOwn ytmusic-player-bar,html.wsMuOwn #player-bar-background{position:fixed!important;left:-200vw!important;bottom:0!important;opacity:0!important;pointer-events:none!important}',
     /* YouTube Music 播放頁的展開／收合不要動畫（瞬間完成），收合的那一小段時間整頁透明（最多 2.5 秒，時間到一定恢復） */
     /* YouTube Music 自己認為播放頁「已收合」（player-ui-state 不是 PLAYER_PAGE_OPEN）時，播放頁一律不顯示：收合動畫、偶爾卡住沒消失的情況都看不到 */

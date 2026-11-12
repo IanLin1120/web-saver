@@ -95,7 +95,7 @@ var Upd = {
     if(!this.native()){ this.open(url); toast('已用瀏覽器開始下載，完成後點通知安裝（直接覆蓋安裝，資料會保留）'); return; }
     if(!NAT.call('canInstall')){
       this.pend = {url: url, v: v};
-      this.dialog('需要允許安裝', '第一次在 App 內更新，需要允許「網頁擷取」安裝應用程式。按「前往設定」打開「允許來自這個來源的應用程式」，回到 App 後會自動繼續下載安裝。',
+      this.dialog('需要允許安裝', '第一次在 App 內更新，需要允許「琥珀瀏覽器」安裝應用程式。按「前往設定」打開「允許來自這個來源的應用程式」，回到 App 後會自動繼續下載安裝。',
         [['前往設定', function(){ NAT.call('askInstall'); }], ['改用瀏覽器下載', function(){ self.pend = null; self.open(url); }], ['取消', function(){ self.pend = null; }]]);
       return;
     }

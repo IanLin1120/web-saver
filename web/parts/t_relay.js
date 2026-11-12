@@ -35,7 +35,7 @@ async function rlGhSetup(tok){
   var repo = null;
   try{ repo = await rlGh('/repos/' + u.login + '/' + RELAY.REPO, 'GET', null, tok); }catch(e){ if(e.status !== 404) throw e; }
   if(!repo){
-    await rlGh('/user/repos', 'POST', {name: RELAY.REPO, description: '網頁擷取 App 跨網路傳檔的暫存中繼（內容皆已加密，傳完自動刪除）', private: false, auto_init: true, has_issues: false, has_wiki: false}, tok);
+    await rlGh('/user/repos', 'POST', {name: RELAY.REPO, description: '琥珀瀏覽器 App 跨網路傳檔的暫存中繼（內容皆已加密，傳完自動刪除）', private: false, auto_init: true, has_issues: false, has_wiki: false}, tok);
     await sleep(1500);
   } else if(repo.private) throw new Error('「' + RELAY.REPO + '」是私人倉庫，對方會下載不到。請到 GitHub 把它改成公開（裡面的檔案都有加密）');
   return u.login;
@@ -130,7 +130,7 @@ function relayPane(body, mode, items, redraw){
   if(mode === 'gh'){
     if(!RELAY.cfg.gh){
       var inp = h('input', {style: {width: '100%', margin: '8px 0'}, type: 'password', placeholder: 'ghp_… 貼上 GitHub 權杖', autocomplete: 'off'});
-      body.appendChild(h('div', {class: 'note', html: '<b>第一次使用要先貼上你的 GitHub 權杖</b>（只存在這支手機）：<br>① 用瀏覽器登入 github.com → 右上角頭像 → Settings → 最下面 Developer settings → Personal access tokens → <b>Tokens (classic)</b> → Generate new token (classic)<br>② Note 隨便填（例如「網頁擷取傳檔」），Expiration 選你要的期限，權限只勾 <b>public_repo</b><br>③ 按 Generate token，複製 <b>ghp_</b> 開頭的那串貼到下面'}));
+      body.appendChild(h('div', {class: 'note', html: '<b>第一次使用要先貼上你的 GitHub 權杖</b>（只存在這支手機）：<br>① 用瀏覽器登入 github.com → 右上角頭像 → Settings → 最下面 Developer settings → Personal access tokens → <b>Tokens (classic)</b> → Generate new token (classic)<br>② Note 隨便填（例如「琥珀瀏覽器傳檔」），Expiration 選你要的期限，權限只勾 <b>public_repo</b><br>③ 按 Generate token，複製 <b>ghp_</b> 開頭的那串貼到下面'}));
       body.appendChild(inp);
       body.appendChild(h('div', {class: 'btn-row'}, h('button', {class: 'btn pri', html: icon('check', 'sm') + '儲存並檢查', onclick: async function(){
         var t = inp.value.trim(); if(!t){ toast('請先貼上權杖', true); return; }
@@ -381,5 +381,5 @@ function qrScan(){
     }catch(e){}
     busy = false;
   }, 220);
-  open('', true).catch(function(e){ msg.textContent = '無法開啟相機（' + ((e && e.name) || '') + '）。請到手機設定允許「網頁擷取」使用相機，或用「從相片選」。'; });
+  open('', true).catch(function(e){ msg.textContent = '無法開啟相機（' + ((e && e.name) || '') + '）。請到手機設定允許「琥珀瀏覽器」使用相機，或用「從相片選」。'; });
 }

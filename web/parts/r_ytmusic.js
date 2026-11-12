@@ -175,9 +175,7 @@ YTMU.draw = function(force){
     h('div', {class: 'th', style: Object.assign({width: '46px', height: '46px', borderRadius: '12px', flex: 'none', backgroundSize: 'cover'}, s.art ? {backgroundImage: 'url("' + s.art + '")'} : {background: 'var(--c-audio)'})}),
     h('div', {class: 'grow'}, h('b', {text: s.title, style: {fontSize: '17px', display: 'block'}, class: 'ell'}),
       h('div', {class: 'sub ell', text: [s.artist, s.album].filter(Boolean).join('・') + (it && it.lrcSrc ? '・歌詞：' + it.lrcSrc.split('：')[0] : '')})),
-    h('button', {class: 'ib' + (s.like === 'LIKE' ? ' on' : ''), title: '喜歡', style: s.like === 'LIKE' ? {color: 'var(--accent)'} : null,
-      html: '<svg class="i' + (s.like === 'LIKE' ? ' fill' : '') + '" viewBox="0 0 24 24"><path d="M7 10v11H3V10zM7 10l4-8a3 3 0 0 1 3 3v4h5.5a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 18.1 21H7"/></svg>',
-      onclick: function(){ self.cmd('like'); s.like = s.like === 'LIKE' ? 'INDIFFERENT' : 'LIKE'; buzz(10); self.draw(true); }})));
+    s.vid ? h('button', {class: 'ib', title: '下載', html: icon('download'), onclick: function(){ self.sheet.close(); openYt(s.vid); }}) : null));
   var tb = h('div', {class: 'mpTools'});
   var tbtn = function(ic, label, fn){ tb.appendChild(h('button', {class: 'chip', style: {background: 'var(--surface-3)', color: 'var(--text)', border: '1px solid var(--border-soft)'}, html: icon(ic, 'sm') + label, onclick: fn})); };
   tbtn(showLyr ? 'image' : 'type', showLyr ? '封面' : '歌詞', function(){ CFG.lyr.ytView = showLyr ? 'cover' : 'lyrics'; if(!showLyr) CFG.lyr.show = true; saveCfg(); self.draw(true); });
@@ -189,7 +187,6 @@ YTMU.draw = function(force){
     tbtn('back', '早 0.5 秒', function(){ shift(-0.5); });
     tbtn('fwd', '晚 0.5 秒', function(){ shift(0.5); });
   }
-  if(s.vid) tbtn('download', '下載', function(){ self.sheet.close(); openYt(s.vid); });
   body.appendChild(tb);
   var prog = h('input', {type: 'range', id: 'ymProg', min: 0, max: s.dur || 1, step: .1, value: this.time()});
   prog.addEventListener('input', function(){ prog.__drag = true; $('ymT1').textContent = fmtDur(prog.value); });
@@ -340,7 +337,7 @@ function ytmuListen(force){
     NAT.call('ytTap', 'start:' + SEC_N);
     return;
   }
-  if(!NAT.call('micStart')){ view('無法使用麥克風', '請到手機設定允許「網頁擷取」使用麥克風'); return; }
+  if(!NAT.call('micStart')){ view('無法使用麥克風', '請到手機設定允許「琥珀瀏覽器」使用麥克風'); return; }
   recOn = true;
   countdown('用麥克風聽周圍的聲音（正在播的不會暫停）');
 }

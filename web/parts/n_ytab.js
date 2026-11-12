@@ -224,7 +224,7 @@ function ytOrient(){
 window.addEventListener('resize', function(){ clearTimeout(ytOrient.t); ytOrient.t = setTimeout(ytOrient, 250); });
 
 /* ---------- 從其他 App 分享進來 ---------- */
-/* 「用網頁擷取下載」：YouTube 連結 → 在 YouTube 分頁打開並直接跳出下載面板；其他網址 → 打開並偵測媒體 */
+/* 「用琥珀瀏覽器下載」：YouTube 連結 → 在 YouTube 分頁打開並直接跳出下載面板；其他網址 → 打開並偵測媒體 */
 on('shareDl', function(u){
   u = String(u || '');
   var id = YT.idOf(u);
@@ -240,7 +240,8 @@ function fabSync(){
   if(!isApp) return;
   var on = false, label = '';
   if(CFG.fab && !SREC.on){
-    if(curView === 'yt') on = !!ytCurId() && !YTB.fs;
+    /* YouTube／YouTube Music 分頁不放懸浮按鈕：播放器、Shorts 上方、音樂播放面板各有自己的下載按鈕 */
+    if(curView === 'yt') on = false;
     else if(curView === 'browse'){ on = (!BR.home && BR.loaded && !!BR.url && !/^(about|data):/.test(BR.url)) || document.body.classList.contains('brFull'); label = on && BR.mediaN ? String(BR.mediaN > 99 ? '99+' : BR.mediaN) : ''; }
   }
   /* 狀態沒變就不呼叫原生（YouTube Music 換歌、播放時事件很多） */

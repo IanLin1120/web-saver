@@ -13,9 +13,9 @@ function gRows(rows, cap){ return '<div class="gFig"><div class="gRows">' + rows
 function gMini(title, sub, cap){ return '<div class="gFig"><div class="gMini"><span class="gArt">' + gI('audio') + '</span><span class="gT"><b>' + title + '</b><small>' + sub + '</small></span>' + gI('pause') + gI('fwd') + '<span class="gHit gX">' + gI('x') + '</span></div><em>' + cap + '</em></div>'; }
 var G_FIG = {
   intro: function(){ return gNav(-1); },
-  perm: function(){ return '<div class="gFig"><div class="gDlg"><b>要允許「網頁擷取」傳送通知嗎？</b><div><span>不允許</span><span class="gHit">允許</span></div></div><em>手機跳出這種詢問時，選「允許」</em></div>'; },
+  perm: function(){ return '<div class="gFig"><div class="gDlg"><b>要允許「琥珀瀏覽器」傳送通知嗎？</b><div><span>不允許</span><span class="gHit">允許</span></div></div><em>手機跳出這種詢問時，選「允許」</em></div>'; },
   browse: function(){ return gBar([{ic: 'back'}, {ic: 'home'}, {t: '輸入網址或關鍵字', wide: 1}, {ic: 'grid', hit: 1, n: '1'}], '① 右上角的「功能選單」：擷取網頁、下載影片、收藏、無痕模式都在裡面'); },
-  yt: function(){ return gNav(1) + '<div class="gFig"><div class="gStage"><span class="gPlay">' + gI('play', '') + '</span><span class="gFab gHit">' + gI('download') + '</span></div><em>看影片時，按可以拖曳的「⬇」懸浮按鈕就能下載</em></div>'; },
+  yt: function(){ return gNav(1) + '<div class="gFig"><div class="gStage"><span class="gPlay">' + gI('play', '') + '</span><span class="gFab gHit" style="position:absolute;right:14px;bottom:14px;top:auto;width:36px;height:36px;border-radius:10px;background:rgba(0,0,0,.45);color:#fff">' + gI('download') + '</span></div><em>看影片時，點一下畫面，播放器控制列上的「⬇」就是下載</em></div>'; },
   music: function(){ return gBar([{ic: 'back'}, {ic: 'home'}, {ic: 'reload'}, {ic: 'listen', hit: 1, n: '2'}, '<span class="gSeg"><i>' + gI('video') + '</i><i class="on gHit">' + gI('audio') + '</i><u>1</u></span>', {ic: 'more'}], '① 切到音符就是 YouTube Music　② 圓形聲波按鈕是「聽歌辨識」（YouTube 和 YouTube Music 都有）') +
     gMini('歌名', '歌手（有同步歌詞時顯示正在唱的那句）', '播放時下方的小播放列：點一下打開播放面板，最右邊 ✕ 停止播放'); },
   ai: function(){ return gBar([{ic: 'back'}, {t: 'AI 摘要', wide: 1}, {t: '● Gemini', hit: 1, n: '1'}, {ic: 'more'}], '① 在「AI 摘要」分頁，點右上角顯示 AI 名稱的按鈕，打開「AI 設定」') +
@@ -30,7 +30,7 @@ var G_FIG = {
 };
 var GUIDE = [
   {ic: 'info', fig: 'intro', t: '這套 App 可以做什麼', open: true, html:
-    '<p>「網頁擷取」把常用的幾件事放在同一個 App，下面五個分頁各管一件事：</p>' +
+    '<p>「琥珀瀏覽器」把常用的幾件事放在同一個 App，下面五個分頁各管一件事：</p>' +
     '<ul>' +
     '<li><b>瀏覽</b>：內建瀏覽器，擋廣告，可以把整個網頁存成離線檔、下載網頁裡的圖片和影片。</li>' +
     '<li><b>YouTube</b>：沒有廣告的 YouTube 和 YouTube Music，可以背景播放、下載影片和音樂。</li>' +
@@ -52,9 +52,11 @@ var GUIDE = [
     '<tr><td>資料夾存取</td><td>「其他 App 下載自動搬回」要你自己選一次那個 App 的下載資料夾。</td></tr>' +
     '<tr><td>指紋</td><td>用指紋代替輸入解鎖密碼。</td></tr>' +
     '</table>' +
-    '<p class="gTip">省電設定：有些手機會把背景的 App 關掉。如果關螢幕後音樂或下載會中斷，請到手機的「設定 → 應用程式 → 網頁擷取 → 電池」選「不限制」。</p>'},
+    '<p class="gTip">省電設定：有些手機會把背景的 App 關掉。如果關螢幕後音樂或下載會中斷，請到手機的「設定 → 應用程式 → 琥珀瀏覽器 → 電池」選「不限制」。</p>'},
 
   {ic: 'globe', fig: 'browse', t: '瀏覽：上網、存網頁、下載圖片影片', html:
+    '<p><b>翻譯網頁（AI）</b>：看外文網頁時，右上角功能選單 →「翻譯網頁」，App 會用 Gemini 把整頁文字翻成你的介面語言（預設繁體中文），版面不變。往下捲出現新內容時再按一次可以「翻譯新載入的內容」，也可以「顯示原文」。要先設定 Gemini 金鑰（見「AI 摘要」）。</p>' +
+    '<p><b>網址沒打 http／https</b>：App 會先用 https 開；那個網站的 https 打不開時（有些公司內部網站只有 http），會自動改用 http 再開一次。</p>' +
     '<p><b>掃 QR Code</b>：首頁「瀏覽記錄」旁邊的「掃 QR Code」。用相機掃（可以拉桿放大縮小、有多顆後鏡頭時按「換鏡頭」切換，也可以從相片選、開手電筒），掃到網址就直接用 App 打開；掃到別人用這套 App 分享的傳檔 QR Code，會直接把檔案收進檔案庫。第一次會問相機權限。</p>' +
     '<p>在上方輸入網址或關鍵字就能上網，廣告會自動擋掉。右上角的「功能選單」（格子圖示）裡有這些功能：</p>' +
     '<ul>' +
@@ -71,7 +73,7 @@ var GUIDE = [
     '<ol>' +
     '<li>點下方的「YouTube」分頁，就是沒有廣告的 YouTube。可以登入自己的 Google 帳號看訂閱內容。</li>' +
     '<li><b>背景播放</b>：切到別的 App 或關螢幕，聲音會繼續播；回到主畫面時會變成小視窗（子母畫面）。</li>' +
-    '<li><b>下載</b>：看影片時畫面上有一顆可以拖曳的「⬇」懸浮按鈕，按下去選畫質，或只下載音樂（MP3）。下載好的檔案在檔案庫。</li>' +
+    '<li><b>下載</b>：點一下影片，播放器控制列上有「⬇」下載按鈕，按下去選畫質，或只下載音樂（MP3）。看 <b>Shorts</b> 時，下載按鈕在畫面右上角、放大鏡的右邊。下載好的檔案在檔案庫。（YouTube 這一頁不再顯示懸浮下載按鈕；一般網頁的「瀏覽」分頁仍然有。）</li>' +
     '<li><b>交給其他下載 App</b>：下載面板裡也可以把影片交給 Snaptube 等 App 下載，下載完會自動搬回檔案庫（見「其他 App 下載自動搬回」）。</li>' +
     '<li><b>聽歌辨識</b>：上方的圓形聲波按鈕。想知道影片裡在放哪首歌時按一下，App 會直接聽影片的聲音 10 秒（不用麥克風、影片不會暫停），再告訴你歌名（詳見「YouTube Music」那一節）。</li>' +
     '<li>右上角「⋮」可以調整播放器設定：預設畫質、播放速度、自動跳過贊助片段等。</li>' +
@@ -80,7 +82,7 @@ var GUIDE = [
   {ic: 'audio', fig: 'music', t: 'YouTube Music：聽音樂、歌詞、聽歌辨識', html:
     '<ol>' +
     '<li>在 YouTube 分頁上方，有一個「影片／音符」的切換鈕，切到音符就是 YouTube Music。</li>' +
-    '<li>點任何一首歌就會播放，並打開播放面板：封面、進度條、上一首／下一首、隨機、循環、喜歡、播放佇列。</li>' +
+    '<li>點任何一首歌就會播放，並打開播放面板：封面、進度條、上一首／下一首、隨機、循環、播放佇列。歌名右邊的「⬇」可以把這首歌下載下來。</li>' +
     '<li><b>歌詞</b>：播放面板按「歌詞」。App 會自動找會跟著唱的同步歌詞，找不到就顯示 YouTube Music 內建的歌詞；也可以按「找歌詞」自己挑。</li>' +
     '<li>把面板關掉後，下方會留一條小播放列，可以暫停、下一首，最右邊的 ✕ 是停止播放。</li>' +
     '<li><b>聽歌辨識</b>：切換鈕旁邊的圓形聲波按鈕（YouTube 和 YouTube Music 兩邊都有）。聽 10 秒後辨識出歌名。<br>・App 裡有影片或音樂在播：直接聽那個聲音，不用麥克風，<b>播放不會暫停</b>。<br>・沒有東西在播，或按「改聽周圍的聲音」：用麥克風聽外面的音樂（其他 App 或喇叭播的也可以）。<br>・在 YouTube Music 會自動去搜尋那首歌；在 YouTube 看影片時只顯示歌名，影片繼續播，要搜尋再自己按。<br>這個功能要先設定 Gemini 金鑰（見「AI 摘要」）。</li>' +
@@ -98,7 +100,7 @@ var GUIDE = [
     '</ol>' +
     '<p>設定好之後的用法：</p>' +
     '<ul>' +
-    '<li>在「AI 摘要」貼上 YouTube 網址，或在 YouTube App／這個 App 的 YouTube 分頁按「分享」→ 選「AI 摘要（網頁擷取）」。</li>' +
+    '<li>在「AI 摘要」貼上 YouTube 網址，或在 YouTube App／這個 App 的 YouTube 分頁按「分享」→ 選「AI 摘要（琥珀瀏覽器）」。</li>' +
     '<li>AI 會產生逐字稿、摘要、章節；「對話」可以針對影片內容發問。沒有字幕的影片，AI 會直接看影片聽寫。</li>' +
     '<li>分析可以在背景進行，完成會通知；分析過的影片會依頻道分資料夾保存。</li>' +
     '</ul>' +
@@ -133,7 +135,7 @@ var GUIDE = [
     '<p><b>GitHub 中繼：第一次要設定權杖</b></p><ol>' +
     '<li>用瀏覽器登入 <b>github.com</b>（沒有帳號要先免費註冊）。</li>' +
     '<li>右上角頭像 → <b>Settings</b> → 左邊最下面 <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Tokens (classic)</b>。</li>' +
-    '<li>按 <b>Generate new token (classic)</b>。Note 隨便填（例如「網頁擷取傳檔」），Expiration 選你要的期限，下面的權限只勾 <b>public_repo</b>。</li>' +
+    '<li>按 <b>Generate new token (classic)</b>。Note 隨便填（例如「琥珀瀏覽器傳檔」），Expiration 選你要的期限，下面的權限只勾 <b>public_repo</b>。</li>' +
     '<li>按最下面的 <b>Generate token</b>，複製 <b>ghp_</b> 開頭的那一串（只會顯示這一次）。</li>' +
     '<li>回到 App 的「GitHub 中繼」分頁貼上，按「儲存並檢查」。App 會在你的 GitHub 自動建立一個叫 <b>web-saver-relay</b> 的公開倉庫當中繼站。</li></ol>' +
     '<p><b>GitHub 中繼：傳完刪除</b>　對方下載完後，按「<b>對方收到了，刪除暫存</b>」就會把 GitHub 上的暫存刪掉。忘了按也沒關係，60 分鐘後 App 會自動刪（App 要有開）。</p>' +
@@ -157,6 +159,13 @@ var GUIDE = [
     '</ul>' +
     '<p class="gTip">請記住解鎖密碼。密碼只存在這支手機，忘記了沒有人能幫你找回，上鎖的內容就打不開了。</p>'},
 
+  {ic: 'globe', t: '語言 Language：切換介面語言', html:
+    '<p>介面原文是繁體中文。到「設定」最上面的「<b>語言 Language</b>」（說明書最上面也有按鈕）可以換成 English、日本語、한국어、简体中文、Tiếng Việt、ไทย、Bahasa Indonesia、Español、Français、Deutsch 等語言。</p>' +
+    '<ol><li>先設定好 Gemini 金鑰（見「AI 摘要」）。</li>' +
+    '<li>選一個語言。第一次會用 Gemini 把整套介面和這份說明書翻譯一次，大約 1～3 分鐘，畫面上會顯示進度。</li>' +
+    '<li>翻好的內容存在手機裡，之後開 App 就直接是那個語言，不用再翻。App 更新後多出來的新文字會自動補翻。</li>' +
+    '<li>要換回來：再到同一個地方選「繁體中文」。</li></ol>' +
+    '<div class="gTip">只翻譯介面文字，不會改你的檔名、歌名、收藏的標題。少數地方（系統通知列的文字、YouTube 播放器上的按鈕提示）目前仍是中文。</div>'},
   {ic: 'reload', fig: 'upd', t: '更新 App', html:
     '<ul>' +
     '<li>到「設定 → 版本與更新」可以檢查新版本，小更新會直接套用，大更新會下載新的安裝檔，按「安裝」即可（第一次要允許「安裝未知的應用程式」）。</li>' +
@@ -175,13 +184,16 @@ var GUIDE = [
 
 function openGuide(first){
   var body = h('div', {class: 'guide'});
-  body.appendChild(h('p', {class: 'gLead', text: first ? '歡迎使用「網頁擷取」！開始之前，請花兩分鐘看一下這份說明。滑到最下面按確認，就可以開始使用。' : '這裡整理了 App 的所有功能，以及需要設定的地方。點標題可以展開或收起。'}));
+  body.appendChild(h('p', {class: 'gLead', text: first ? '歡迎使用「琥珀瀏覽器」！開始之前，請花兩分鐘看一下這份說明。滑到最下面按確認，就可以開始使用。' : '這裡整理了 App 的所有功能，以及需要設定的地方。點標題可以展開或收起。'}));
+  body.appendChild(h('div', {class: 'btn-row', style: {margin: '0 0 10px'}}, h('button', {class: 'btn', 'data-i18n-skip': '', html: icon('globe', 'sm') + '語言 Language：' + (typeof I18N !== 'undefined' ? I18N.label() : '繁體中文'), onclick: function(){ openLang(); }})));
   GUIDE.forEach(function(g, i){
     var d = h('details', {class: 'gSec'});
     if(g.open || !first && i < 1) d.open = true;
     d.appendChild(h('summary', {html: '<span class="gIc">' + icon(g.ic) + '</span><b>' + esc(g.t) + '</b><span class="gChev">' + icon('chevR', 'sm') + '</span>'}));
     var fig = ''; try{ fig = g.fig && G_FIG[g.fig] ? G_FIG[g.fig]() : ''; }catch(e){}
-    d.appendChild(h('div', {class: 'gBody', html: fig + g.html}));
+    /* 說明書內文：其他語言時用整段翻好的版本（不走逐句替換，句子才通順） */
+    var tr = typeof i18nGuideHtml === 'function' ? i18nGuideHtml(i) : g.html;
+    d.appendChild(h('div', {class: 'gBody', html: fig + '<div' + (tr !== g.html ? ' data-i18n-skip' : '') + '>' + tr + '</div>'}));
     body.appendChild(d);
   });
   var ok = false;

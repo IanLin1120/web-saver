@@ -53,7 +53,7 @@ var AudioEnc = (function(){
   /* FLAC 標籤區塊：VORBIS_COMMENT（歌名、歌手、歌詞）＋ PICTURE（封面） */
   function flacMeta(tags){
     tags = tags || {};
-    var blocks = [], vendor = utf8('網頁擷取 FLAC'), cm = [];
+    var blocks = [], vendor = utf8('琥珀瀏覽器 FLAC'), cm = [];
     if(tags.title) cm.push(utf8('TITLE=' + tags.title));
     if(tags.artist) cm.push(utf8('ARTIST=' + tags.artist));
     if(tags.album) cm.push(utf8('ALBUM=' + tags.album));

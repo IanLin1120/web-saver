@@ -6,8 +6,28 @@ root = os.path.join(here, '..')
 ver = os.environ.get('VER') or open(os.path.join(root, 'VERSION')).read().strip()
 R = lambda *p: open(os.path.join(here, *p), encoding='utf-8').read()
 
-order = ['a_core', 'b_cfg', 'c_browser', 'd_capture', 'e_media', 'f_library', 'g_viewer', 'h_settings', 'i_update', 'j_audio', 'k_youtube', 'l_folders_music', 'm_lyrics', 'n_ytab', 'o_history', 'p_lock', 'q_ai', 'o_office', 'r_ytmusic', 's_guide', 't_relay', 'z_boot']
+order = ['a_core', 'b_cfg', 'c_browser', 'd_capture', 'e_media', 'f_library', 'g_viewer', 'h_settings', 'i_update', 'j_audio', 'k_youtube', 'l_folders_music', 'm_lyrics', 'n_ytab', 'o_history', 'p_lock', 'q_ai', 'o_office', 'r_ytmusic', 's_guide', 't_relay', 'u_i18n', 'z_boot']
 app = '\n'.join(R('parts', n + '.js') for n in order).replace('__VER__', ver)
+
+# 多國語言：把程式裡所有中文介面文字列成清單（I18N_SRC），App 切換語言時整批翻譯
+import re
+_han = re.compile(r'[㐀-鿿]')
+_src = set()
+def _add(piece):
+    for p in re.split(r'<[^>]+>|&[a-z]+;|\\n', piece):
+        p = p.strip()
+        if _han.search(p) and len(p) < 300 and 'JSON' not in p and '":' not in p: _src.add(p)
+for n in order:
+    if n == 'u_i18n': continue
+    js = re.sub(r'/\*.*?\*/', '', R('parts', n + '.js'), flags=re.S)
+    js = re.sub(r'(?m)^\s*//.*$', '', js)
+    if n == 's_guide': js = re.sub(r'(?m)^\s{4}\'<(p|li|ol|ul|table|tr|div class="gTip).*$', '', js)   # 說明書內文整段另外翻
+    for m in re.finditer(r"'((?:[^'\\\n]|\\.)*)'|\"((?:[^\"\\\n]|\\.)*)\"", js):
+        t = m.group(1) if m.group(1) is not None else m.group(2)
+        if _han.search(t): _add(t.replace("\\'", "'").replace('\\"', '"'))
+for m in re.finditer(r'>([^<>]+)<|(?:title|placeholder|aria-label)="([^"]+)"', R('shell.html')):
+    _add(m.group(1) or m.group(2))
+app = 'window.I18N_SRC=' + json.dumps(sorted(_src), ensure_ascii=False) + ';\n' + app
 
 hosts = [l.strip().lower() for l in R('inject', 'adhosts.txt').splitlines() if l.strip() and not l.startswith('#') and '/' not in l]
 css = ','.join(l.strip() for l in R('inject', 'adcss.txt').splitlines() if l.strip() and not l.startswith('#'))
@@ -25,7 +45,7 @@ shell = R('shell.html')
 assert shell.startswith('<body>')
 html = ('<!DOCTYPE html>\n<html lang="zh-Hant">\n<head>\n<script>' + R('ota_boot.js').replace('__VER__', ver) + '</script>\n'
   '<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">\n'
-  '<meta name="theme-color" content="#efe5d3">\n<title>網頁擷取</title>\n'
+  '<meta name="theme-color" content="#efe5d3">\n<title>琥珀瀏覽器</title>\n'
   '<link rel="icon" href="icon-192.png">\n<style>' + R('app.css') + '</style>\n<style>' + R('vendor', 'katex.css') + '</style>\n</head>\n' +
   shell.replace('</body>', '') + '\n' + vend +
   '<script>window.PDF_WORKER_URL = URL.createObjectURL(new Blob([' + worker + '], {type: "text/javascript"}));</script>\n' +

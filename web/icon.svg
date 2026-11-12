@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFC55A"/><stop offset=".55" stop-color="#E8891C"/><stop offset="1" stop-color="#9C4710"/></linearGradient>
+<radialGradient id="orb" cx=".36" cy=".3" r=".85"><stop offset="0" stop-color="#FFF3CC"/><stop offset=".38" stop-color="#FFC44D"/><stop offset=".78" stop-color="#E07F12"/><stop offset="1" stop-color="#A44C0C"/></radialGradient>
+<linearGradient id="n1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFDF4"/><stop offset="1" stop-color="#FFE7B0"/></linearGradient>
+<linearGradient id="n2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7A3A0C"/><stop offset="1" stop-color="#4A1F05"/></linearGradient>
+<filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#5A2606" flood-opacity=".45"/></filter>
+</defs>
+<rect width="512" height="512" rx="116" fill="url(#bg)"/>
+<path d="M0 116C0 52 52 0 116 0h280c64 0 116 52 116 116v60C380 120 150 110 0 210z" fill="#fff" opacity=".13"/>
+<g filter="url(#sh)">
+<circle cx="256" cy="256" r="168" fill="url(#orb)"/>
+<circle cx="256" cy="256" r="168" fill="none" stroke="#FFF1C4" stroke-opacity=".75" stroke-width="7"/>
+</g>
+<ellipse cx="204" cy="176" rx="74" ry="40" transform="rotate(-28 204 176)" fill="#fff" opacity=".38"/>
+<g stroke="#8A3F0A" stroke-opacity=".5" stroke-width="7" stroke-linecap="round"><path d="M256 104v22M256 386v22M104 256h22M386 256h22"/></g>
+<g transform="rotate(45 256 256)">
+<path d="M256 118l44 138h-88z" fill="url(#n1)"/>
+<path d="M256 394l-44-138h88z" fill="url(#n2)"/>
+</g>
+<circle cx="256" cy="256" r="20" fill="#FFF6DC" stroke="#8A3F0A" stroke-width="7"/>
+<circle cx="336" cy="330" r="7" fill="#FFF1C4" opacity=".7"/><circle cx="318" cy="352" r="4" fill="#FFF1C4" opacity=".6"/>
+</svg>
