@@ -822,5 +822,6 @@ public class Bridge {
     @JavascriptInterface public void aiCancel(String id) { AiHttp.cancel(id); }
     @JavascriptInterface public void aiLabel(String s) { AiHttp.setLabel(a, s); }
     @JavascriptInterface public void aiNotice(String head, String text) { KeepAlive.notice(a, head, text); }
+    @JavascriptInterface public void aiNoticeOpen(String head, String text, String id) { KeepAlive.notice(a, head, text, id); }
     @JavascriptInterface public boolean appVisible() { return MainActivity.visible; }
 }

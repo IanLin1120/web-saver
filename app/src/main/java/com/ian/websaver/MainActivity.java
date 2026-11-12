@@ -385,6 +385,12 @@ public class MainActivity extends Activity {
     /** 從其他 App「分享」網址進來：直接在瀏覽頁打開 */
     private void handleIntent(Intent i) {
         if (i == null) return;
+        /* 點了「AI 摘要完成」的通知：直接打開那部影片 */
+        if ("com.ian.websaver.AI_OPEN".equals(i.getAction())) {
+            final String id = i.getStringExtra("aiId");
+            if (id != null) Util.MAIN.postDelayed(new Runnable() { @Override public void run() { emit("aiOpen", org.json.JSONObject.quote(id)); } }, cur == null || ui == null ? 1500 : 400);
+            return;
+        }
         String u = null;
         if (Intent.ACTION_SEND.equals(i.getAction())) {
             String t = i.getStringExtra(Intent.EXTRA_TEXT);

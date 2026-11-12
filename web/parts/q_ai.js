@@ -206,6 +206,8 @@ async function aiAskApi(prompt){
 }
 function aiErrDlg(e){
   var code = e && e.code;
+  /* 批次補齊中：不跳對話框，記下來交給批次處理 */
+  if(typeof AIFIX !== 'undefined' && AIFIX.on){ AIFIX.lastErr = e || {}; return; }
   if(code === 'login' || code === 'grant'){
     dialog(code === 'grant' ? '需要授權一次' : '需要登入 Claude',
       (code === 'grant' ? '第一次使用時，claude.ai 需要你同意工作頁使用 Claude：按「開啟工作頁」，按「授權並測試」，跳出詢問時按「允許」，回來再按一次「探索洞察」。'
@@ -366,14 +368,16 @@ function aiNotifyDone(id, what){
   if(!isApp || !NAT.has('aiNotice')) return;
   if(NAT.call('appVisible') && curView === 'ai' && AI.id === id) return;
   var c = lsGet('ws.ai.' + id, null), t = (c && c.info && c.info.title) || id;
-  NAT.call('aiNotice', what, t);
+  if(NAT.has('aiNoticeOpen')) NAT.call('aiNoticeOpen', what, t, id); else NAT.call('aiNotice', what, t);
 }
+/* 點通知：直接打開那部影片的摘要 */
+on('aiOpen', function(id){ if(typeof id === 'string' && id){ try{ Sheets.stack.slice().forEach(function(x){ if(x && x.close) x.close(); }); }catch(e){} aiOpenVideo(id, {tab: 'sum'}); } });
 function aiUseVideo(){ return AICFG.engine === 'gemini' && AICFG.gmode === 'video'; }
 
 async function aiOpenVideo(id, opts){
   opts = opts || {};
   if(!id) return;
-  if(curView !== 'ai') showView('ai');
+  if(curView !== 'ai' && !opts.bg) showView('ai');
   aiEngStart();
   var c = lsGet('ws.ai.' + id, null);
   var vNow = $('aiVid'); if(vNow) vNow.pause();
@@ -527,6 +531,8 @@ function aiFmt(t){
 /* ---------- 小播放器：優先用可直接播放的影片網址（App 內 <video>），不行再用 YouTube 嵌入播放器 ---------- */
 function aiSetupPlayer(autoplay){
   if(!AI.id) return;
+  /* 批次補齊時不載入播放器（只要逐字稿和分析） */
+  if(typeof AIFIX !== 'undefined' && AIFIX.on && AIFIX.curId === AI.id) return;
   if(!AI.pmode){
     if(AI.info && AI.info.prog) AI.pmode = 'html';
     else if(isApp && NAT.has('aipLoad')){ AI.pmode = 'native'; NAT.call('aipLoad', AI.id, Math.floor(AI.curT || 0), !!autoplay); }
@@ -849,7 +855,8 @@ function aiStartPage(){
       var la = Math.max.apply(null, groups[a].map(function(x){ return x.t0 || x.t; })), lb = Math.max.apply(null, groups[b].map(function(x){ return x.t0 || x.t; }));
       return lb - la;
     });
-    pg.appendChild(h('h3', {class: 'aiH3', text: '分析過的影片・依頻道'}));
+    pg.appendChild(h('div', {class: 'aiH3Row'}, h('h3', {class: 'aiH3', text: '分析過的影片・依頻道'}),
+      h('button', {class: 'btn sm', html: icon('check', 'sm') + (AIFIX.on ? '補齊中 ' + AIFIX.done + '/' + AIFIX.total : '檢查未完成'), onclick: function(){ aiFixOpen(); }})));
     keys.forEach(function(k){
       var L = groups[k], last = Math.max.apply(null, L.map(function(x){ return x.t0 || x.t; })), nf = (aiFolders()[k] || []).length;
       pg.appendChild(h('div', {class: 'aiFRow', onclick: function(){ AIV.ch = k; AIV.sub = ''; aiRender(); }},
@@ -1065,3 +1072,89 @@ function aiSettings(){
   on('ceng', function(d){ if(d && d.state && !s.closed && AICFG.engine === 'sub') draw(); });
 }
 
+
+
+/* ============================================================
+   檢查未完成的影片並依序補齊：沒有逐字稿、或沒有摘要／章節的，一部一部重新跑
+   ============================================================ */
+var AIFIX = {on: false, stop: false, done: 0, total: 0, ok: 0, fail: [], cur: '', lastErr: null};
+function aiFixScan(){
+  var hist = aiHist(), out = [];
+  hist.forEach(function(x, i){
+    if(AIJOB[x.id] && (AIJOB[x.id].gen || AIJOB[x.id].listen)) return;
+    var c = lsGet('ws.ai.' + x.id, null) || {};
+    var noIns = !(c.ins && c.ins.overview), noCh = !noIns && !(c.ins.chapters && c.ins.chapters.length);
+    /* 較舊的影片為了省空間不留逐字稿（打開時才重新讀），所以只有最近的才檢查逐字稿 */
+    var noTr = i < 15 && !(c.cues && c.cues.length);
+    if(noIns || noCh || noTr) out.push({id: x.id, title: (c.info && c.info.title) || x.title || x.id, author: (c.info && c.info.author) || x.author || '', noIns: noIns, noCh: noCh, noTr: noTr});
+  });
+  return out;
+}
+function aiFixOpen(){
+  var body = h('div'), L = aiFixScan();
+  var s = openSheet({title: '檢查未完成的影片', icon: 'check', body: body, tall: true});
+  function draw(){
+    body.textContent = '';
+    if(AIFIX.on){
+      body.appendChild(h('div', {class: 'note', text: '補齊中：第 ' + Math.min(AIFIX.total, AIFIX.done + 1) + ' / ' + AIFIX.total + ' 部' + (AIFIX.cur ? '・' + AIFIX.cur : '') + '。可以關掉這個面板、切到別的分頁或關螢幕，會繼續跑。'}));
+      body.appendChild(h('div', {class: 'btn-row'}, h('button', {class: 'btn dang', html: icon('x', 'sm') + '停止', onclick: function(){ AIFIX.stop = true; toast('這一部跑完後停止'); s.close(); }})));
+      paintIcons(body); return;
+    }
+    if(AIFIX.fail.length || AIFIX.ok){
+      body.appendChild(h('div', {class: 'note' + (AIFIX.fail.length ? ' err' : ''), text: '上次補齊：成功 ' + AIFIX.ok + ' 部' + (AIFIX.fail.length ? '，失敗 ' + AIFIX.fail.length + ' 部（' + AIFIX.fail.slice(0, 3).map(function(f){ return f.why; }).join('；') + '）' : '')}));
+    }
+    if(!L.length){ body.appendChild(h('div', {class: 'note', text: '✓ 全部影片都有逐字稿、摘要和章節，沒有未完成的。'})); return; }
+    body.appendChild(h('div', {class: 'sub', style: {marginBottom: '8px'}, text: '找到 ' + L.length + ' 部未完成的影片。按「開始補齊」會照順序一部一部重新執行；每一部做完才做下一部。'}));
+    body.appendChild(h('div', {class: 'btn-row'}, h('button', {class: 'btn pri', html: icon('sparkle', 'sm') + '開始補齊（' + L.length + ' 部）', onclick: function(){ s.close(); aiFixRun(L); }})));
+    var list = h('div', {class: 'list'});
+    L.forEach(function(x){
+      list.appendChild(h('div', {class: 'lrow', onclick: function(){ s.close(); aiOpenVideo(x.id); }}, h('div', {class: 'grow'}, h('b', {class: 'ell2', 'data-i18n-skip': '', text: x.title}),
+        h('div', {class: 'sub', text: [x.noTr ? '沒有逐字稿' : '', x.noIns ? '沒有摘要與章節' : '', x.noCh ? '沒有章節' : ''].filter(Boolean).join('・')}))));
+    });
+    body.appendChild(list);
+    body.appendChild(h('div', {class: 'note', text: '執行中可以關螢幕或切到別的 App；但如果把 App 從最近使用清單滑掉（完全關閉），工作會中斷，下次再按「檢查未完成」可以接著做。'}));
+    paintIcons(body);
+  }
+  draw();
+}
+async function aiFixRun(L){
+  if(AIFIX.on) return;
+  if(AICFG.engine === 'gemini' && !AICFG.gkey){ toast('要先設定 Gemini 金鑰', true); return; }
+  Object.assign(AIFIX, {on: true, stop: false, done: 0, total: L.length, ok: 0, fail: [], cur: ''});
+  var wait = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };
+  var busy = function(id){ var J = AIJOB[id]; return !!(J && (J.gen || J.listen)); };
+  for(var i = 0; i < L.length && !AIFIX.stop; i++){
+    var x = L[i]; AIFIX.cur = x.title; AIFIX.curId = x.id; AIFIX.lastErr = null;
+    if(curView === 'ai' && !AI.id) aiRender();
+    try{
+      if(x.noCh){ var c0 = lsGet('ws.ai.' + x.id, null); if(c0){ delete c0.ins; lsSet('ws.ai.' + x.id, c0); } }
+      await aiOpenVideo(x.id, {auto: true, bg: true});
+      /* 等這一部的聽寫和分析都結束（最多 20 分鐘） */
+      var t0 = Date.now(); await wait(1500);
+      while(busy(x.id) && Date.now() - t0 < 20 * 60000) await wait(2000);
+      var c = lsGet('ws.ai.' + x.id, null) || {};
+      /* 有逐字稿但還沒分析（例如不是「直接看影片」模式、剛剛才聽寫完）：補跑一次摘要 */
+      if(!(c.ins && c.ins.overview) && !AIFIX.lastErr && AI.id === x.id && !busy(x.id)){
+        aiGenerate(); await wait(1500);
+        while(busy(x.id) && Date.now() - t0 < 25 * 60000) await wait(2000);
+        c = lsGet('ws.ai.' + x.id, null) || {};
+      }
+      if(c.ins && c.ins.overview) AIFIX.ok++;
+      else {
+        var e = AIFIX.lastErr || {}, why = e.message || '沒有產生摘要';
+        AIFIX.fail.push({id: x.id, why: why});
+        /* 額度用完、沒有金鑰、要登入：後面的也一定失敗，直接停下來 */
+        if(/^(rate|quota|nogkey|nokey|login|grant)$/.test(e.code || '')){ AIFIX.stop = true; }
+      }
+    }catch(e){ AIFIX.fail.push({id: x.id, why: (e && e.message) || String(e)}); }
+    AIFIX.done = i + 1;
+    if(!AIFIX.stop && i < L.length - 1) await wait(4000);
+  }
+  AIFIX.on = false; AIFIX.cur = '';
+  if(AI.id && AI.id === AIFIX.curId){ if(curView !== 'ai') aiClose(); else aiSetupPlayer(false); }
+  AIFIX.curId = '';
+  var msg = '補齊完成：成功 ' + AIFIX.ok + ' 部' + (AIFIX.fail.length ? '，失敗 ' + AIFIX.fail.length + ' 部' : '');
+  toast(msg, !!AIFIX.fail.length, ['查看', function(){ showView('ai'); aiFixOpen(); }]);
+  if(isApp && NAT.has('aiNotice') && !NAT.call('appVisible')) NAT.call('aiNotice', 'AI 補齊完成', msg);
+  if(curView === 'ai' && !AI.id) aiRender();
+}

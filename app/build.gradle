@@ -40,3 +40,8 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 }
+
+dependencies {
+    // 只用來關掉 WebView 每個請求都會帶的 X-Requested-With 標頭（一般瀏覽器不會送，有些網站的資安防護會因此擋下來）
+    implementation 'androidx.webkit:webkit:1.11.0'
+}

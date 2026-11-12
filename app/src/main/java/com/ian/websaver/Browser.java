@@ -262,6 +262,18 @@ final class Browser {
     }
 
     /* ---------- 建立 WebView ---------- */
+    /** WebView 預設會在每個請求加上「X-Requested-With: <App 套件名>」，一般瀏覽器不會送；
+     *  部分網站的資安防護（WAF）看到這個標頭會把請求當成可疑來源擋下來。這裡把它關掉，讓請求和一般瀏覽器一樣。
+     *  （androidx.webkit 只在正式打包的 APK 裡有；沒有時略過） */
+    static void noXrw(WebSettings s) {
+        try {
+            Class<?> f = Class.forName("androidx.webkit.WebViewFeature");
+            if (!(Boolean) f.getMethod("isFeatureSupported", String.class).invoke(null, "REQUESTED_WITH_HEADER_ALLOW_LIST")) return;
+            Class.forName("androidx.webkit.WebSettingsCompat").getMethod("setRequestedWithHeaderOriginAllowList", WebSettings.class, java.util.Set.class)
+                .invoke(null, s, new java.util.HashSet<String>());
+        } catch (Throwable t) { /* ignore */ }
+    }
+
     static String cleanUa(String ua) {
         return ua.replace("; wv)", ")").replaceAll("Version/\\d+\\.\\d+ ", "");
     }
@@ -273,6 +285,7 @@ final class Browser {
     private WebView makeWebView(final boolean isPopup) {
         final WebView w = new KeepWebView(a, !isPopup && (ytTab || hiddenBr));
         WebSettings s = w.getSettings();
+        noXrw(s);
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);

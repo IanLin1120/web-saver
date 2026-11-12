@@ -241,7 +241,9 @@ public class KeepAlive extends Service {
     /** 下載／擷取完成：震動並發通知 */
     static void done(Context c, String title) { notice(c, "下載完成", title); }
 
-    static void notice(Context c, String head, String title) {
+    static void notice(Context c, String head, String title) { notice(c, head, title, null); }
+    /** aiId：點通知時要直接打開的那部影片（AI 摘要） */
+    static void notice(Context c, String head, String title, String aiId) {
         if (c == null) return;
         Context ac = c.getApplicationContext();
         try {
@@ -254,7 +256,9 @@ public class KeepAlive extends Service {
         try {
             channels(ac);
             Intent open = new Intent(ac, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            PendingIntent pi = PendingIntent.getActivity(ac, 3, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            int rc = 3;
+            if (aiId != null && !aiId.isEmpty()) { open.setAction("com.ian.websaver.AI_OPEN").putExtra("aiId", aiId); rc = 4000 + (aiId.hashCode() & 0xfff); }
+            PendingIntent pi = PendingIntent.getActivity(ac, rc, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(ac, CH_DONE) : new Notification.Builder(ac);
             b.setSmallIcon(android.R.drawable.stat_sys_download_done).setContentTitle(head).setContentText(title == null ? "" : title).setAutoCancel(true).setContentIntent(pi);
             ((NotificationManager) ac.getSystemService(NOTIFICATION_SERVICE)).notify((int) (System.currentTimeMillis() % 100000) + 100, b.build());
