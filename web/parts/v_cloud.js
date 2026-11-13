@@ -208,8 +208,7 @@ function clSettings(){
     }
     var P = Object.keys(CLOUD.pend);
     body.appendChild(h('div', {class: 'note', html: '✓ 已連接：<b>' + esc(CLOUD.cfg.login) + '/' + CLOUD.REPO + '</b>（私人倉庫）<br>等待雲端完成：' + P.length + ' 部' + (CLOUD.last ? '・上次檢查 ' + fmtDate(CLOUD.last) : '')}));
-    var au = h('input', {type: 'checkbox', checked: !!CLOUD.cfg.auto, onchange: function(){ CLOUD.cfg.auto = this.checked; CLOUD.save(); }});
-    body.appendChild(h('label', {class: 'setRow aiSw'}, h('div', {class: 'grow'}, h('b', {text: '新影片直接交給雲端分析'}), h('div', {class: 'sub', text: '從 YouTube 分享進來或在 AI 摘要貼上網址時，不在手機上跑，改交給 GitHub 雲端'})), au));
+    body.appendChild(h('div', {class: 'sub', style: {margin: '4px 2px 10px'}, text: '按「AI 摘要」時會讓你選「在手機上分析」或「交給 GitHub 雲端分析」。'}));
     body.appendChild(h('div', {class: 'btn-row', style: {flexWrap: 'wrap'}},
       h('button', {class: 'btn', html: icon('reload', 'sm') + '立即取回結果', onclick: async function(){ this.disabled = true; await clPoll(true); draw(); }}),
       h('button', {class: 'btn', html: icon('globe', 'sm') + '在 GitHub 查看執行狀態', onclick: function(){ s.close(); navigate('https://github.com/' + CLOUD.cfg.login + '/' + CLOUD.REPO + '/actions'); }}),

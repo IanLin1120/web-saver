@@ -391,6 +391,14 @@ public class MainActivity extends Activity {
             if (id != null) Util.MAIN.postDelayed(new Runnable() { @Override public void run() { emit("aiOpen", org.json.JSONObject.quote(id)); } }, cur == null || ui == null ? 1500 : 400);
             return;
         }
+        /* 懸浮聽歌卡片按了「YouTube Music／YouTube」 */
+        if ("com.ian.websaver.LSN_SEARCH".equals(i.getAction())) {
+            try {
+                final String js = new JSONObject().put("q", i.getStringExtra("q")).put("where", i.getStringExtra("where")).toString();
+                Util.MAIN.postDelayed(new Runnable() { @Override public void run() { emit("lsnSearch", js); } }, cur == null || ui == null ? 1500 : 300);
+            } catch (Throwable t) { /* ignore */ }
+            return;
+        }
         String u = null;
         if (Intent.ACTION_SEND.equals(i.getAction())) {
             String t = i.getStringExtra(Intent.EXTRA_TEXT);
@@ -549,6 +557,8 @@ public class MainActivity extends Activity {
                 fileCb.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(res, data));
                 fileCb = null;
             }
+        } else if (req == ListenFloat.REQ) {
+            ListenFloat.onResult(this, res, data);
         } else if (req == ScreenRec.REQ) {
             ScreenRec.onResult(this, res, data);
         } else if (req == REQ_PICK) {

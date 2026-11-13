@@ -122,7 +122,8 @@ $('ytMore').addEventListener('click', function(){
   menu('YouTube', [
     ytIsMusic(YTB.url) ? ['info', 'YouTube Music 診斷資訊', function(){ if(isApp && NAT.has('muCmd')) NAT.call('muCmd', 'diag', ''); }, false, '有問題時截圖傳給 Claude（v' + APP_VERSION + '）'] : null,
     ['download', '下載這部影片', function(){ if(id) openYt(id); else toast('先打開一部影片', true); }, false, id ? '' : '目前不在影片頁'],
-    ['sparkle', 'AI 摘要這部影片', function(){ if(id){ NAT.call('ytNav', 'pause'); aiOpenVideo(id, {auto: true}); } else showView('ai'); }, false, id ? '摘要、章節、針對影片提問' : '目前不在影片頁'],
+    ['sparkle', 'AI 摘要這部影片', function(){ if(id){ NAT.call('ytNav', 'pause'); aiChoose(id, YTB.title || ''); } else showView('ai'); }, false, id ? '摘要、章節、針對影片提問' : '目前不在影片頁'],
+    NAT.has('lsnFloat') ? ['listen', NAT.call('lsnFloatOn') ? '關閉懸浮聽歌' : '懸浮聽歌（在其他 App 上用）', function(){ lsnFloatToggle(); }, false, '浮在其他 App 上的 ♫ 按鈕，點一下就辨識手機正在播的歌；長按按鈕關閉'] : null,
     ['gear', 'YouTube 播放器設定', function(){ openYtSettings(); }, false, '去廣告、背景播放、手勢、SponsorBlock、畫質…'],
     ['open', '開啟應用程式設定', function(){ openYtAppSettings(); }, false, (YT_APP.yt || YT_APP.music) ? '已指定：' + [YT_APP.yt && YT_APP.yt.label, YT_APP.music && YT_APP.music.label].filter(Boolean).join('、') : '「開啟應用程式」要用哪個 App'],
     ['search', '貼上 YouTube 網址', async function(){

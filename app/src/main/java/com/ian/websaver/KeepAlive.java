@@ -205,7 +205,7 @@ public class KeepAlive extends Service {
         try {
             if (Build.VERSION.SDK_INT >= 29) {
                 boolean proj;
-                synchronized (TASKS) { proj = TASKS.containsKey("srec"); }
+                synchronized (TASKS) { proj = TASKS.containsKey("srec") || (TASKS.containsKey("lsnf") && ListenFloat.wantProj); }
                 int type = ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC | (media() ? ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK : 0) | (proj ? ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION : 0);
                 startForeground(7, n, type);
             } else startForeground(7, n);

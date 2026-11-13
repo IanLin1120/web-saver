@@ -441,6 +441,10 @@ public class Bridge {
         } catch (Throwable t) { micStop0(); return false; }
     }
     private void micStop0() { try { if (micRec != null) { try { micRec.stop(); } catch (Throwable t) { /* 太短 */ } micRec.release(); } } catch (Throwable t) { /* ignore */ } micRec = null; }
+    @JavascriptInterface public void lsnFloat(final String cmd, final String cfg) {
+        ui(new Runnable() { @Override public void run() { if ("stop".equals(cmd)) ListenFloat.stop(); else ListenFloat.start(a, cfg); } });
+    }
+    @JavascriptInterface public boolean lsnFloatOn() { return ListenFloat.on(); }
     @JavascriptInterface public String micStop() {
         micStop0();
         try {

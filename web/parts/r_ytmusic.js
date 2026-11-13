@@ -238,6 +238,25 @@ function ytmuSearch(q){
    兩種都不會暫停正在播的影片或音樂。 */
 var LSN = {cb: null};
 on('tapAudio', function(d){ if(LSN.cb) LSN.cb(d || {}); });
+var LSN_JSON = '只回傳 JSON：{"found": true 或 false, "title": "歌名（原文）", "artist": "歌手／演出者（原文）", "lyrics": "你實際聽到的一兩句歌詞（原文照寫，沒有聽到人聲就留空）", "confidence": 0 到 1 的數字, "note": "一句話說明（繁體中文）"}\n' +
+  '規則：不確定是哪首歌時 found 填 false，不要亂猜歌名；但只要聽得到歌詞，lyrics 一定要照實寫下來（我會用歌詞去搜尋）。';
+function lsnPrompt(mode){ return (mode === 'tap' ? '這是一段從影片或音樂直接錄下的聲音（可能同時有人講話、音效或背景音樂）。請辨識裡面的音樂是哪一首歌。\n' : '這是一段用手機麥克風錄下的音樂（可能有環境雜音，也可能是有人在哼唱）。請辨識這是哪一首歌。\n') + LSN_JSON; }
+/* 懸浮聽歌：浮在其他 App 上的 ♫ 按鈕，點一下聽手機正在播的聲音（不支援或沒聲音就用麥克風） */
+function lsnFloatToggle(){
+  if(!isApp || !NAT.has('lsnFloat')){ toast('懸浮聽歌需要新版 App（請安裝最新的 APK）', true); return; }
+  if(NAT.call('lsnFloatOn')){ NAT.call('lsnFloat', 'stop', ''); return; }
+  if(!AICFG.gkey){ toast('聽歌辨識要用 Gemini：請先到「AI 摘要」設定 Gemini 金鑰', true); return; }
+  if(!NAT.call('audioOk')){ NAT.call('audioAsk'); toast('請允許使用麥克風，再按一次'); return; }
+  var dead = lsGet('ws.aiGDead', {}), chain = [AICFG.gmodel || AI_GFALLBACK[0]];
+  AI_GFALLBACK.forEach(function(m){ if(chain.indexOf(m) < 0 && !dead[m]) chain.push(m); });
+  NAT.call('lsnFloat', 'start', JSON.stringify({key: AICFG.gkey, chain: chain, pTap: lsnPrompt('tap'), pMic: lsnPrompt('mic')}));
+}
+on('lsnFloat', function(d){ if(d && d.msg) toast(d.msg, d.st === 'err' || d.st === 'need'); });
+on('lsnSearch', function(d){
+  if(!d || !d.q) return;
+  if(d.where === 'mu') ytmuSearch(d.q);
+  else { showView('yt'); ytEnsure('https://m.youtube.com/results?search_query=' + encodeURIComponent(d.q)); }
+});
 function ytmuListen(force){
   if(!isApp || !NAT.has('micStart')){ toast('聽歌辨識需要新版 App（請安裝最新的 APK）', true); return; }
   if(!AICFG.gkey){ toast('聽歌辨識要用 Gemini：請先到「AI 摘要」設定 Gemini 金鑰', true, ['去設定', function(){ showView('ai'); if(typeof aiSettings === 'function') aiSettings(); }]); return; }
@@ -261,6 +280,7 @@ function ytmuListen(force){
     body.appendChild(h('b', {class: 'lsnBig', text: big}));
     if(sub) body.appendChild(h('div', {class: 'sub', style: {textAlign: 'center'}, text: sub}));
     if(extra) body.appendChild(extra);
+    if(NAT.has('lsnFloat')) body.appendChild(h('button', {class: 'btn ghost', style: {margin: '14px auto 0', display: 'flex'}, html: icon('listen', 'sm') + (NAT.call('lsnFloatOn') ? '關閉懸浮聽歌按鈕' : '開啟懸浮聽歌（切到其他 App 也能用）'), onclick: function(){ sheet.close(); lsnFloatToggle(); }}));
     paintIcons(body);
   }
   function fail(msg){ view('沒有辨識出來', msg, h('div', {class: 'btn-row', style: {justifyContent: 'center', flexWrap: 'wrap'}}, h('button', {class: 'btn pri', html: icon('listen', 'sm') + '再聽一次', onclick: function(){ again(mode); }}), swapB())); }
@@ -268,9 +288,7 @@ function ytmuListen(force){
     if(done) return;
     view('辨識中…', '交給 Gemini 聽這段音樂');
     try{
-      var r = await aiAskGemini((mode === 'tap' ? '這是一段從影片或音樂直接錄下的聲音（可能同時有人講話、音效或背景音樂）。請辨識裡面的音樂是哪一首歌。\n' : '這是一段用手機麥克風錄下的音樂（可能有環境雜音，也可能是有人在哼唱）。請辨識這是哪一首歌。\n') +
-        '只回傳 JSON：{"found": true 或 false, "title": "歌名（原文）", "artist": "歌手／演出者（原文）", "lyrics": "你實際聽到的一兩句歌詞（原文照寫，沒有聽到人聲就留空）", "confidence": 0 到 1 的數字, "note": "一句話說明（繁體中文）"}\n' +
-        '規則：不確定是哪首歌時 found 填 false，不要亂猜歌名；但只要聽得到歌詞，lyrics 一定要照實寫下來（我會用歌詞去搜尋）。',
+      var r = await aiAskGemini(lsnPrompt(mode),
         {audio: audio, signal: ctl.signal});
       if(done) return;
       r = r || {};

@@ -919,7 +919,7 @@ function aiStartPage(){
   var hist = aiHist();
   if(!AIV.ch){
     var inp = h('input', {type: 'url', placeholder: '貼上 YouTube 影片網址…', onkeydown: function(e){ if(e.key === 'Enter') go(); }});
-    var go = function(){ var v = inp.value.trim(), id = YT.idOf(v) || (/^[\w-]{11}$/.test(v) ? v : ''); if(!id){ toast('這不是 YouTube 影片網址', true); return; } if(typeof CLOUD !== 'undefined' && CLOUD.cfg.ok && CLOUD.cfg.auto){ inp.value = ''; clSubmit([{id: id}]); return; } aiOpenVideo(id, {auto: true}); };
+    var go = function(){ var v = inp.value.trim(), id = YT.idOf(v) || (/^[\w-]{11}$/.test(v) ? v : ''); if(!id){ toast('這不是 YouTube 影片網址', true); return; } inp.value = ''; aiChoose(id); };
     pg.appendChild(h('div', {class: 'card glass aiHero'},
       h('div', {class: 'aiHeroT', html: icon('sparkle') + '<b>YouTube 影片 AI 洞察</b>'}),
       h('div', {class: 'sub', text: '在 YouTube App 按「分享」→「AI 摘要（Terra 瀏覽器）」就會自動分析；也可以在這裡貼上網址。'}),
@@ -1032,9 +1032,34 @@ on('shareAi', function(u){
   u = String(u || '');
   var id = YT.idOf(u);
   if(!id){ toast('分享進來的不是 YouTube 影片網址', true); return; }
-  if(typeof CLOUD !== 'undefined' && CLOUD.cfg.ok && CLOUD.cfg.auto){ showView('ai'); clSubmit([{id: id}]); return; }
-  aiOpenVideo(id, {auto: true});
+  aiChoose(id);
 });
+/* 按「AI 摘要」：選要在手機上分析，還是交給 GitHub 雲端分析 */
+function aiChoose(id, title){
+  var c = aiDbGet(id), done = c && c.cues && c.cues.length && c.ins && c.ins.overview;
+  if(done){ aiOpenVideo(id); return; }   /* 已經分析過：直接打開 */
+  var cl = typeof CLOUD !== 'undefined' && CLOUD.cfg.ok, pend = cl && CLOUD.pend[id];
+  menu(title || 'AI 摘要', [
+    ['phone', '在手機上分析', function(){ aiOpenVideo(id, {auto: true}); }, false, '馬上開始，可以邊看結果邊問問題；把 App 從最近使用清單滑掉會中斷'],
+    ['cloud', cl ? (pend ? '交給 GitHub 雲端分析（已在雲端排隊）' : '交給 GitHub 雲端分析') : 'GitHub 雲端分析（尚未設定）', async function(){
+      if(!cl){ clSettings(); return; }
+      showView('ai'); if(AI.id) aiClose && aiClose();
+      /* 先在手機上讀影片資訊和字幕（很快），雲端就知道影片多長、有字幕的話不用再聽寫 */
+      var c0 = aiDbGet(id) || {};
+      if(!(c0.info && c0.info.len) || !(c0.cues && c0.cues.length)){
+        toast('讀取影片資訊…');
+        try{
+          var r = await aiLoadInfo(id, function(){});
+          var add = {info: Object.assign({}, c0.info || {}, r.info)};
+          if(!(c0.cues && c0.cues.length)){ var t = aiPickTrack(r.tracks); if(t){ try{ var got = await aiLoadBest(r.tracks, t, ''); if(got){ add.cues = got.cues; add.track = got.track; add.tr = ''; } }catch(e){} } }
+          aiCacheMerge(id, add);
+          title = title || r.info.title;
+        }catch(e){}
+      }
+      await clSubmit([{id: id, title: title || ''}], {redo: !!pend});
+    }, false, cl ? '手機關螢幕、App 完全關掉也會繼續跑，完成後打開 App 自動取回' : '先連接 GitHub，之後就能交給雲端分析']
+  ]);
+}
 
 /* ---------- 匯出（純文字／Markdown／JSON） ---------- */
 function aiExportText(fmt, withChat){
