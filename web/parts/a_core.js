@@ -10,8 +10,25 @@ function $(id){ return document.getElementById(id); }
 function qs(s, r){ return (r || document).querySelector(s); }
 function qsa(s, r){ return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); }
-function lsGet(k, d){ try{ var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } }
-function lsSet(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} if(typeof lsBackupSoon === 'function') lsBackupSoon(); }
+/* 重要資料（上鎖設定、資料夾、收藏、分類、垃圾桶、設定）以 App 自己的檔案為準，瀏覽器儲存空間只是副本：
+   就算網站資料被清掉，鎖和資料夾也不會不見 */
+var LS_CRIT = {'ws.sec': 1, 'ws.lf': 1, 'ws.bm': 1, 'ws.area': 1, 'ws.trash': 1, 'ws.cfg': 1, 'ws.aiFolders': 1, 'ws.cloud': 1};
+function lsKv(){ var b = window.WSB; return b && typeof b.kvGet === 'function' ? b : null; }
+function lsGet(k, d){
+  try{
+    var b = LS_CRIT[k] && lsKv(), v = null;
+    if(b){ v = b.kvGet(k); if(v){ try{ if(localStorage.getItem(k) !== v) localStorage.setItem(k, v); }catch(e){} return JSON.parse(v); } }
+    v = localStorage.getItem(k);
+    if(v != null && b) b.kvPut(k, v);    /* 舊版資料：第一次讀到就搬一份到 App 檔案 */
+    return v == null ? d : JSON.parse(v);
+  }catch(e){ return d; }
+}
+function lsSet(k, v){
+  var s = JSON.stringify(v);
+  try{ localStorage.setItem(k, s); }catch(e){}
+  var b = LS_CRIT[k] && lsKv(); if(b){ try{ b.kvPut(k, s); }catch(e){} }
+  if(typeof lsBackupSoon === 'function') lsBackupSoon();
+}
 function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function fmtSize(b){

@@ -26,6 +26,21 @@ var SEC = {
   }
 };
 var INTRUDER_F = 'f_intruder';
+/* 這個檔案有沒有上鎖（不論現在是否已解鎖）：入侵者照片、上鎖的分類、上鎖的資料夾（含上層） */
+SEC.itemLocked = function(it){
+  if(!it) return false;
+  if(it.sys === 'intruder' || it.folder === INTRUDER_F) return true;
+  if(this.catLocked(typeof areaOf === 'function' ? areaOf(it) : it.cat)) return true;
+  var f = (typeof LF !== 'undefined' && LF.folderOf(it.id)) || it.folder;
+  return !!(f && this.folderLocked(f));
+};
+/* 刪除前檢查：只要有一個是上鎖的，就要先輸入密碼（或指紋）才能刪；回傳 Promise<可不可以刪> */
+SEC.guardDel = function(ids, what){
+  if(!SEC.has()) return Promise.resolve(true);
+  var lk = (ids || []).some(function(id){ return SEC.itemLocked(typeof id === 'object' ? id : Lib.byId(id)); });
+  if(!lk) return Promise.resolve(true);
+  return SEC.verify(what || '刪除上鎖的檔案，請輸入密碼');
+};
 setTimeout(function(){ ensureIntruderFolder(); }, 0);
 
 /* 需要解鎖時呼叫：回傳 Promise<是否解鎖> */
@@ -79,6 +94,7 @@ function pinPad(o){
     if(isApp && NAT.has('lockCheck')){
       var r = NAT.json('lockCheck', pin) || {};
       if(r.ok){ finish(pin); return; }
+      if(r.wait){ var sec = Math.ceil(r.wait / 1000); fail('輸錯太多次，請 ' + (sec >= 60 ? Math.ceil(sec / 60) + ' 分鐘' : sec + ' 秒') + '後再試'); return; }
       fail('密碼錯誤' + (r.fails ? '（已錯 ' + r.fails + ' 次）' : ''));
     } else {
       if(await sha(pin) === lsGet('ws.secPin', '')){ SEC.webOk = true; finish(pin); } else fail('密碼錯誤');

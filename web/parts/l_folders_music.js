@@ -24,8 +24,10 @@ LF.add = function(cat, parent, name){
 LF.remove = function(id){
   var f = LF.get(id); if(!f) return;
   LF.folders.forEach(function(x){ if(x.parent === id) x.parent = f.parent; });
-  Object.keys(LF.map).forEach(function(k){ if(LF.map[k] === id) LF.map[k] = f.parent; });
+  var moved = [];
+  Object.keys(LF.map).forEach(function(k){ if(LF.map[k] === id){ LF.map[k] = f.parent; moved.push(k); } });
   LF.folders = LF.folders.filter(function(x){ return x.id !== id; }); LF.save();
+  if(isApp) moved.forEach(function(k){ NAT.call('libMeta', k, JSON.stringify({folder: f.parent || ''})); });
 };
 LF.move = function(id, parent){
   if(id === parent || LF.isAncestor(id, parent)) return false;
@@ -41,14 +43,42 @@ LF.shift = function(id, dir){
   if(j < 0 || j >= sib.length) return;
   sib[i].order = j; sib[j].order = i; LF.save();
 };
-LF.setItems = function(ids, fid){ ids.forEach(function(id){ if(fid) LF.map[id] = fid; else delete LF.map[id]; }); LF.save(); if(isApp) ids.forEach(function(id){ NAT.call('libMeta', id, JSON.stringify({folder: fid || ''})); }); };
+LF.setItems = function(ids, fid){
+  /* 入侵者照片固定待在「入侵者照片」資料夾；其他檔案也不能放進去 */
+  ids = ids.filter(function(id){ var it = Lib.byId(id), intr = !!(it && it.sys === 'intruder'); return intr ? fid === INTRUDER_F : fid !== INTRUDER_F; });
+  ids.forEach(function(id){ if(fid) LF.map[id] = fid; else delete LF.map[id]; }); LF.save(); if(isApp) ids.forEach(function(id){ NAT.call('libMeta', id, JSON.stringify({folder: fid || ''})); }); };
 LF.pickDefault = function(){ return ''; };
 on('libChanged', function(){
   /* 清掉已刪除檔案的對應；原生紀錄的資料夾補回來 */
   var ids = {}; (Lib.all || Lib.items).forEach(function(it){ ids[it.id] = 1; if(it.folder && !LF.map[it.id] && LF.get(it.folder)) LF.map[it.id] = it.folder; });
   var ch = false; Object.keys(LF.map).forEach(function(k){ if(!ids[k]){ delete LF.map[k]; ch = true; } });
   if(ch) LF.save();
+  lfRecover();
 });
+/* 找回資料夾：舊版「清除 Cookie」會把資料夾清單一起清掉，但每個檔案屬於哪個資料夾還記在 App 裡。
+   資料夾清單是空的、檔案卻還記得資料夾時，依原本的分組重建（名稱與上鎖要重新設定） */
+function lfRecover(){
+  if(LF.folders.some(function(f){ return !f.sys; })) return;
+  var groups = {}, n = 0;
+  (Lib.all || Lib.items || []).forEach(function(it){
+    var fid = it.folder;
+    if(!fid || fid === INTRUDER_F || it.sys === 'intruder' || LF.get(fid)) return;
+    (groups[fid] = groups[fid] || []).push(it);
+  });
+  Object.keys(groups).forEach(function(fid){
+    var L = groups[fid], cnt = {};
+    L.forEach(function(it){ var a = typeof areaOf === 'function' ? areaOf(it) : it.cat; cnt[a] = (cnt[a] || 0) + 1; });
+    var cat = Object.keys(cnt).sort(function(a, b){ return cnt[b] - cnt[a]; })[0];
+    n++;
+    LF.folders.push({id: fid, cat: cat, parent: '', name: '找回的資料夾 ' + n, order: n, icon: '📁', recovered: true});
+    L.forEach(function(it){ LF.map[it.id] = fid; });
+  });
+  if(!n) return;
+  LF.save();
+  setTimeout(function(){
+    dialog('已找回 ' + n + ' 個資料夾', '舊版「清除 Cookie」時把資料夾清單一起清掉了，但每個檔案原本放在哪個資料夾還記得，所以已經照原本的分組放回去。<br><br>資料夾名稱暫時叫「找回的資料夾 1、2…」，<b>原本有上鎖的資料夾請重新上鎖</b>（資料夾按「⋯」→「上鎖」）。<br><span class="sub">新版已經把資料夾和上鎖設定改存在 App 自己的檔案裡，之後清除 Cookie 不會再被清掉。</span>', [['好', null]]);
+  }, 1200);
+}
 /* 資料夾樹選擇器 */
 function folderPicker(cat, title, cb, opts){
   opts = opts || {};
@@ -87,11 +117,12 @@ function folderMenu(f, redraw){
   }, false, f.lock ? '' : '裡面的檔案和子資料夾都要密碼才能看'];
   menu(f.icon + ' ' + f.name, [lockItem,
     ['edit', '重新命名', async function(){ var n = await promptDlg('重新命名資料夾', f.name); if(n){ f.name = n.slice(0, 40); LF.save(); redraw(); } }],
-    ['folder', '移到其他資料夾下', function(){ folderPicker(f.cat, '把「' + f.name + '」移到…', function(pid){ if(LF.move(f.id, pid)){ toast('已移動'); redraw(); } }, {exclude: f.id, cur: f.parent}); }, false, '可以變成某個資料夾的子資料夾'],
+    ['folder', '移到其他資料夾下', async function(){ if(SEC.has() && SEC.folderLocked(f.id) && !(await SEC.verify('移動上鎖的「' + f.name + '」'))) return; folderPicker(f.cat, '把「' + f.name + '」移到…', function(pid){ if(LF.move(f.id, pid)){ toast('已移動'); redraw(); } }, {exclude: f.id, cur: f.parent}); }, false, '可以變成某個資料夾的子資料夾'],
     ['back', '往前排', function(){ LF.shift(f.id, -1); setCfg('lib.fsort', 'manual'); redraw(); }],
     ['fwd', '往後排', function(){ LF.shift(f.id, 1); setCfg('lib.fsort', 'manual'); redraw(); }],
     ['palette', '換圖示', function(){ iconPicker('「' + f.name + '」的圖示', f.icon, function(ic){ f.icon = ic; LF.save(); redraw(); }); }],
     ['trash', '刪除資料夾', async function(){
+      if(SEC.has() && SEC.folderLocked(f.id) && !(await SEC.verify('「' + f.name + '」已上鎖，刪除前請輸入密碼'))) return;
       var n = LF.count(f.id);
       if(await confirmDlg('刪除「' + esc(f.name) + '」？', n ? '裡面的 ' + n + ' 個檔案與子資料夾會移到上一層，<b>檔案不會被刪除</b>。' : '這個資料夾是空的。', '刪除資料夾', true)){ if(LV.folder[f.cat] === f.id) LV.folder[f.cat] = f.parent; LF.remove(f.id); redraw(); }
     }, true]

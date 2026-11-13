@@ -43,6 +43,9 @@ final class Lock {
     private Lock() { }
 
     static volatile boolean session = false;
+    /** 最近一次輸入正確密碼／指紋的時間（刪除上鎖的東西要用） */
+    static volatile long lastOk = 0;
+    static boolean recentlyOk() { return session || System.currentTimeMillis() - lastOk < 120000; }
     static final String INTRUDER_FOLDER = "f_intruder";
 
     private static SharedPreferences p(Context c) { return c.getSharedPreferences("ws_lock", Context.MODE_PRIVATE); }
@@ -69,7 +72,8 @@ final class Lock {
     static String set(Context c, String oldPin, String pin) {
         try {
             if (pin == null || !pin.matches("\\d{6,16}")) return "密碼要 6～16 位數字";
-            if (has(c) && !verify(c, oldPin)) return "舊密碼不正確";
+            if (has(c) && waitMs(c) > 0) return "輸錯太多次，請稍後再試";
+            if (has(c) && !verify(c, oldPin)) { int f = p(c).getInt("fails", 0) + 1; p(c).edit().putInt("fails", f).putLong("failAt", System.currentTimeMillis()).apply(); return "舊密碼不正確"; }
             byte[] salt = new byte[16];
             new SecureRandom().nextBytes(salt);
             p(c).edit().putString("salt", Base64.encodeToString(salt, Base64.NO_WRAP)).putString("hash", hash(pin, salt)).putInt("fails", 0).putInt("len", pin.length()).apply();
@@ -82,24 +86,38 @@ final class Lock {
     static int len(Context c) { return p(c).getInt("len", 0); }
 
     static boolean clear(Context c, String pin) {
-        if (!verify(c, pin)) return false;
+        if (waitMs(c) > 0) return false;
+        if (!verify(c, pin)) { int f = p(c).getInt("fails", 0) + 1; p(c).edit().putInt("fails", f).putLong("failAt", System.currentTimeMillis()).apply(); return false; }
         p(c).edit().remove("salt").remove("hash").putInt("fails", 0).apply();
         session = false;
         return true;
     }
 
     /** 檢查密碼；錯誤累計到 3 的倍數時拍照 */
+    /** 連續輸錯 5 次起要等一段時間才能再試（30 秒起跳、每多錯一次加倍，最多 1 小時），防止有人一直猜 */
+    static long waitMs(Context c) {
+        int f = p(c).getInt("fails", 0);
+        if (f < 5) return 0;
+        long w = Math.min(3600000L, 30000L << Math.min(7, f - 5));
+        long left = p(c).getLong("failAt", 0) + w - System.currentTimeMillis();
+        return Math.max(0, left);
+    }
     static JSONObject check(MainActivity a, String pin) {
         JSONObject o = new JSONObject();
         try {
+            long w = waitMs(a);
+            if (w > 0) return o.put("ok", false).put("fails", p(a).getInt("fails", 0)).put("wait", w);
             if (verify(a, pin)) {
                 session = true;
+                lastOk = System.currentTimeMillis();
                 p(a).edit().putInt("fails", 0).apply();
                 return o.put("ok", true);
             }
             int f = p(a).getInt("fails", 0) + 1;
-            p(a).edit().putInt("fails", f).apply();
+            p(a).edit().putInt("fails", f).putLong("failAt", System.currentTimeMillis()).apply();
             o.put("ok", false).put("fails", f);
+            long w2 = waitMs(a);
+            if (w2 > 0) o.put("wait", w2);
             if (f % 3 == 0 && a.prefs.getBoolean("intruderCam", true)) shoot(a);
         } catch (Throwable t) { /* ignore */ }
         return o;
@@ -128,7 +146,7 @@ final class Lock {
                 });
             if (Build.VERSION.SDK_INT >= 30) b.setAllowedAuthenticators(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG | android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK);
             b.build().authenticate(new CancellationSignal(), a.getMainExecutor(), new android.hardware.biometrics.BiometricPrompt.AuthenticationCallback() {
-                @Override public void onAuthenticationSucceeded(android.hardware.biometrics.BiometricPrompt.AuthenticationResult r) { session = true; p(a).edit().putInt("fails", 0).apply(); emitBio(true, ""); }
+                @Override public void onAuthenticationSucceeded(android.hardware.biometrics.BiometricPrompt.AuthenticationResult r) { session = true; lastOk = System.currentTimeMillis(); p(a).edit().putInt("fails", 0).apply(); emitBio(true, ""); }
                 @Override public void onAuthenticationError(int code, CharSequence msg) { emitBio(false, String.valueOf(msg)); }
             });
         } catch (Throwable t) { emitBio(false, String.valueOf(t.getMessage())); }
@@ -176,14 +194,17 @@ final class Lock {
                     ht.quitSafely();
                 }
             };
+            /* ready[0]：曝光已收斂（有人臉就以人臉為準）、對焦完成，才存照片 */
+            final boolean[] ready = {false};
             ir.setOnImageAvailableListener(new ImageReader.OnImageAvailableListener() {
                 @Override public void onImageAvailable(ImageReader r) {
                     Image img = null;
                     try {
                         img = r.acquireLatestImage();
                         if (img == null || done[0]) return;
-                        /* 等自動曝光穩定（約 1 秒）再存 */
-                        if (System.currentTimeMillis() - t0 < 1800) return;
+                        long dt = System.currentTimeMillis() - t0;
+                        /* 最少暖機 0.8 秒；曝光／對焦穩定就存；最晚 4 秒一定存 */
+                        if (dt < 800 || (!ready[0] && dt < 4000)) return;
                         done[0] = true;
                         ByteBuffer bb = img.getPlanes()[0].getBuffer();
                         byte[] jpg = new byte[bb.remaining()];
@@ -199,13 +220,22 @@ final class Lock {
                     dev[0] = cam;
                     try {
                         cam.createCaptureSession(Arrays.asList(ir.getSurface()), new CameraCaptureSession.StateCallback() {
-                            @Override public void onConfigured(CameraCaptureSession s) {
+                            @Override public void onConfigured(final CameraCaptureSession s) {
                                 try {
-                                    CaptureRequest.Builder b = cam.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+                                    final CaptureRequest.Builder b = cam.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
                                     b.addTarget(ir.getSurface());
+                                    b.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
                                     b.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
-                                    b.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                                    /* 自動對焦：前鏡頭多半是定焦，只有支援時才開 */
+                                    boolean afOk = false;
+                                    int[] afm = fch.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES);
+                                    if (afm != null) for (int m : afm) if (m == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE) afOk = true;
+                                    if (afOk) b.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                                    final boolean hasAf = afOk;
                                     if (sensor != null) b.set(CaptureRequest.JPEG_ORIENTATION, sensor);
+                                    final android.graphics.Rect ar = fch.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+                                    Integer mxAe = fch.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE), mxAf = fch.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AF);
+                                    final boolean aeReg = mxAe != null && mxAe > 0, afReg = mxAf != null && mxAf > 0;
                                     /* 人臉優先曝光：背光時臉才不會整個黑掉 */
                                     try {
                                         int[] scenes = fch.get(CameraCharacteristics.CONTROL_AVAILABLE_SCENE_MODES);
@@ -218,12 +248,47 @@ final class Lock {
                                         android.util.Range<Integer> ev = fch.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
                                         android.util.Rational step = fch.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP);
                                         if (ev != null && step != null && step.floatValue() > 0) b.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, Math.min(ev.getUpper(), Math.round(1.0f / step.floatValue())));
-                                        /* 測光放在畫面中上（拿手機的人臉通常在這裡） */
-                                        android.graphics.Rect ar = fch.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
-                                        Integer maxAe = fch.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE);
-                                        if (ar != null && maxAe != null && maxAe > 0) b.set(CaptureRequest.CONTROL_AE_REGIONS, new android.hardware.camera2.params.MeteringRectangle[] {new android.hardware.camera2.params.MeteringRectangle(ar.width() / 4, ar.height() / 5, ar.width() / 2, ar.height() / 2, 1000)});
+                                        /* 還沒偵測到臉之前：測光／對焦放在畫面中上（拿手機的人臉通常在這裡） */
+                                        if (ar != null) {
+                                            android.hardware.camera2.params.MeteringRectangle[] mr = {new android.hardware.camera2.params.MeteringRectangle(ar.width() / 4, ar.height() / 5, ar.width() / 2, ar.height() / 2, 1000)};
+                                            if (aeReg) b.set(CaptureRequest.CONTROL_AE_REGIONS, mr);
+                                            if (afReg && hasAf) b.set(CaptureRequest.CONTROL_AF_REGIONS, mr);
+                                        }
                                     } catch (Throwable t) { /* 不支援就用一般曝光 */ }
-                                    s.setRepeatingRequest(b.build(), null, hd);
+                                    final boolean[] faceSet = {false};
+                                    final CameraCaptureSession.CaptureCallback cb = new CameraCaptureSession.CaptureCallback() {
+                                        @Override public void onCaptureCompleted(CameraCaptureSession ss, CaptureRequest rq, android.hardware.camera2.TotalCaptureResult res) {
+                                            try {
+                                                if (done[0]) return;
+                                                /* 偵測到臉：把曝光＋對焦區域改成最大的那張臉 */
+                                                android.hardware.camera2.params.Face[] fs = res.get(android.hardware.camera2.CaptureResult.STATISTICS_FACES);
+                                                if (!faceSet[0] && fs != null && fs.length > 0) {
+                                                    android.hardware.camera2.params.Face big = fs[0];
+                                                    for (android.hardware.camera2.params.Face f : fs) if (f.getBounds().width() * f.getBounds().height() > big.getBounds().width() * big.getBounds().height()) big = f;
+                                                    android.graphics.Rect r0 = big.getBounds();
+                                                    int pad = r0.width() / 5;
+                                                    android.graphics.Rect r1 = new android.graphics.Rect(Math.max(0, r0.left - pad), Math.max(0, r0.top - pad), r0.right + pad, r0.bottom + pad);
+                                                    if (ar != null) { r1.right = Math.min(r1.right, ar.width() - 1); r1.bottom = Math.min(r1.bottom, ar.height() - 1); }
+                                                    android.hardware.camera2.params.MeteringRectangle[] mr = {new android.hardware.camera2.params.MeteringRectangle(r1, 1000)};
+                                                    if (aeReg) b.set(CaptureRequest.CONTROL_AE_REGIONS, mr);
+                                                    if (afReg && hasAf) b.set(CaptureRequest.CONTROL_AF_REGIONS, mr);
+                                                    faceSet[0] = true;
+                                                    ready[0] = false;
+                                                    ss.setRepeatingRequest(b.build(), this, hd);
+                                                    return;
+                                                }
+                                                Integer ae = res.get(android.hardware.camera2.CaptureResult.CONTROL_AE_STATE);
+                                                Integer af = res.get(android.hardware.camera2.CaptureResult.CONTROL_AF_STATE);
+                                                boolean aeOk = ae == null || ae == android.hardware.camera2.CaptureResult.CONTROL_AE_STATE_CONVERGED || ae == android.hardware.camera2.CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED || ae == android.hardware.camera2.CaptureResult.CONTROL_AE_STATE_LOCKED;
+                                                boolean afOk2 = !hasAf || af == null || af == android.hardware.camera2.CaptureResult.CONTROL_AF_STATE_INACTIVE && System.currentTimeMillis() - t0 > 1500
+                                                    || af == android.hardware.camera2.CaptureResult.CONTROL_AF_STATE_PASSIVE_FOCUSED || af == android.hardware.camera2.CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED
+                                                    || af == android.hardware.camera2.CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED && System.currentTimeMillis() - t0 > 2500;
+                                                /* 有臉就等臉的曝光穩定；沒臉的話 2 秒後也接受 */
+                                                ready[0] = aeOk && afOk2 && (faceSet[0] || System.currentTimeMillis() - t0 > 2000);
+                                            } catch (Throwable t) { /* ignore */ }
+                                        }
+                                    };
+                                    s.setRepeatingRequest(b.build(), cb, hd);
                                 } catch (Throwable t) { close.run(); }
                             }
                             @Override public void onConfigureFailed(CameraCaptureSession s) { close.run(); }
@@ -233,7 +298,7 @@ final class Lock {
                 @Override public void onDisconnected(CameraDevice cam) { close.run(); }
                 @Override public void onError(CameraDevice cam, int e) { close.run(); }
             }, hd);
-            hd.postDelayed(new Runnable() { @Override public void run() { if (!done[0]) close.run(); } }, 7000);
+            hd.postDelayed(new Runnable() { @Override public void run() { if (!done[0]) close.run(); } }, 8000);
         } catch (Throwable t) { /* 沒有相機或被占用 */ }
     }
 

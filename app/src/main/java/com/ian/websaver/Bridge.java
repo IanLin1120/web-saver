@@ -328,9 +328,9 @@ public class Bridge {
 
     @JavascriptInterface public boolean credSave(String host, String user, String pass) { return Creds.get(a).save(host.trim().toLowerCase(), user, pass); }
 
-    @JavascriptInterface public void credDel(String host, String user) { Creds.get(a).del(host, user); }
+    @JavascriptInterface public void credDel(String host, String user) { if (Lock.has(a) && !Lock.recentlyOk()) return; Creds.get(a).del(host, user); }
 
-    @JavascriptInterface public String credReveal(String host, String user) { String p = Creds.get(a).password(host, user); return p == null ? "" : p; }
+    @JavascriptInterface public String credReveal(String host, String user) { if (Lock.has(a) && !Lock.recentlyOk()) return ""; String p = Creds.get(a).password(host, user); return p == null ? "" : p; }
 
     /* ---------- 媒體下載 ---------- */
     @JavascriptInterface public void dlStart(String json) {
@@ -672,7 +672,18 @@ public class Bridge {
     @JavascriptInterface public String libStats() { return Lib.get(a).stats(a); }
 
     @JavascriptInterface public int libDelete(String idsJson) {
-        try { int n = Lib.get(a).delete(new JSONArray(idsJson)); return n; } catch (Throwable t) { return 0; }
+        try {
+            /* 入侵者照片：要剛輸入過正確密碼（或指紋）才能刪 */
+            JSONArray in = new JSONArray(idsJson), ok = new JSONArray();
+            Lib lib = Lib.get(a);
+            for (int i = 0; i < in.length(); i++) {
+                JSONObject it = lib.find(in.optString(i));
+                boolean intr = it != null && ("intruder".equals(it.optString("sys")) || Lock.INTRUDER_FOLDER.equals(it.optString("folder")));
+                if (intr && !Lock.recentlyOk()) continue;
+                ok.put(in.optString(i));
+            }
+            return lib.delete(ok);
+        } catch (Throwable t) { return 0; }
     }
 
     @JavascriptInterface public boolean libRename(String id, String name) { return Lib.get(a).rename(id, name); }
@@ -860,6 +871,30 @@ public class Bridge {
     /* App 介面的設定與記錄（瀏覽器儲存空間）另外備份一份到檔案：被清掉時可以還原 */
     @JavascriptInterface public boolean lsBackup(String json) {
         try { java.io.File f = new java.io.File(a.getFilesDir(), "ls_backup.json"), tmp = new java.io.File(a.getFilesDir(), "ls_backup.tmp"); Util.writeText(tmp, json == null ? "" : json); if (f.exists()) f.delete(); return tmp.renameTo(f); } catch (Throwable t) { return false; }
+    }
+    /* 重要設定（上鎖設定、資料夾、收藏…）存在 App 自己的檔案；清除網站資料不會動到 */
+    private java.io.File kvFile(String k, String ext) {
+        if (k == null || !k.matches("[A-Za-z0-9._-]{1,64}")) return null;
+        java.io.File d = new java.io.File(a.getFilesDir(), "kv");
+        if (!d.exists()) d.mkdirs();
+        return new java.io.File(d, k + ext);
+    }
+    @JavascriptInterface public String kvGet(String k) {
+        try {
+            java.io.File f = kvFile(k, ".json");
+            if (f == null) return "";
+            if (!f.exists()) { java.io.File b = kvFile(k, ".bak"); if (b != null && b.exists()) f = b; else return ""; }
+            return Util.readText(new java.io.FileInputStream(f));
+        } catch (Throwable t) { return ""; }
+    }
+    @JavascriptInterface public synchronized boolean kvPut(String k, String v) {
+        try {
+            java.io.File f = kvFile(k, ".json"), b = kvFile(k, ".bak"), tmp = kvFile(k, ".tmp");
+            if (f == null || v == null || v.isEmpty()) return false;
+            Util.writeText(tmp, v);
+            if (f.exists()) { if (b.exists()) b.delete(); f.renameTo(b); }
+            return tmp.renameTo(f);
+        } catch (Throwable t) { return false; }
     }
     @JavascriptInterface public String lsRestore() {
         try { java.io.File f = new java.io.File(a.getFilesDir(), "ls_backup.json"); return f.exists() ? Util.readText(new java.io.FileInputStream(f)) : ""; } catch (Throwable t) { return ""; }

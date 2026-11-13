@@ -53,7 +53,7 @@ $('vwMore').addEventListener('click', function(){
     it.src ? ['globe', '開啟原網頁', function(){ Viewer.close(); navigate(it.src); }] : null,
     ['edit', '重新命名', async function(){ var n = await promptDlg('重新命名', it.name.replace(/\.[a-z0-9]+$/i, '')); if(n){ await Lib.rename(it, n); var nw = Lib.byId(it.id); if(nw){ Viewer.cur = nw; $('vwTitle').textContent = nw.name; } toast('已重新命名'); } }],
     ['info', '檔案資訊', function(){ fileInfo(it); }],
-    ['trash', '刪除（移到垃圾桶）', async function(){ await Lib.trash([it.id]); Viewer.close(); toast('已移到垃圾桶', false, ['復原', function(){ Lib.restore([it.id]); }]); }, true]
+    ['trash', '刪除（移到垃圾桶）', async function(){ if(!(await Lib.trash([it.id]))) return; Viewer.close(); toast('已移到垃圾桶', false, ['復原', function(){ Lib.restore([it.id]); }]); }, true]
   ]);
 });
 on('vwLink', function(d){ Viewer.close(); navigate(d.url); });
