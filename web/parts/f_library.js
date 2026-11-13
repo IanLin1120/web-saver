@@ -247,6 +247,9 @@ function renderCats(){
   var tn = Lib.trashList().length;
   if(tn) bar.appendChild(h('button', {class: 'fchip', html: icon('trash', 'sm') + '垃圾桶 <span class="c">' + tn + '</span>', onclick: function(){ openTrash(); }}));
   bar.appendChild(h('button', {class: 'fchip', html: icon('gear', 'sm') + '分類', title: '管理分類', onclick: function(){ manageAreas(); }}));
+  /* 有檔案記得的資料夾不見了：顯示「找回資料夾」 */
+  var lost = typeof lfLostGroups === 'function' ? Object.keys(lfLostGroups()).length : 0;
+  bar.appendChild(h('button', {class: 'fchip' + (lost ? ' on' : ''), html: icon('reload', 'sm') + (lost ? '找回 ' + lost + ' 個資料夾' : '找回資料夾'), title: '依檔案原本的紀錄重建遺失的資料夾', onclick: function(){ recoverLost(); }}));
   if(CFG.lib.cat !== 'all' && !cnt[CFG.lib.cat] && !CAT[CFG.lib.cat]){ var f2 = Object.keys(CAT).filter(function(k){ return cnt[k]; })[0]; CFG.lib.cat = f2 || 'all'; saveCfg(); }
 }
 function thumbEl(it, cls){

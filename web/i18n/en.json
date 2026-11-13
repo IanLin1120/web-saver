@@ -1924,7 +1924,7 @@
 "從 YouTube 分享進來或在 AI 摘要貼上網址時，不在手機上跑，改交給 GitHub 雲端": "When a video is shared from YouTube or a URL is pasted in Summary, send it to GitHub cloud instead of running on the phone",
 "手機關掉也會在雲端繼續跑，完成後自動取回": "Keeps running in the cloud even when the phone is off; results are fetched automatically",
 "手機關掉也能在雲端繼續分析": "Keep analyzing in the cloud even when the phone is off",
-"找回": "Recovered",
+"找回": "Recover",
 "把 AI 摘要交給": "Run Summary jobs on",
 "把 Gemini 金鑰加密存到 GitHub…": "Encrypting and saving the Gemini key to GitHub…",
 "把分析交給 GitHub 雲端": "Run analysis in GitHub cloud",
@@ -1977,5 +1977,17 @@
 "資料夾名稱暫時叫「找回的資料夾 1、2…」，": "The folders are temporarily named \"Recovered folder 1, 2…\"; ",
 "輸錯太多次，請": "Too many wrong attempts. Wait ",
 "還有": "",
-"（資料夾按「⋯」→「上鎖」）。": " (folder \"⋯\" → \"Lock\")."
+"（資料夾按「⋯」→「上鎖」）。": " (folder \"⋯\" → \"Lock\").",
+"✅ 收藏：從檔案庫裡的「收藏備份」檔找回": "✅ Bookmarks: restored from the \"bookmark backup\" files in the Library: ",
+"✅ 檔案庫：找回": "✅ Library: recovered",
+"個收藏夾。": " bookmark folders.",
+"個資料夾，檔案已照原本的分組放回去。名稱暫時叫「找回的資料夾…」，可以按資料夾的「⋯」重新命名；": " folders, and the files are back in their original groups. They are temporarily named \"Recovered folder…\"; rename them with the folder's \"⋯\" menu; ",
+"原本有上鎖的請重新上鎖": "lock again any that were locked before",
+"找回資料夾": "Recover folders",
+"找回遺失的資料夾與收藏": "Recover lost folders and bookmarks",
+"依檔案原本的紀錄重建遺失的資料夾": "Rebuild lost folders from each file's record",
+"檔案庫：所有檔案記得的資料夾都已經在了，沒有需要找回的。": "Library: every folder the files remember is already there. Nothing to recover.",
+"檔案庫：這些檔案沒有留下原本資料夾的紀錄，沒辦法自動分回去，只能重新整理。": "Library: these files have no record of their original folders, so they cannot be sorted back automatically.",
+"現在資料夾、收藏和上鎖設定都存在 App 自己的檔案裡，清除 Cookie 不會再清掉。只有在系統設定裡「清除 App 儲存空間」或解除安裝才會刪除，建議偶爾用「收藏備份／還原 → 匯出」存一份到下載資料夾。": "Folders, bookmarks and lock settings are now stored in the app's own files, so clearing cookies no longer erases them. Only \"Clear storage\" in system settings or uninstalling deletes them, so export a copy now and then with \"Bookmark backup / restore → Export\".",
+"舊版清除 Cookie 清掉的檔案庫資料夾，依檔案的紀錄重建；收藏從「收藏備份」檔找回": "Rebuild Library folders erased by \"Clear cookies\" in older versions; restore bookmarks from \"bookmark backup\" files"
 }

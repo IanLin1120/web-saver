@@ -57,27 +57,63 @@ on('libChanged', function(){
 });
 /* 找回資料夾：舊版「清除 Cookie」會把資料夾清單一起清掉，但每個檔案屬於哪個資料夾還記在 App 裡。
    資料夾清單是空的、檔案卻還記得資料夾時，依原本的分組重建（名稱與上鎖要重新設定） */
-function lfRecover(){
-  if(LF.folders.some(function(f){ return !f.sys; })) return;
-  var groups = {}, n = 0;
+function lfLostGroups(){
+  var groups = {};
   (Lib.all || Lib.items || []).forEach(function(it){
     var fid = it.folder;
     if(!fid || fid === INTRUDER_F || it.sys === 'intruder' || LF.get(fid)) return;
     (groups[fid] = groups[fid] || []).push(it);
   });
+  return groups;
+}
+/* 依檔案記得的資料夾，把遺失的資料夾重建；回傳重建了幾個 */
+function lfRebuild(){
+  var groups = lfLostGroups(), n = 0;
+  var base = LF.folders.filter(function(f){ return f.recovered; }).length;
   Object.keys(groups).forEach(function(fid){
     var L = groups[fid], cnt = {};
     L.forEach(function(it){ var a = typeof areaOf === 'function' ? areaOf(it) : it.cat; cnt[a] = (cnt[a] || 0) + 1; });
     var cat = Object.keys(cnt).sort(function(a, b){ return cnt[b] - cnt[a]; })[0];
     n++;
-    LF.folders.push({id: fid, cat: cat, parent: '', name: '找回的資料夾 ' + n, order: n, icon: '📁', recovered: true});
+    LF.folders.push({id: fid, cat: cat, parent: '', name: '找回的資料夾 ' + (base + n), order: base + n, icon: '📁', recovered: true});
     L.forEach(function(it){ LF.map[it.id] = fid; });
   });
+  if(n) LF.save();
+  return n;
+}
+function lfRecover(){
+  if(LF.folders.some(function(f){ return !f.sys; })) return;
+  var n = lfRebuild();
   if(!n) return;
-  LF.save();
   setTimeout(function(){
     dialog('已找回 ' + n + ' 個資料夾', '舊版「清除 Cookie」時把資料夾清單一起清掉了，但每個檔案原本放在哪個資料夾還記得，所以已經照原本的分組放回去。<br><br>資料夾名稱暫時叫「找回的資料夾 1、2…」，<b>原本有上鎖的資料夾請重新上鎖</b>（資料夾按「⋯」→「上鎖」）。<br><span class="sub">新版已經把資料夾和上鎖設定改存在 App 自己的檔案裡，之後清除 Cookie 不會再被清掉。</span>', [['好', null]]);
   }, 1200);
+}
+/* 手動「找回遺失的資料夾與收藏」：資料夾依檔案的紀錄重建；收藏從檔案庫裡的「收藏備份」檔合併回來 */
+async function recoverLost(){
+  await Lib.refresh();
+  var all = Lib.all || Lib.items || [];
+  var remembered = all.filter(function(it){ return it.folder && it.folder !== INTRUDER_F && it.sys !== 'intruder'; }).length;
+  var nF = lfRebuild();
+  /* 收藏：找檔案庫裡以前匯出的收藏備份（新的先合併） */
+  var bk = all.filter(function(it){ return /收藏備份.*\.json$/i.test(it.name || ''); }).sort(function(a, b){ return (b.time || 0) - (a.time || 0); });
+  var nB = 0, nBF = 0;
+  for(var i = 0; i < bk.length; i++){
+    try{
+      var d = JSON.parse(await (await Lib.blob(bk[i])).text());
+      (d.folders || []).forEach(function(f){ if(!BM.folders.some(function(x){ return x.id === f.id; })){ BM.folders.push(f); nBF++; } });
+      (d.items || []).forEach(function(it){ if(it && it.url && !BM.find(it.url)){ if(!BM.folders.some(function(f){ return f.id === it.folder; })) it.folder = BM.folders[0].id; BM.items.push(it); nB++; } });
+    }catch(e){}
+  }
+  if(nB || nBF){ BM.save(); try{ renderBr(); }catch(e){} }
+  if(typeof renderLib === 'function') renderLib();
+  var msg = '';
+  msg += nF ? '✅ 檔案庫：找回 <b>' + nF + '</b> 個資料夾，檔案已照原本的分組放回去。名稱暫時叫「找回的資料夾…」，可以按資料夾的「⋯」重新命名；<b>原本有上鎖的請重新上鎖</b>。'
+    : (remembered ? '檔案庫：所有檔案記得的資料夾都已經在了，沒有需要找回的。' : '檔案庫：這些檔案沒有留下原本資料夾的紀錄，沒辦法自動分回去，只能重新整理。');
+  msg += '<br><br>' + (nB || nBF ? '✅ 收藏：從檔案庫裡的「收藏備份」檔找回 <b>' + nB + '</b> 個收藏、' + nBF + ' 個收藏夾。'
+    : '收藏：以前的收藏只存在被清掉的地方，檔案庫裡也沒有找到「收藏備份」檔，所以沒辦法自動找回。如果你曾經把收藏備份存到別的地方（下載資料夾、雲端），可以到「設定 → 收藏備份／還原 → 從 JSON 檔還原」匯入。');
+  msg += '<br><br><span class="sub">現在資料夾、收藏和上鎖設定都存在 App 自己的檔案裡，清除 Cookie 不會再清掉。只有在系統設定裡「清除 App 儲存空間」或解除安裝才會刪除，建議偶爾用「收藏備份／還原 → 匯出」存一份到下載資料夾。</span>';
+  dialog('找回遺失的資料夾與收藏', msg, [['好', null]]);
 }
 /* 資料夾樹選擇器 */
 function folderPicker(cat, title, cb, opts){

@@ -125,7 +125,8 @@ function renderSettings(){
     isApp ? swRow('同時存一份到手機「下載/網頁擷取」', '每次擷取或下載完成，自動複製一份到手機公開的下載資料夾', 'autoExport') : null,
     isApp ? h('div', {class: 'setRow', onclick: function(){ openWifi(); }}, h('span', {class: 'ic', html: icon('wifi')}), h('div', {class: 'grow'}, h('b', {text: '無線傳到電腦／其他手機'}), h('div', {class: 'sub', text: '掃 QR Code 用瀏覽器下載；不同網路可以走 GitHub 或公用中繼'})), h('span', {class: 'chev', text: '›'})) : null,
     h('div', {class: 'setRow', onclick: function(){ showView('lib'); }}, h('span', {class: 'ic', html: icon('folder')}), h('div', {class: 'grow'}, h('b', {text: '開啟檔案庫'}), h('div', {class: 'sub', text: '查看空間使用、分類、匯出'})), h('span', {class: 'chev', text: '›'})),
-    h('div', {class: 'setRow', onclick: bmBackup}, h('span', {class: 'ic', html: icon('books')}), h('div', {class: 'grow'}, h('b', {text: '收藏備份／還原'}), h('div', {class: 'sub', text: BM.items.length + ' 個收藏・' + BM.folders.length + ' 個收藏夾'})), h('span', {class: 'chev', text: '›'}))
+    h('div', {class: 'setRow', onclick: bmBackup}, h('span', {class: 'ic', html: icon('books')}), h('div', {class: 'grow'}, h('b', {text: '收藏備份／還原'}), h('div', {class: 'sub', text: BM.items.length + ' 個收藏・' + BM.folders.length + ' 個收藏夾'})), h('span', {class: 'chev', text: '›'})),
+    h('div', {class: 'setRow', onclick: function(){ recoverLost(); }}, h('span', {class: 'ic', html: icon('reload')}), h('div', {class: 'grow'}, h('b', {text: '找回遺失的資料夾與收藏'}), h('div', {class: 'sub', text: '舊版清除 Cookie 清掉的檔案庫資料夾，依檔案的紀錄重建；收藏從「收藏備份」檔找回'})), h('span', {class: 'chev', text: '›'}))
   ]));
 
   /* 網頁版代理 */
