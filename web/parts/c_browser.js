@@ -655,6 +655,13 @@ function openToolsMenu(){
     if(typeof fabSync === 'function'){ fabSync.k = null; fabSync(); }
     toast(on ? '已顯示懸浮下載按鈕（放回右側預設位置）' : '已隱藏懸浮下載按鈕');
   }, {on: !!CFG.fab});
+  /* 網頁影片用 App 內建播放器（跟檔案庫的播放器一樣，會依直式／橫式自動轉向） */
+  if(isApp) b('play', '內建播放器', function(){
+    var on = CFG.webVp === false; setCfg('webVp', on);
+    NAT.call('setPref', 'webVp', on ? '1' : '0');
+    if(page) NAT.call('brRun', 'window.__wsCfg&&(window.__wsCfg.vp=' + on + ');' + (on ? 'window.__wsVpOff=0;' : ''), 'vpCfg');
+    toast(on ? '網頁影片改用內建播放器播放' : '網頁影片用網頁自己的播放器');
+  }, {on: CFG.webVp !== false});
   b('film', '下載影片', function(){ openMedia(); }, {dis: !page, n: BR.mediaN ? (BR.mediaN > 99 ? '99+' : BR.mediaN) : ''});
   b('download', '擷取網頁', function(){ openCapture(); }, {dis: !page});
   b('copy', '複製網址', function(){ copyText(BR.url); }, {dis: !page});

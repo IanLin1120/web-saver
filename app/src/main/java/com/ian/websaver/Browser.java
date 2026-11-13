@@ -597,6 +597,7 @@ final class Browser {
             c.put("ads", ads && !AdBlock.allowed(curHost));
             c.put("css", AdBlock.css);
             c.put("pw", pw);
+            c.put("vp", "br".equals(tag) && !"0".equals(a.prefs.getString("u_webVp", "1")));
             if (ytOpts != null) c.put("yt", ytOpts);
             if (grabOpts != null) c.put("grab", grabOpts);
             return "window.__wsCfg=" + c.toString() + ";";
@@ -1105,6 +1106,33 @@ final class Browser {
             mediaEmitPending = true;
             Util.MAIN.postDelayed(new Runnable() { @Override public void run() { mediaEmitPending = false; lastMediaEmit = System.currentTimeMillis(); emitMediaCount(); } }, 900);
         }
+    }
+
+    /** 網頁用串流（blob:）播放時，從偵測到的網路請求挑出影片來源：優先最早出現的 m3u8（通常是總清單），其次最新的影片檔 */
+    String pickStream() {
+        JSONObject hls = null, vid = null;
+        synchronized (netMedia) {
+            for (JSONObject o : netMedia.values()) {
+                String k = o.optString("kind");
+                if ("hls".equals(k)) { if (hls == null) hls = o; }
+                else if ("video".equals(k)) vid = o;
+            }
+        }
+        JSONObject p = hls != null ? hls : vid;
+        if (p == null) return "";
+        try { return new JSONObject().put("url", p.optString("url")).put("kind", p.optString("kind")).toString(); } catch (Throwable t) { return ""; }
+    }
+
+    /** 網頁上的影片改用 App 內建播放器播放 */
+    void webVideo(String json) {
+        try {
+            JSONObject o = new JSONObject(json);
+            String u = o.optString("src");
+            if (!u.startsWith("http")) return;
+            o.put("ref", curUrl == null ? "" : curUrl);
+            o.put("play", VidProxy.wrap(u, curUrl));
+            MainActivity.emit("webVideo", o.toString());
+        } catch (Throwable t) { /* ignore */ }
     }
 
     void emitMediaCount() {

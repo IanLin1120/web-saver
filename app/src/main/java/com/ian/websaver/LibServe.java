@@ -21,6 +21,11 @@ final class LibServe {
         h.put("Access-Control-Allow-Origin", "*");
         h.put("Cache-Control", "max-age=3600");
         try {
+            if ("/vp".equals(u.getPath())) {
+                String url = u.getQueryParameter("u");
+                if (url == null || !url.startsWith("http")) throw new Exception("bad");
+                return VidProxy.serve(url, u.getQueryParameter("r"), reqH);
+            }
             if ("/px".equals(u.getPath())) {
                 String url = u.getQueryParameter("u"), ref = u.getQueryParameter("r");
                 if (url == null || !url.startsWith("http")) throw new Exception("bad");

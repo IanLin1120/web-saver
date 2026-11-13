@@ -18,6 +18,40 @@
       try { B.video(on && !v.paused, v.videoWidth || 0, v.videoHeight || 0); } catch (x) {}
     };
     ['play', 'playing', 'pause', 'ended', 'emptied'].forEach(function (t) { document.addEventListener(t, rep, true); });
+    /* 你點了網頁上的影片：改用 App 內建播放器（跟檔案庫的離線播放器一樣，會依直式／橫式自動轉向）。
+       只接手你自己按播放的、有聲音、夠大的影片；網頁自動播放的預覽影片不管 */
+    var lastTap = 0, lastClick = 0;
+    ['pointerdown', 'touchend', 'click', 'keydown'].forEach(function (t) { document.addEventListener(t, function () { lastTap = Date.now(); if (t === 'click') lastClick = lastTap; }, true); });
+    var handTo = function (v, src, kind) {
+      try { v.pause(); } catch (x) {}
+      var r = v.getBoundingClientRect ? v.getBoundingClientRect() : {width: 0};
+      B.webVideo(JSON.stringify({src: src, kind: kind || '', t: v.currentTime || 0, title: (document.title || '').slice(0, 120), poster: v.poster || '',
+        w: v.videoWidth || 0, h: v.videoHeight || 0, dur: isFinite(v.duration) ? v.duration : 0}));
+    };
+    document.addEventListener('play', function (e) {
+      var v = e.target;
+      if (!v || v.tagName !== 'VIDEO' || !B.webVideo || !(window.__wsCfg || cfg).vp || window.__wsVpOff || v.__wsVpOff) return;
+      /* 靜音的只在你剛點過（不是捲動）時才接手，避免捲到自動播放的預覽影片就跳出播放器 */
+      if (Date.now() - lastTap > 4000 || (v.muted && Date.now() - lastClick > 1500)) return;
+      var r = v.getBoundingClientRect();
+      if (r.width < 140 || r.height < 80) return;
+      var src = v.currentSrc || v.src || '';
+      if (/^https?:/i.test(src)) { handTo(v, src, /\.m3u8(\?|#|$)/i.test(src) ? 'hls' : 'video'); return; }
+      /* 串流（blob:）：用 App 偵測到的 m3u8／mp4；還沒偵測到就等一下再試 */
+      var tries = 0;
+      (function chk() {
+        var p = '';
+        try { p = B.pickStream ? B.pickStream() : ''; } catch (x) {}
+        if (p) { try { var o = JSON.parse(p); if (!v.paused || tries === 0) handTo(v, o.url, o.kind); } catch (x) {} return; }
+        if (++tries < 4 && !v.paused) setTimeout(chk, 700);
+      })();
+    }, true);
+    window.__wsVpBack = function (t) {
+      window.__wsVpOff = 1;
+      var v = curV && curV.isConnected ? curV : document.querySelector('video');
+      if (!v) return;
+      try { if (t > 1) v.currentTime = t; var p = v.play(); if (p && p.catch) p.catch(function () {}); } catch (x) {}
+    };
     window.addEventListener('pagehide', function () { try { B.video(false, 0, 0); } catch (x) {} });
     var pst = null, anc = [];
     window.__wsYTpip = function (on) {

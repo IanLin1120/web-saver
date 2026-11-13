@@ -10,6 +10,7 @@ var CFG_DEF = {
   ytAds: true,
   yt: {bg: true, pip: true, sb: true, q: 'max', gest: true, bar: true, speed: true, skin: true, ryd: true, noShorts: false, codec: 'vp9'},
   fab: true,
+  webVp: true,
   lib: {sort: 'time', dir: 'desc', view: 'grid', cat: 'all'},
   autoExport: false,
   proxies: 'https://corsproxy.io/?url={url}\nhttps://api.allorigins.win/raw?url={url}\nhttps://api.codetabs.com/v1/proxy?quest={url}'
@@ -79,6 +80,7 @@ function pushNativeCfg(){
   if(!isApp) return;
   NAT.call('brConfig', JSON.stringify({mode: CFG.mode, textZoom: CFG.textZoom, popups: CFG.popups, ads: CFG.ads, ytAds: CFG.ytAds, yt: CFG.yt, pw: CFG.pw, adHosts: CFG.adHosts, adCss: CFG.adCss, adAllow: CFG.adAllow}));
   NAT.call('setPref', 'autoExport', CFG.autoExport ? '1' : '0');
+  NAT.call('setPref', 'webVp', CFG.webVp === false ? '0' : '1');
 }
 function setCfg(path, val, opts){
   var ks = path.split('.'), o = CFG;

@@ -19,7 +19,8 @@ Viewer.open = async function(it, list){
   V.classList.add('on');
   this.kind = it.cat;
   $('vwTitle').textContent = it.title && it.cat === 'html' ? it.title : it.name;
-  $('vwSub').textContent = c.name + '・' + fmtSize(it.size) + '・' + fmtDate(it.time, true) + (it.w ? '・' + it.w + '×' + it.h : '') + (it.src ? '・' + hostOf(it.src) : '');
+  if(it.web) $('vwSub').textContent = '網頁影片・' + hostOf(it.src || it.url) + (it.w ? '・' + it.w + '×' + it.h : '');
+  else $('vwSub').textContent = c.name + '・' + fmtSize(it.size) + '・' + fmtDate(it.time, true) + (it.w ? '・' + it.w + '×' + it.h : '') + (it.src ? '・' + hostOf(it.src) : '');
   updateBrVisible();
   try{
     if(it.cat === 'html') await viewHtml(it, body);
@@ -42,9 +43,10 @@ Viewer.close = function(){
   updateBrVisible();
 };
 $('vwClose').addEventListener('click', function(){ Viewer.close(); });
-$('vwShare').addEventListener('click', function(){ if(Viewer.cur) exportSheet([Viewer.cur]); });
+$('vwShare').addEventListener('click', function(){ var it = Viewer.cur; if(!it) return; if(it.web){ if(isApp) NAT.call('share', it.name || '', it.src || it.url); else copyText(it.src || it.url); return; } exportSheet([it]); });
 $('vwMore').addEventListener('click', function(){
   var it = Viewer.cur; if(!it) return;
+  if(it.web){ webVideoMenu(it); return; }
   menu(it.name, [
     it.cat === 'html' ? ['pdf', isApp ? '轉成 PDF（存入檔案庫）' : '列印／另存為 PDF', function(){ toPdf(it); }] : null,
     it.cat === 'html' && isApp ? ['image', '轉成無縫圖片 PDF（長條漫畫）', function(){ CAPTURING = true; capCard(1, '整理網頁裡的圖片…'); NAT.call('libComic', it.id, '{}'); }, false, '只留內容圖片，上下無縫接起來，去掉按鈕與選單'] : null,
@@ -272,7 +274,7 @@ function subStyle(){ return Object.assign({}, SUBSTY_DEF, lsGet('ws.subSty', {})
 async function viewVideo(it, body){
   /* 自己的播放器：跟 YouTube 分頁一樣的操作（點一下顯示控制、兩側連點快轉、長按 2 倍速、拖曳進度、全螢幕＋自動轉向） */
   var v = h('video', {autoplay: true, playsinline: true, preload: 'auto'});
-  v.src = await Lib.src(it);
+  if(it.web) webVideoSrc(v, it); else v.src = await Lib.src(it);
   var box = h('div', {class: 'vwVideo vp'}, v);
   var ui = h('div', {class: 'vpUi'});
   var pv = h('button', {class: 'vpB', html: icon('play')});
@@ -291,7 +293,7 @@ async function viewVideo(it, body){
   fitB.onclick = function(e){ e.stopPropagation(); fitI = (fitI + 1) % FITS.length; lsSet('ws.vpFit', FITS[fitI][0]); applyFit(); fl('畫面：' + FITS[fitI][1]); show(); };
   applyFit();
   /* 字幕（自己畫，才能調大小、顏色、背景、位置、時間同步）：自動找對應的字幕檔 */
-  var subs = vpSubs(it), subI = -1, cues = [], ST = subStyle();
+  var subs = it.web ? [] : vpSubs(it), subI = -1, cues = [], ST = subStyle();
   var subBox = h('div', {class: 'vpSub'}), subTxt = h('span');
   subBox.appendChild(subTxt);
   var ccB = h('button', {class: 'vpC', text: '字幕'});
@@ -404,7 +406,7 @@ async function viewVideo(it, body){
   }
   /* 其他功能（像 MX Player／VLC）：鎖定畫面、循環、旋轉、上一部／下一部、播完自動下一部、雙指縮放 */
   var moreB = h('button', {class: 'vpI', html: icon('more')});
-  var vids = (Viewer.list && Viewer.list.length > 1 ? Viewer.list : Lib.items).filter(function(x){ return x.cat === 'video' && !SEC.hidden(x); });
+  var vids = it.web ? [] : (Viewer.list && Viewer.list.length > 1 ? Viewer.list : Lib.items).filter(function(x){ return x.cat === 'video' && !SEC.hidden(x); });
   var vi = vids.findIndex(function(x){ return x.id === it.id; });
   function goVid(d){ var n = vids[vi + d]; if(n){ Viewer.open(n, Viewer.list); } else fl(d > 0 ? '已經是最後一部' : '已經是第一部'); }
   var LOOP = lsGet('ws.vpLoop', false), AUTONEXT = lsGet('ws.vpNext', false);
@@ -425,12 +427,14 @@ async function viewVideo(it, body){
       ['key', '鎖定畫面', function(){ LOCK = true; box.classList.add('locked'); box.classList.remove('show'); fl('已鎖定：點兩下解鎖'); }, false, '避免誤觸'],
       ['reload', (LOOP ? '✓ ' : '') + '循環播放', function(){ LOOP = !LOOP; v.loop = LOOP; lsSet('ws.vpLoop', LOOP); fl(LOOP ? '循環播放：開' : '循環播放：關'); }],
       ['fwd', (AUTONEXT ? '✓ ' : '') + '播完自動播下一部', function(){ AUTONEXT = !AUTONEXT; lsSet('ws.vpNext', AUTONEXT); fl(AUTONEXT ? '自動下一部：開' : '自動下一部：關'); }],
-      ['back', '上一部', function(){ goVid(-1); }, false, vi > 0 ? vids[vi - 1].name : '沒有上一部'],
-      ['fwd', '下一部', function(){ goVid(1); }, false, vi < vids.length - 1 ? vids[vi + 1].name : '沒有下一部'],
+      it.web ? null : ['back', '上一部', function(){ goVid(-1); }, false, vi > 0 ? vids[vi - 1].name : '沒有上一部'],
+      it.web ? null : ['fwd', '下一部', function(){ goVid(1); }, false, vi < vids.length - 1 ? vids[vi + 1].name : '沒有下一部'],
       ['phone', '旋轉畫面', function(){ rotI = (rotI + 1) % 2; if(!FS) setFs(true); if(isApp) NAT.call('uiFull', true, rotI === 1); fl(rotI === 1 ? '橫向' : '直向'); }],
       ['search', '縮放還原', function(){ zoom = 1; zx = 0; zy = 0; applyZoom(); fl('縮放：100%'); }, false, '雙指可以放大縮小畫面'],
       ['sliders', '字幕樣式與同步…', function(){ subSettings(); }],
-      ['scissors', '剪輯影片（裁掉頭尾）', function(){ trimSheet(); }, false, isApp ? '例如裁掉錄影開頭的讀取畫面' : '需 APK 版']
+      it.web ? null : ['scissors', '剪輯影片（裁掉頭尾）', function(){ trimSheet(); }, false, isApp ? '例如裁掉錄影開頭的讀取畫面' : '需 APK 版'],
+      it.web ? ['download', '下載這部影片', function(){ webVideoDl(it); }] : null,
+      it.web ? ['globe', '改回網頁裡播放', function(){ webVideoBack(it, v.currentTime); }, false, '這個網頁接下來都用網頁自己的播放器'] : null
     ]);
   };
   /* 剪輯：拖動或按「設為開頭／結尾」選範圍，預覽後存檔（不重新編碼，畫質不變） */
@@ -573,15 +577,68 @@ async function viewVideo(it, body){
   v.addEventListener('pause', function(){ show(true); });
   v.addEventListener('play', function(){ show(); });
   var posM = lsGet('ws.vpos', {});
-  v.addEventListener('loadedmetadata', function(){ if(posM[it.id] && posM[it.id] < v.duration - 5) v.currentTime = posM[it.id]; onRot(); });
+  v.addEventListener('loadedmetadata', function(){
+    if(it.web){ if(it.t > 1 && (!v.duration || it.t < v.duration - 2)) v.currentTime = it.t; }
+    else if(posM[it.id] && posM[it.id] < v.duration - 5) v.currentTime = posM[it.id];
+    onRot();
+  });
   show();
   Viewer.cleanup = function(){
-    try{ posM = lsGet('ws.vpos', {}); posM[it.id] = v.currentTime; lsSet('ws.vpos', posM); v.pause(); v.removeAttribute('src'); v.load(); }catch(e){}
+    try{ if(!it.web){ posM = lsGet('ws.vpos', {}); posM[it.id] = v.currentTime; lsSet('ws.vpos', posM); } v.pause(); if(v.__hls) v.__hls.destroy(); v.removeAttribute('src'); v.load(); }catch(e){}
     window.removeEventListener('resize', onRot);
     cancelAnimationFrame(subRaf);
     if(FS) setFs(false);
   };
 }
+/* ---------- 網頁影片用內建播放器播放 ---------- */
+function webVideoSrc(v, it){
+  var fail = function(){
+    if(v.__failed) return; v.__failed = true;
+    var d = dialog('這部影片無法用內建播放器播放', '網站可能有保護或用了特殊格式。要改回網頁裡播放嗎？', [['回網頁播放', function(){ webVideoBack(it, it.t); }], ['關閉', null, '']]);
+  };
+  if(it.kind === 'hls' && window.Hls && Hls.isSupported()){
+    var hl = new Hls({maxBufferLength: 40, enableWorker: true});
+    v.__hls = hl;
+    hl.on(Hls.Events.ERROR, function(e, d){
+      if(!d.fatal) return;
+      if(d.type === Hls.ErrorTypes.NETWORK_ERROR && !hl.__retry){ hl.__retry = 1; hl.startLoad(); return; }
+      if(d.type === Hls.ErrorTypes.MEDIA_ERROR && !hl.__rec){ hl.__rec = 1; hl.recoverMediaError(); return; }
+      hl.destroy(); v.__hls = null;
+      /* 換系統內建的 HLS 播放試試 */
+      if(!v.__native){ v.__native = 1; v.src = it.play; return; }
+      fail();
+    });
+    hl.loadSource(it.play); hl.attachMedia(v);
+  } else v.src = it.play;
+  v.addEventListener('error', function(){ if(!v.__hls) fail(); });
+}
+function webVideoBack(it, t){
+  Viewer.close();
+  if(isApp) NAT.call('brRun', 'window.__wsVpBack&&window.__wsVpBack(' + (+t || 0) + ')', 'vpBack');
+}
+function webVideoDl(it){
+  var mo = CFG.media || {};
+  var name = (it.name || '影片').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80);
+  var req = {page: it.src, title: it.name, items: [{url: it.url, kind: it.kind || 'video', name: name, variant: '', referer: it.src, seq: 1}],
+    opts: {imgFmt: mo.imgFmt, imgMax: +mo.imgMax || 0, imgQ: +mo.imgQ || 90, vidOut: mo.vidOut, vidQ: mo.vidQ, zip: false}};
+  req.job = dlJobId(name);
+  dlCard(0, 1, '準備下載…', 0);
+  NAT.call('dlStart', JSON.stringify(req));
+  toast('開始下載，完成後會放進檔案庫');
+}
+function webVideoMenu(it){
+  menu(it.name || '網頁影片', [
+    ['download', '下載這部影片', function(){ webVideoDl(it); }],
+    ['globe', '改回網頁裡播放', function(){ webVideoBack(it, it.t); }, false, '這個網頁接下來都用網頁自己的播放器'],
+    ['copy', '複製影片網址', function(){ copyText(it.url); }],
+    ['link', '複製網頁網址', function(){ copyText(it.src); }]
+  ]);
+}
+on('webVideo', function(d){
+  if(!d || !d.play) return;
+  if(typeof showView === 'function' && curView !== 'browse') return;
+  Viewer.open({id: 'web_' + Date.now(), web: true, cat: 'video', name: d.title || hostOf(d.ref) || '網頁影片', src: d.ref, url: d.src, play: d.play, kind: d.kind || 'video', t: +d.t || 0, w: d.w || 0, h: d.h || 0});
+});
 async function viewAudio(it, body){
   var t = Lib.thumb(it);
   var a = h('audio', {controls: true, autoplay: true, preload: 'auto'});

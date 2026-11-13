@@ -1989,5 +1989,18 @@
 "檔案庫：所有檔案記得的資料夾都已經在了，沒有需要找回的。": "Library: every folder the files remember is already there. Nothing to recover.",
 "檔案庫：這些檔案沒有留下原本資料夾的紀錄，沒辦法自動分回去，只能重新整理。": "Library: these files have no record of their original folders, so they cannot be sorted back automatically.",
 "現在資料夾、收藏和上鎖設定都存在 App 自己的檔案裡，清除 Cookie 不會再清掉。只有在系統設定裡「清除 App 儲存空間」或解除安裝才會刪除，建議偶爾用「收藏備份／還原 → 匯出」存一份到下載資料夾。": "Folders, bookmarks and lock settings are now stored in the app's own files, so clearing cookies no longer erases them. Only \"Clear storage\" in system settings or uninstalling deletes them, so export a copy now and then with \"Bookmark backup / restore → Export\".",
-"舊版清除 Cookie 清掉的檔案庫資料夾，依檔案的紀錄重建；收藏從「收藏備份」檔找回": "Rebuild Library folders erased by \"Clear cookies\" in older versions; restore bookmarks from \"bookmark backup\" files"
+"舊版清除 Cookie 清掉的檔案庫資料夾，依檔案的紀錄重建；收藏從「收藏備份」檔找回": "Rebuild Library folders erased by \"Clear cookies\" in older versions; restore bookmarks from \"bookmark backup\" files",
+"內建播放器": "Built-in player",
+"回網頁播放": "Play in page",
+"改回網頁裡播放": "Play in the page instead",
+"網站可能有保護或用了特殊格式。要改回網頁裡播放嗎？": "The site may protect it or use a special format. Play it in the page instead?",
+"網頁影片": "Web video",
+"網頁影片・": "Web video · ",
+"網頁影片改用內建播放器播放": "Web videos now play in the built-in player",
+"網頁影片用網頁自己的播放器": "Web videos use the page's own player",
+"複製影片網址": "Copy video URL",
+"複製網頁網址": "Copy page URL",
+"這個網頁接下來都用網頁自己的播放器": "This page will use its own player from now on",
+"這部影片無法用內建播放器播放": "This video can't play in the built-in player",
+"開始下載，完成後會放進檔案庫": "Download started; it will be saved to the Library"
 }

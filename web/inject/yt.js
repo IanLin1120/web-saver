@@ -712,12 +712,29 @@
     root.addEventListener('pointercancel', function () { if (G) { clearTimeout(G.lp); if (G.mode === 'hold') { W.hold = false; var vv = vid(); if (vv) vv.playbackRate = getSpeed(); } } G = null; $('lvl').classList.remove('on'); $('pvw').classList.remove('on'); });
     /* 畫面更新：控制層的位置跟著 YouTube 播放器，全螢幕時鋪滿 */
     var lastInfoId = '';
+    function covered(pe, r) {
+      var box = (pe.closest && pe.closest('#player-container-id,ytm-player,#player-container,.player-container,#player-control-container')) || pe;
+      if (box.parentElement && box.parentElement.id === 'player-container-id') box = box.parentElement;
+      pe = box;
+      var pts = [[0.5, 0.5], [0.3, 0.7], [0.7, 0.3]], hit = 0;
+      for (var i = 0; i < pts.length; i++) {
+        var x = r.left + r.width * pts[i][0], y = Math.max(1, Math.min(innerHeight - 2, r.top + r.height * pts[i][1]));
+        var els = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [];
+        var top = null;
+        for (var k = 0; k < els.length; k++) { if (els[k] !== host && els[k] !== document.documentElement) { top = els[k]; break; } }
+        if (top && !pe.contains(top) && !top.contains(pe)) hit++;
+      }
+      return hit >= 2;
+    }
     function upd() {
       var pe = playerEl(), id = videoId();
       /* Shorts：控制層一律不顯示（以前這裡沒擋，從一般影片滑到 Shorts 時控制層可能又蓋回去，愛心、留言就按不到） */
       if (!pe || !id || O.skin === false || /^\/shorts\//.test(location.pathname)) { host.style.display = 'none'; setTimeout(function () { requestAnimationFrame(upd); }, 300); return; }
       var r = isFs() ? {left: 0, top: 0, width: innerWidth, height: innerHeight, bottom: innerHeight} : pe.getBoundingClientRect();
       var ok = r.width > 80 && r.height > 60 && r.bottom > 30 && r.top < innerHeight - 30 && !document.documentElement.classList.contains('__wspip');
+      /* YouTube 自己的視窗（儲存至播放清單、選單、分享…）蓋在影片上時，控制層要讓開，
+         不然點到的會是我們的播放控制，選項被擋住按不到 */
+      if (ok && !isFs()) { var nt = Date.now(); if (nt - (upd.cvT || 0) > 180) { upd.cvT = nt; upd.cv = covered(pe, r); } if (upd.cv) ok = false; }
       host.style.display = ok ? 'block' : 'none';
       if (ok) {
         /* 只在位置真的改變時才更新樣式（避免每一格都重新排版造成播放卡頓） */
