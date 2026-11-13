@@ -1,6 +1,7 @@
 package com.ian.websaver;
 
 import android.graphics.Color;
+import android.net.Uri;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.ValueCallback;
@@ -54,9 +55,13 @@ final class AiPlayer {
         s.setUserAgentString(s.getUserAgentString().replace("; wv", "").replace(" Version/4.0", ""));
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true);
         wv.setWebViewClient(new WebViewClient() {
+            @Override public void onPageFinished(WebView v, String url) { v.evaluateJavascript(shim(), null); }
+            @Override public void onPageCommitVisible(WebView v, String url) { v.evaluateJavascript(shim(), null); }
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
                 String u = r.getUrl().toString();
                 if (u.contains("/embed/") || u.startsWith("about:") || u.startsWith("https://ianlin1120.github.io/")) return false;
+                if (u.contains("youtube.com/watch") && u.contains("v=" + vid)) return false;
+                if (u.contains("accounts.google.") || u.contains("consent.youtube.com") || u.contains("consent.google.")) return false;
                 /* 點了「在 YouTube 觀看」之類的連結：交給 App 的 YouTube 分頁 */
                 try { MainActivity.emit("aipLink", new JSONObject().put("url", u).toString()); } catch (Throwable t) { /* ignore */ }
                 return true;
@@ -73,17 +78,40 @@ final class AiPlayer {
     }
 
     static volatile int err = 0;
+    private static int startAt = 0;
+    private static boolean auto = false;
+
+    /** 只顯示播放器、提供 P（時間／播放／暫停／跳轉）給 App 用、自動跳過廣告、不讓它自己跳到下一部 */
+    private static String shim() {
+        return "(function(){if(window.__aip)return;window.__aip=1;var ID=" + JSONObject.quote(vid) + ",START=" + startAt + ",AUTO=" + auto + ";"
+            + "var css=document.createElement('style');css.textContent='html,body{background:#000!important;overflow:hidden!important}"
+            + "ytm-mobile-topbar-renderer,header,.mobile-topbar-header,ytm-pivot-bar-renderer,ytm-item-section-renderer,ytm-slim-video-metadata-section-renderer,.watch-below-the-player,ytm-engagement-panel,ytm-single-column-watch-next-results-renderer,ytm-companion-slot,ytm-promoted-sparkles-web-renderer,ytm-statement-banner-renderer,.mealbar-promo-renderer,ytm-mealbar-promo-renderer{display:none!important}"
+            + "#player-container-id,.player-container,ytm-player,#player,#movie_player,.html5-video-player{position:fixed!important;left:0!important;top:0!important;width:100vw!important;height:100vh!important;max-height:none!important;padding:0!important;margin:0!important;z-index:2147483646!important;transform:none!important}"
+            + ".html5-video-container,video{width:100vw!important;height:100vh!important;left:0!important;top:0!important}video{object-fit:contain!important}';"
+            + "(document.head||document.documentElement).appendChild(css);"
+            + "window.ERR=0;var V=function(){return document.querySelector('video')};"
+            + "window.P={getCurrentTime:function(){var v=V();return v?v.currentTime:0},getDuration:function(){var v=V();return v&&isFinite(v.duration)?v.duration:0},"
+            + "getPlayerState:function(){var v=V();return v&&!v.paused?1:2},seekTo:function(t){var v=V();if(v)v.currentTime=t},"
+            + "playVideo:function(){var v=V();if(v){var p=v.play();if(p&&p.catch)p.catch(function(){})}},pauseVideo:function(){var v=V();if(v)v.pause()}};"
+            + "var started=false,t0=Date.now();setInterval(function(){var v=V();"
+            + "var m=location.search.match(/[?&]v=([^&]+)/);if(location.pathname.indexOf('/watch')===0&&m&&m[1]!==ID){location.replace('https://m.youtube.com/watch?v='+ID);return;}"
+            + "if(!v){if(Date.now()-t0>15000&&!started)ERR=150;return;}"
+            + "var ad=document.querySelector('.ad-showing,.ad-interrupting');"
+            + "if(ad){v.__aipAd=1;v.muted=true;if(isFinite(v.duration)&&v.duration>0&&v.duration<180)v.currentTime=v.duration;"
+            + "var sk=document.querySelector('.ytp-ad-skip-button,.ytp-ad-skip-button-modern,.ytp-skip-ad-button,button[class*=skip]');if(sk)sk.click();return;}"
+            + "if(v.__aipAd){v.__aipAd=0;v.muted=false;}"
+            + "if(!started&&v.readyState>0){started=true;if(START>1&&v.currentTime<START-2)v.currentTime=START;if(!AUTO)v.pause();else{var p=v.play();if(p&&p.catch)p.catch(function(){})}}"
+            + "},300);})()";
+    }
 
     static void load(MainActivity a, String id, int start, boolean autoplay) {
         ensure(a);
         vid = id;
         t = start; dur = 0; playing = false; err = 0;
-        /* 用 IFrame API 嵌入：頁面掛在 App 自己的 GitHub Pages 網址底下，YouTube 才拿得到合法的來源（直接開 /embed/ 會出現錯誤 152／153） */
-        String base = "https://ianlin1120.github.io/web-saver/";
-        String html = "<!doctype html><html><head><meta name=viewport content='width=device-width,initial-scale=1'><style>html,body{margin:0;height:100%;background:#000;overflow:hidden}#p,iframe{position:absolute;inset:0;width:100%;height:100%;border:0}</style></head><body><div id=p></div><script>"
-            + "var P=null,ERR=0;function onYouTubeIframeAPIReady(){P=new YT.Player('p',{videoId:" + JSONObject.quote(id) + ",host:'https://www.youtube.com',playerVars:{playsinline:1,rel:0,modestbranding:1,fs:1,start:" + Math.max(0, start) + ",autoplay:" + (autoplay ? 1 : 0) + ",origin:location.origin},events:{onError:function(e){ERR=e.data||1}}});}"
-            + "</script><script src='https://www.youtube.com/iframe_api'></script></body></html>";
-        wv.loadDataWithBaseURL(base, html, "text/html", "utf-8", null);
+        /* 直接開 YouTube 手機版的觀看頁（跟 YouTube 分頁同一套播放器、同一個登入），只留下播放器畫面；
+           之前用的嵌入播放器常被 YouTube 擋（錯誤 152／153）或一直轉圈。 */
+        startAt = Math.max(0, start); auto = autoplay;
+        wv.loadUrl("https://m.youtube.com/watch?v=" + Uri.encode(id) + (start > 1 ? "&t=" + start + "s" : ""));
         apply();
     }
 

@@ -53,9 +53,10 @@
   /* 串流（blob:）：App 在背景比對影片長度找出這一部的來源；找不到就讓網頁繼續播 */
   var handBlob = function (v, t0) {
     if (!B.webVideoBlob) return false;
-    try { B.vpHold && B.vpHold(true); } catch (x) {}
-    window.__wsVpHold = 1;
-    try { v.pause(); } catch (x) {}
+    /* 先只把網頁影片靜音、讓它繼續讀（第一次打開網頁時，網頁常常要播了才開始下載影片，太早暫停 App 會找不到來源），
+       找到來源再暫停；找不到就恢復聲音讓網頁繼續播 */
+    var wasMuted = v.muted;
+    try { v.muted = true; } catch (x) {}
     var tok = 'p' + Date.now() + Math.random().toString(36).slice(2, 6);
     B.webVideoBlob(JSON.stringify({tok: tok, t: t0, title: (document.title || '').slice(0, 120), poster: v.poster || '',
       w: v.videoWidth || 0, h: v.videoHeight || 0, dur: durOf(v), ref: ref()}));
@@ -63,19 +64,28 @@
     var poll = setInterval(function () {
       var r = '';
       try { r = B.vpResult ? B.vpResult(tok) : ''; } catch (x) {}
-      if (r === 'ok') { clearInterval(poll); return; }
+      if (r === 'ok') {
+        clearInterval(poll);
+        window.__wsVpHold = 1;
+        try { v.pause(); } catch (x) {}
+        setTimeout(function () { try { v.muted = wasMuted; } catch (x) {} }, 400);
+        return;
+      }
       if (r === 'fail' || ++n > 60) {
         clearInterval(poll);
         try { B.vpHold && B.vpHold(false); } catch (x) {}
         window.__wsVpHold = 0;
-        v.__wsVpOff = 1;
-        try { var p = v.play(); if (p && p.catch) p.catch(function () {}); } catch (x) {}
+        /* 這一部先不自動接手；你之後再點一次還是會重新試 */
+        v.__wsFail = v.currentSrc || v.src || '1'; v.__wsFailT = Date.now();
+        try { v.muted = wasMuted; } catch (x) {}
+        if (v.paused) { try { var p = v.play(); if (p && p.catch) p.catch(function () {}); } catch (x) {} }
       }
     }, 300);
     return true;
   };
   var takeOver = function (v, fromStart) {
     if (!vpOn() || v.__wsVpOff) return false;
+    if (v.__wsFailT && Date.now() - v.__wsFailT < 3000) return false;
     v.__wsTook = v.currentSrc || v.src || '1';
     var t0 = fromStart ? 0 : (v.currentTime || 0);
     var src = v.currentSrc || v.src || '';
@@ -107,7 +117,7 @@
     var v = e.target;
     if (!v || v.tagName !== 'VIDEO' || held() || !vpOn() || v.__wsVpOff) return;
     var src = v.currentSrc || v.src || '';
-    if (v.muted || !big(v) || v.__wsAuto === src) return;
+    if (v.muted || !big(v) || v.__wsAuto === src || v.__wsFail === src) return;
     setTimeout(function () {
       if (v.paused || v.muted || held() || v.__wsAuto === src) return;
       var d = durOf(v);

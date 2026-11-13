@@ -2020,5 +2020,8 @@
 "AI 摘要在手機上分析中（可以關螢幕）": "AI summary analyzing on this phone (screen can be off)",
 "可能是這首（不確定）": "Possibly this song (not sure)",
 "可能是：": "Possibly: ",
-"（不確定）": " (not sure)"
+"（不確定）": " (not sure)",
+"已經自動重試好幾次還是讀不到，網站可能有加密保護（DRM）或限制只能在它自己的頁面播放。要改回網頁裡播放嗎？": "It still can't load after several automatic retries. The site may use encryption (DRM) or only allow playback on its own page. Play it in the page instead?",
+"結束選取": "Done selecting",
+"點選收藏": "Tap bookmarks to select"
 }

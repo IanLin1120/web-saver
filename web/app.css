@@ -346,7 +346,10 @@ input[type=range]{width:100%;accent-color:var(--accent);padding:0;border:0;backg
 .lrow b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lrow .ck{width:24px;height:24px;border-radius:50%;border:2px solid var(--border);display:none;place-items:center;color:#fff;flex:none}
 .selBar{position:sticky;top:-12px;z-index:4;display:flex;align-items:center;gap:6px;border-radius:18px;padding:6px 8px;margin-bottom:10px}
-.selBar b{flex:1;padding-left:4px}
+.selBar{overflow-x:auto;scrollbar-width:none}
+.selBar::-webkit-scrollbar{display:none}
+.selBar b{flex:1 0 auto;padding-left:4px;white-space:nowrap;font-size:13.5px}
+.selBar .ib{flex:none}
 
 /* ---------- 檢視器 ---------- */
 #viewer{position:fixed;inset:0;z-index:150;background:var(--bg);display:none;flex-direction:column}

@@ -145,7 +145,22 @@ final class VidProxy {
 
     private static final Pattern URI_ATTR = Pattern.compile("URI=\"([^\"]+)\"");
 
+    /** 網路不穩或網站暫時出錯：自動再試兩次 */
     static WebResourceResponse serve(String url, String ref, Map<String, String> reqH) throws Exception {
+        Exception last = null;
+        for (int i = 0; i < 3; i++) {
+            try {
+                WebResourceResponse r = serve0(url, ref, reqH);
+                if (r.getStatusCode() < 500 && r.getStatusCode() != 429 && r.getStatusCode() != 408) return r;
+                if (i == 2) return r;
+                try { if (r.getData() != null) r.getData().close(); } catch (Throwable t) { /* ignore */ }
+            } catch (Exception e) { last = e; }
+            try { Thread.sleep(400L * (i + 1)); } catch (InterruptedException ie) { break; }
+        }
+        throw last != null ? last : new Exception("failed");
+    }
+
+    private static WebResourceResponse serve0(String url, String ref, Map<String, String> reqH) throws Exception {
         Map<String, String> out = new HashMap<>();
         out.put("Access-Control-Allow-Origin", "*");
         out.put("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges");

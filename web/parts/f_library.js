@@ -385,7 +385,8 @@ function renderSelBar(){
   bar.appendChild(h('button', {class: 'ib', html: icon('share'), title: '匯出', disabled: !n, onclick: function(){ exportSheet(picked); }}));
   bar.appendChild(h('button', {class: 'ib', html: icon('trash'), title: '刪除', disabled: !n, style: {color: 'var(--danger)'}, onclick: async function(){
     var ids = Array.from(LV.sel);
-    if(!(await Lib.trash(ids))) return; LV.sel.clear(); LV.selMode = false;
+    /* 刪除後留在「選取模式」，可以接著選下一個（不會變成點了就播放） */
+    if(!(await Lib.trash(ids))) return; LV.sel.clear(); renderLib();
     toast('已移到垃圾桶（' + n + ' 個）', false, ['復原', function(){ Lib.restore(ids).then(function(){ toast('已復原'); }); }]);
   }}));
 }

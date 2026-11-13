@@ -1167,9 +1167,6 @@ final class Browser {
         String tk = "";
         try { tk = new JSONObject(json).optString("tok", ""); } catch (Throwable t) { /* ignore */ }
         final String tok = tk;
-        final java.util.List<JSONObject> cand = new java.util.ArrayList<>();
-        synchronized (netMedia) { for (JSONObject o : netMedia.values()) { String k = o.optString("kind"); if ("hls".equals(k) || "video".equals(k) || "audio".equals(k)) cand.add(o); } }
-        java.util.Collections.sort(cand, new java.util.Comparator<JSONObject>() { @Override public int compare(JSONObject x, JSONObject y) { return Long.compare(y.optLong("last"), x.optLong("last")); } });
         new Thread(new Runnable() { @Override public void run() {
             try {
                 JSONObject o = new JSONObject(json);
@@ -1177,28 +1174,43 @@ final class Browser {
                 boolean durOk = dur > 1 && !Double.isInfinite(dur) && !Double.isNaN(dur);
                 JSONObject best = null, bestA = null;
                 java.util.List<JSONObject[]> vids = new java.util.ArrayList<>(), auds = new java.util.ArrayList<>();
-                int probed = 0;
-                for (JSONObject c : cand) {
-                    if (probed >= 10) break;
-                    String u = c.optString("url"), k = c.optString("kind");
-                    JSONObject p = "hls".equals(k) ? VidProxy.probeHls(u, ref) : VidProxy.probeMp4(u, ref);
-                    probed++;
-                    if (p == null) continue;
-                    p.put("url", u).put("kind", "hls".equals(k) ? "hls" : "video");
-                    if (p.optBoolean("v") || "hls".equals(k)) vids.add(new JSONObject[] {p});
-                    else if (p.optBoolean("a")) auds.add(new JSONObject[] {p});
+                java.util.Map<String, JSONObject> probedMap = new HashMap<>();
+                /* 第一次打開網頁時，網頁常常按下播放後才開始讀影片：找不到就等一下再找（最多約 6 秒） */
+                long[] waits = {0, 1200, 1800, 2500};
+                for (int attempt = 0; attempt < waits.length && best == null; attempt++) {
+                    if (waits[attempt] > 0) Thread.sleep(waits[attempt]);
+                    final java.util.List<JSONObject> cand = new java.util.ArrayList<>();
+                    synchronized (netMedia) { for (JSONObject c : netMedia.values()) { String k = c.optString("kind"); if ("hls".equals(k) || "video".equals(k) || "audio".equals(k)) cand.add(c); } }
+                    java.util.Collections.sort(cand, new java.util.Comparator<JSONObject>() { @Override public int compare(JSONObject x, JSONObject y) { return Long.compare(y.optLong("last"), x.optLong("last")); } });
+                    vids.clear(); auds.clear();
+                    int probed = 0;
+                    for (JSONObject c : cand) {
+                        if (probed >= 12) break;
+                        String u = c.optString("url"), k = c.optString("kind");
+                        JSONObject p = probedMap.get(u);
+                        if (p == null) {
+                            p = "hls".equals(k) ? VidProxy.probeHls(u, ref) : VidProxy.probeMp4(u, ref);
+                            probed++;
+                            if (p == null) continue;
+                            p.put("url", u).put("kind", "hls".equals(k) ? "hls" : "video");
+                            probedMap.put(u, p);
+                        }
+                        if (p.optBoolean("v") || "hls".equals(p.optString("kind"))) vids.add(new JSONObject[] {p});
+                        else if (p.optBoolean("a")) auds.add(new JSONObject[] {p});
+                    }
+                    /* 候選已照最近讀取排序：長度對得上的取最新的那個；都對不上時，取長度未知的最新一個 */
+                    double tol = durOk ? Math.max(2.5, dur * 0.04) : 0;
+                    JSONObject unk = null;
+                    for (JSONObject[] w : vids) {
+                        JSONObject p = w[0];
+                        double d = p.optDouble("dur", 0);
+                        if (!durOk) { best = p; break; }
+                        if (d > 0 && Math.abs(d - dur) <= tol) { best = p; break; }
+                        if (d <= 0 && unk == null) unk = p;
+                    }
+                    if (best == null && attempt == waits.length - 1) best = unk;
+                    else if (best == null && unk != null && attempt >= 1) best = unk;
                 }
-                /* 候選已照最近讀取排序：長度對得上的取最新的那個；都對不上時，取長度未知的最新一個 */
-                double tol = durOk ? Math.max(2.5, dur * 0.04) : 0;
-                JSONObject unk = null;
-                for (JSONObject[] w : vids) {
-                    JSONObject p = w[0];
-                    double d = p.optDouble("dur", 0);
-                    if (!durOk) { best = p; break; }
-                    if (d > 0 && Math.abs(d - dur) <= tol) { best = p; break; }
-                    if (d <= 0 && unk == null) unk = p;
-                }
-                if (best == null) best = unk;
                 if (best == null) { if (!tok.isEmpty()) vpRes.put(tok, "fail"); resumePage(); return; }
                 if (!best.optBoolean("a", true) && !"hls".equals(best.optString("kind"))) {
                     double bd = 1e9;

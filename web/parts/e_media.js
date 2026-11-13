@@ -8,13 +8,44 @@ function pxUrl(u){
   if(/^data:/.test(u)) return u;
   return isApp ? 'https://wslib.local/px?u=' + encodeURIComponent(u) + '&r=' + encodeURIComponent(BR.url) : u;
 }
+/* 檔名：網頁標題去掉「免費線上看、網站名」這類尾巴，再加上偵測到的集數（例如「再婚皇后 第05集」） */
+var EP_RE = /第\s*([0-9０-９]+|[一二三四五六七八九十百零〇兩两]+)\s*[集話话期回]/;
+function cnNum(x){
+  x = String(x).replace(/[０-９]/g, function(c){ return String.fromCharCode(c.charCodeAt(0) - 65248); });
+  if(/^\d+$/.test(x)) return +x;
+  var map = {零: 0, 〇: 0, 一: 1, 二: 2, 兩: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9}, n = 0, cur = 0;
+  for(var i = 0; i < x.length; i++){ var c = x[i]; if(c in map) cur = map[c]; else if(c === '十'){ n += (cur || 1) * 10; cur = 0; } else if(c === '百'){ n += (cur || 1) * 100; cur = 0; } }
+  return n + cur;
+}
+function smartTitle(t){
+  t = String(t || '').replace(/\s+/g, ' ').trim();
+  var junk = /(免[费費])?(在[线線]|[线線]上)?([观觀]看|看)(完整版)?|免[费費]|高清|全集|完整版|中字|中文字幕|字幕|無刪減|无删减|[线線]上|在[线線]|\b(HD|4K|1080P|720P|online|watch|free)\b/gi;
+  var parts = t.split(/\s*[-|｜_–—]\s*/).map(function(x){ return x.replace(EP_RE, ' ').replace(/\b(EP|Ep|ep)\.?\s*\d{1,4}\b/g, ' ').replace(junk, ' ').replace(/\s+/g, ' ').replace(/^[\s:：,，、]+|[\s:：,，、]+$/g, '').trim(); }).filter(Boolean);
+  /* 最後一段很短的多半是網站名稱（例如「酷播」「劇迷」） */
+  if(parts.length > 1 && parts[parts.length - 1].length <= 8) parts.pop();
+  return parts[0] || t;
+}
+function epLabel(ep){ if(!ep) return ''; var n = +ep; if(!n) return ''; return '第' + (n < 10 ? '0' + n : n) + '集'; }
+function mediaBaseTitle(){
+  var t = smartTitle(MEDIA.title || BR.title || hostOf(MEDIA.page) || '媒體');
+  var ep = MEDIA.ep || '';
+  return (t + (ep ? ' ' + epLabel(ep) : '')).trim();
+}
+/* 在網頁裡找集數：標題、大標題、目前選中的那一集、網址 */
+var EP_JS = '(function(){var re=/第\\s*([0-9０-９]+|[一二三四五六七八九十百零〇兩两]+)\\s*[集話话期回]/,re2=/\\b(?:EP|E|Ep)\\.?\\s*0*(\\d{1,4})\\b/;' +
+  'var src=[document.title];var h=document.querySelector("h1")||document.querySelector("h2");if(h)src.push(h.textContent);' +
+  'var act=document.querySelector("a.active,a.cur,a.on,a.current,a.selected,li.active a,li.cur a,li.on a,li.current a,li.selected a,[aria-current]");' +
+  'if(act)src.push(act.textContent);for(var i=0;i<src.length;i++){var s=(src[i]||"");var m=s.match(re);if(m)return m[1];m=s.match(re2);if(m)return m[1];}' +
+  'if(act){var n=(act.textContent||"").trim().match(/^0*(\\d{1,4})$/);if(n)return n[1];}' +
+  'var u=location.pathname.match(/[-_\\/](\\d{1,3})\\.html?$/);return u?u[1]:"";})()';
+on('mediaEp', function(v){ var e = typeof v === 'string' ? v : ''; MEDIA.ep = e ? cnNum(e) : 0; if(MEDIA.sheet) drawMedia(); });
 function openMedia(force){
   if(force !== true && isApp){ var yid = YT.idOf(BR.url); if(yid){ openYt(yid); return; } }
   var body = h('div', {html: '<div class="ringBox"><div class="spin"></div><div class="sub">正在偵測頁面上的圖片與影片…</div></div>'});
   var dlBtn = h('button', {class: 'btn pri lg', html: icon('download', 'sm') + '下載', disabled: true});
   var selAll = h('button', {class: 'btn', html: icon('checks', 'sm') + '全選'});
   MEDIA.sel = new Set(); MEDIA.tab = 'all';
-  MEDIA.sheet = openSheet({title: '媒體下載', icon: 'film', body: body, tall: true, foot: h('div', {style: {display: 'contents'}}, selAll, dlBtn), onClose: function(){ MEDIA.sheet = null; }});
+  MEDIA.sheet = openSheet({title: '媒體下載', icon: 'film', body: body, tall: true, foot: h('div', {style: {display: 'contents'}}, selAll, dlBtn), onClose: function(){ MEDIA.sheet = null; MEDIA.inject = null; }});
   MEDIA.dlBtn = dlBtn; MEDIA.selAll = selAll;
   dlBtn.onclick = startMediaDl;
   selAll.onclick = function(){
@@ -23,6 +54,7 @@ function openMedia(force){
     vis.forEach(function(m){ if(allOn) MEDIA.sel.delete(m.url); else MEDIA.sel.add(m.url); });
     drawMedia();
   };
+  MEDIA.ep = 0; if(isApp) NAT.call('brRun', EP_JS, 'mediaEp');
   if(isApp) NAT.call('brMedia', CFG.media.minPx);
   MEDIA.rec = ''; if(isApp && NAT.has('brRecCheck')) NAT.call('brRecCheck', '');
   else setTimeout(function(){ fire('media', {items: WEB.doc ? WSMedia.scan(WEB.doc, {minPx: CFG.media.minPx, live: false}) : [], page: WEB.url, title: BR.title}); }, 50);
@@ -33,6 +65,15 @@ on('media', function(d){
   MEDIA.page = d.page || BR.url; MEDIA.title = d.title || BR.title;
   BR.mediaN = MEDIA.items.filter(function(m){ return m.kind !== 'image' && mClass(m) !== 'ad'; }).length; renderBr();
   MEDIA.playing = d.playing || null; MEDIA.touched = false; MEDIA.showAds = false;
+  /* 從內建播放器按「下載這部影片」：把正在看的這部放進清單並選好 */
+  var J = MEDIA.inject;
+  if(J){
+    var ex = MEDIA.items.filter(function(m){ return m.url.split('#')[0] === J.url.split('#')[0]; })[0];
+    if(!ex){ ex = {url: J.url, kind: J.kind === 'hls' ? 'hls' : 'video', name: J.name || '', net: true}; MEDIA.items.unshift(ex); }
+    if(J.audioUrl) ex.audioUrl = J.audioUrl;
+    if(J.ref) ex.referer = J.ref;
+    MEDIA.playing = {src: J.url, dur: J.dur || 0, title: J.title || ''};
+  }
   /* 先讀每個串流的長度（用來對應正在播放的影片、分辨廣告） */
   if(isApp) MEDIA.items.forEach(function(m){ if(m.kind === 'hls' && !MEDIA.hls[m.url]){ MEDIA.hls[m.url] = {loading: true}; NAT.call('hlsInfo', m.url, MEDIA.page); } });
   autoSelMedia();
@@ -189,7 +230,7 @@ function autoSelMedia(){
 }
 function pageVideoName(){
   var t = String((MEDIA.playing && (MEDIA.playing.title || MEDIA.playing.heading)) || MEDIA.title || BR.title || '影片');
-  return t.replace(/\s*[-|｜_–—]\s*[^-|｜_–—]{1,20}$/, '').trim() || t;
+  return (smartTitle(t) + (MEDIA.ep ? ' ' + epLabel(MEDIA.ep) : '')).trim() || t;
 }
 function toggleMedia(m, cell){
   MEDIA.touched = true;
@@ -216,7 +257,9 @@ function startMediaDl(){
   var mo = CFG.media;
   var req = {page: MEDIA.page, title: MEDIA.title,
     items: pick.map(function(m, i){
-      var it = {url: m.url, kind: m.kind, name: mediaName(m, i), variant: m.variant || '', referer: MEDIA.page, seq: m.seq || i + 1};
+      var it = {url: m.url, kind: m.kind, name: mediaName(m, i), variant: m.variant || '', referer: m.referer || MEDIA.page, seq: m.seq || i + 1};
+      /* 影像和聲音分開的（例如 IG）：下載後合併成一個檔 */
+      if(m.audioUrl && m.kind === 'video'){ it.kind = 'merge'; it.audioUrl = m.audioUrl; it.container = 'mp4'; }
       var aud = m.kind === 'audio' || ((m.kind === 'video' || m.kind === 'hls') && mo.vidOut === 'm4a');
       if(aud && mo.audFmt && mo.audFmt !== 'orig') it.convert = mo.audFmt + (mo.audFmt === 'mp3' ? ':320' : '');
       return it;
@@ -232,10 +275,12 @@ function mediaName(m, i){
   var orig = (m.name || '').replace(/\?.*$/, ''), ext = (orig.match(/\.[a-z0-9]{2,5}$/i) || [''])[0];
   var stem = orig.replace(/\.[a-z0-9]{2,5}$/i, '');
   var base;
-  if(mo.nameMode === 'title') base = clean(MEDIA.title || hostOf(MEDIA.page) || '媒體').slice(0, 60);
+  if(mo.nameMode === 'title') base = clean(mediaBaseTitle()).slice(0, 70);
   else if(mo.nameMode === 'custom') base = clean(mo.customName) || '媒體';
   else base = (!stem || stem.length < 2 || /^(index|master|playlist|video|image|img|default|large|original)$/i.test(stem)) ? clean(MEDIA.title || hostOf(MEDIA.page) || 'media').slice(0, 40) : clean(stem).slice(0, 80);
   var needSeq = mo.seqOn || (mo.nameMode !== 'orig');
+  /* 偵測到集數、而且只下載一部影片：不用再加流水號 */
+  if(mo.nameMode === 'title' && MEDIA.ep && m.kind !== 'image' && MEDIA.items.filter(function(x){ return MEDIA.sel.has(x.url) && x.kind !== 'image'; }).length <= 1) needSeq = mo.seqOn && false;
   if(needSeq){
     var num;
     if(mo.seqMode === 'sel'){

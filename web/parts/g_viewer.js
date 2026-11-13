@@ -622,15 +622,28 @@ function webVideoSrc(v, it){
     }, 1000);
   }
   var fail = function(){
-    if(v.__failed) return; v.__failed = true;
-    var d = dialog('這部影片無法用內建播放器播放', '網站可能有保護或用了特殊格式。要改回網頁裡播放嗎？', [['回網頁播放', function(){ webVideoBack(it, it.t); }], ['關閉', null, '']]);
+    if(v.__failed) return;
+    /* 播到一半出錯（多半是網站把連線切掉或網址過期）：自動從目前位置重新接上，試 4 次都不行才問你 */
+    v.__tries = (v.__tries || 0) + 1;
+    if(v.__tries <= 4 && !v.__hls){
+      var t = v.currentTime || v.__lastT || it.t || 0;
+      setTimeout(function(){
+        try{ v.src = it.play; v.load(); }catch(e){}
+        var go = function(){ v.removeEventListener('loadedmetadata', go); try{ if(t > 0.5) v.currentTime = t; }catch(e){} v.play().catch(function(){}); };
+        v.addEventListener('loadedmetadata', go);
+      }, 500 * v.__tries);
+      return;
+    }
+    v.__failed = true;
+    dialog('這部影片無法用內建播放器播放', '已經自動重試好幾次還是讀不到，網站可能有加密保護（DRM）或限制只能在它自己的頁面播放。要改回網頁裡播放嗎？', [['回網頁播放', function(){ webVideoBack(it, v.currentTime || it.t); }], ['關閉', null, '']]);
   };
+  v.addEventListener('timeupdate', function(){ if(v.currentTime > 0){ v.__lastT = v.currentTime; if(v.currentTime - (v.__okT || 0) > 20){ v.__okT = v.currentTime; v.__tries = 0; } } });
   if(it.kind === 'hls' && window.Hls && Hls.isSupported()){
     var hl = new Hls({maxBufferLength: 40, enableWorker: true});
     v.__hls = hl;
     hl.on(Hls.Events.ERROR, function(e, d){
       if(!d.fatal) return;
-      if(d.type === Hls.ErrorTypes.NETWORK_ERROR && !hl.__retry){ hl.__retry = 1; hl.startLoad(); return; }
+      if(d.type === Hls.ErrorTypes.NETWORK_ERROR && (hl.__retry || 0) < 4){ hl.__retry = (hl.__retry || 0) + 1; setTimeout(function(){ hl.startLoad(); }, 600 * hl.__retry); return; }
       if(d.type === Hls.ErrorTypes.MEDIA_ERROR && !hl.__rec){ hl.__rec = 1; hl.recoverMediaError(); return; }
       hl.destroy(); v.__hls = null;
       /* 換系統內建的 HLS 播放試試 */
@@ -646,7 +659,14 @@ function webVideoBack(it, t){
   if(isApp && NAT.has('vpRelease')) NAT.call('vpRelease', true);
   if(isApp) NAT.call('brRun', 'window.__wsVpBack&&window.__wsVpBack(' + (+t || 0) + ')', 'vpBack');
 }
+/* 下載正在看的網頁影片：打開跟懸浮下載鈕一樣的「媒體下載」，可以選畫質、格式、檔名（會自動帶影片標題和集數） */
 function webVideoDl(it){
+  if(isApp && typeof openMedia === 'function'){
+    var v = $('vwBody') && $('vwBody').querySelector('video');
+    MEDIA.inject = {url: it.url, kind: it.kind, audioUrl: it.audioSrc || '', ref: it.ref || '', dur: v && isFinite(v.duration) ? v.duration : 0, title: it.name};
+    openMedia(true);
+    return;
+  }
   var mo = CFG.media || {};
   var name = (it.name || '影片').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80);
   var item = it.audioSrc ? {url: it.url, audioUrl: it.audioSrc, container: 'mp4', kind: 'merge', name: name, variant: '', referer: it.ref || it.src, seq: 1}

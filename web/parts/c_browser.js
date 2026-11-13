@@ -285,7 +285,8 @@ async function openBmList(startFolder){
     selBar.classList.toggle('hide', !selMode);
     if(!selMode) return;
     var shown = curItems();
-    selBar.appendChild(h('b', {text: '已選 ' + picked.length + ' 個'}));
+    selBar.appendChild(h('button', {class: 'ib', html: icon('x'), title: '結束選取', onclick: function(){ exitSel(); }}));
+    selBar.appendChild(h('b', {text: picked.length ? '已選 ' + picked.length + ' 個' : '點選收藏'}));
     selBar.appendChild(h('span', {class: 'grow'}));
     selBar.appendChild(h('button', {class: 'chip', text: picked.length === shown.length && shown.length ? '全不選' : '全選', onclick: function(){ picked = picked.length === shown.length ? [] : shown.slice(); draw(); }}));
     selBar.appendChild(h('button', {class: 'ib', html: icon('folder'), title: '移到其他收藏夾', disabled: !picked.length, onclick: function(){
@@ -299,7 +300,8 @@ async function openBmList(startFolder){
         BM.trash = BM.trash.filter(function(x){ return !gone.some(function(g){ return g.url === x.url && x.deleted; }); });
         gone.slice().reverse().forEach(function(it){ BM.items.unshift(it); }); BM.save(); chips.redraw(); draw(); renderBr();
       }]);
-      exitSel(); chips.redraw(); renderBr();
+      /* 刪除後留在選取模式，可以接著選下一個 */
+      picked = []; draw(); chips.redraw(); renderBr();
     }}));
     selBar.appendChild(h('button', {class: 'ib', html: icon('x'), title: '取消', onclick: exitSel}));
     paintIcons(selBar);
@@ -326,7 +328,7 @@ async function openBmList(startFolder){
       var on = picked.indexOf(it) >= 0;
       var row = h('div', {class: 'bmItem' + (selMode ? ' selMode' : '') + (on ? ' picked' : ''), onclick: function(){
         if(row._lp){ row._lp = false; return; }
-        if(selMode){ var i = picked.indexOf(it); if(i >= 0) picked.splice(i, 1); else picked.push(it); if(!picked.length) selMode = false; draw(); return; }
+        if(selMode){ var i = picked.indexOf(it); if(i >= 0) picked.splice(i, 1); else picked.push(it); draw(); return; }
         s.close(); navigate(it.url);
       }},
         selMode ? h('span', {class: 'bmCk', html: on ? icon('check', 'sm') : ''}) : null,
