@@ -34,6 +34,8 @@ public class PageBridge {
 
     @JavascriptInterface public void webVideo(String json) { b.webVideo(json); }
 
+    @JavascriptInterface public void webVideoBlob(String json) { b.webVideoBlob(json); }
+
     @JavascriptInterface public void muState(String json) { MainActivity.emit("muState", json); }
     /** 聽歌辨識：頁面把正在播的聲音（不經麥克風）錄好後傳回來 */
     @JavascriptInterface public void tapAudio(String json) { MainActivity.emit("tapAudio", json); }

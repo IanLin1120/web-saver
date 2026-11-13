@@ -222,19 +222,25 @@ final class ListenFloat {
             try {
                 byte[] pcm = null;
                 if (mp != null && Build.VERSION.SDK_INT >= 29) {
-                    pcm = record(true, 10);
+                    pcm = record(true, 12);
                     if (pcm == null || rms(pcm) < 120) { pcm = null; }
                 }
-                if (pcm == null) { mode = "mic"; pcm = record(false, 9); }
+                if (pcm == null) { mode = "mic"; pcm = record(false, 10); }
                 if (pcm == null || pcm.length < 16000) throw new Exception("沒有錄到聲音");
                 setBubble("…", 0xF05C6B7A);
                 JSONObject r = ask(wav(pcm), "tap".equals(mode) ? pTap : pMic);
                 String title = r.optString("title").trim(), artist = r.optString("artist").trim(), ly = r.optString("lyrics").trim(), note = r.optString("note").trim();
-                boolean sure = r.optBoolean("found") && !title.isEmpty() && (!r.has("confidence") || r.optDouble("confidence", 1) >= 0.5);
-                String q = sure ? (title + " " + artist).trim() : ly.isEmpty() ? "" : ly.split("[\\n。！？!?]")[0];
-                if (q.length() > 40) q = q.substring(0, 40);
+                double conf = r.has("confidence") ? r.optDouble("confidence", 0.6) : 0.6;
+                /* 只有很確定（而且歌詞對得上）才直接給歌名；不確定時用聽到的歌詞搜尋，猜的歌名只當「可能是」 */
+                boolean sure = r.optBoolean("found") && !title.isEmpty() && conf >= 0.85 && (r.optBoolean("lyrics_match") || ly.isEmpty());
+                String lyQ = ly.isEmpty() ? "" : ly.split("[\\n。！？!?]")[0];
+                if (lyQ.length() > 40) lyQ = lyQ.substring(0, 40);
+                String guess = r.optBoolean("found") && !title.isEmpty() && conf >= 0.5 ? (title + " " + artist).trim() : "";
+                String q = sure ? (title + " " + artist).trim() : !lyQ.isEmpty() ? lyQ : guess;
                 if (q.isEmpty()) showCard("沒有辨識出來", note.isEmpty() ? "聽不出是哪首歌，也沒有聽到歌詞。等唱到人聲時再試一次。" : note, null, mode);
-                else { buzz(30); showCard(sure ? title : "用聽到的歌詞搜尋", sure ? (artist + (note.isEmpty() ? "" : "\n" + note)) : "「" + q + "」", q, mode); }
+                else if (sure) { buzz(30); showCard(title, artist + (note.isEmpty() ? "" : "\n" + note), q, mode); }
+                else if (!lyQ.isEmpty()) { buzz(30); showCard("用聽到的歌詞搜尋", "「" + lyQ + "」" + (guess.isEmpty() ? "" : "\n可能是：" + guess + "（不確定）"), q, mode); }
+                else { buzz(30); showCard("可能是這首（不確定）", guess + (note.isEmpty() ? "" : "\n" + note), q, mode); }
             } catch (Throwable t) {
                 showCard("沒有辨識出來", t.getMessage() == null ? "辨識失敗" : t.getMessage(), null, mode);
             } finally {

@@ -66,6 +66,8 @@ final class Browser {
     int progress = 100;
     private int lastInjectBucket = -1;
     Bitmap favicon;
+    /** 這個圖示是哪個網站的（只有跟目前網址同一個網站才算數，避免沿用上一個網頁或登入頁的圖示） */
+    String favHost;
 
     /* 設定（由網頁介面 br_config 傳入） */
     String mode = "mobile", popups = "smart";
@@ -391,7 +393,8 @@ final class Browser {
             }
             curUrl = url;
             curHost = hostOf(url);
-            favicon = fav;
+            /* WebView 給的快取圖示常常對不上（例如沿用登入頁的圖示），等這個網頁自己的圖示 */
+            favicon = null; favHost = null;
             AdBlock.blockedPage.set(0);
             synchronized (netMedia) { netMedia.clear(); }
             lastPlay = null;
@@ -496,7 +499,7 @@ final class Browser {
             emitState();
         }
 
-        @Override public void onReceivedIcon(WebView v, Bitmap icon) { if (!isPopup) favicon = icon; }
+        @Override public void onReceivedIcon(WebView v, Bitmap icon) { if (!isPopup) { favicon = icon; favHost = hostOf(v.getUrl()); } }
 
         @Override public boolean onCreateWindow(WebView v, boolean isDialog, boolean gesture, Message msg) {
             if ("block".equals(popups) || ("smart".equals(popups) && !gesture)) {
@@ -817,7 +820,7 @@ final class Browser {
 
     String faviconB64() {
         Bitmap f = favicon;
-        if (f == null) return "";
+        if (f == null || favHost == null || !favHost.equals(hostOf(curUrl))) return "";
         try {
             Bitmap s = Bitmap.createScaledBitmap(f, 48, 48, true);
             ByteArrayOutputStream o = new ByteArrayOutputStream();
@@ -1086,10 +1089,15 @@ final class Browser {
     /* ---------- 媒體偵測 ---------- */
     private void noteMedia(String url, Map<String, String> headers) {
         if (!MEDIA_RE.matcher(url).find()) return;
+        /* IG／FB 這類分段讀取同一個檔案（bytestart／byteend）：去掉位置參數，當成同一個完整檔案 */
+        for (int i = 0; i < 2; i++) url = url.replaceAll("([?&])(bytestart|byteend)=\\d+&?", "$1");
+        url = url.replaceAll("[?&]$", "");
         if (SEG_RE.matcher(url).find() && !url.toLowerCase().contains(".m3u8")) return;
         String key = url.replaceAll("#.*$", "");
         synchronized (netMedia) {
-            if (netMedia.containsKey(key) || netMedia.size() > 300) return;
+            JSONObject had = netMedia.get(key);
+            if (had != null) { try { had.put("last", System.currentTimeMillis()); } catch (Throwable t) { /* ignore */ } return; }
+            if (netMedia.size() > 300) return;
             try {
                 JSONObject o = new JSONObject();
                 o.put("url", url);
@@ -1097,6 +1105,7 @@ final class Browser {
                 o.put("kind", low.contains(".m3u8") ? "hls" : low.contains(".mpd") ? "dash" : low.matches(".*\\.(mp3|m4a|aac|ogg|oga|opus|wav|flac)(\\?.*|#.*)?$") ? "audio" : "video");
                 o.put("net", true);
                 o.put("t", System.currentTimeMillis());
+                o.put("last", System.currentTimeMillis());
                 netMedia.put(key, o);
             } catch (Throwable t) { return; }
         }
@@ -1121,6 +1130,63 @@ final class Browser {
         JSONObject p = hls != null ? hls : vid;
         if (p == null) return "";
         try { return new JSONObject().put("url", p.optString("url")).put("kind", p.optString("kind")).toString(); } catch (Throwable t) { return ""; }
+    }
+
+    /**
+     * 網頁用串流（blob:）播放：在背景找出「正在播的這一部」的來源。
+     * 依最近讀取的順序看候選檔，讀檔頭比對影片長度（避免拿到上一部或預先載入的下一部），
+     * 分辨純影像／純聲音（IG 影像和聲音是分開的兩個檔），找到就交給內建播放器，找不到就讓網頁繼續播。
+     */
+    void webVideoBlob(final String json) {
+        final String ref = curUrl;
+        final java.util.List<JSONObject> cand = new java.util.ArrayList<>();
+        synchronized (netMedia) { for (JSONObject o : netMedia.values()) { String k = o.optString("kind"); if ("hls".equals(k) || "video".equals(k) || "audio".equals(k)) cand.add(o); } }
+        java.util.Collections.sort(cand, new java.util.Comparator<JSONObject>() { @Override public int compare(JSONObject x, JSONObject y) { return Long.compare(y.optLong("last"), x.optLong("last")); } });
+        new Thread(new Runnable() { @Override public void run() {
+            try {
+                JSONObject o = new JSONObject(json);
+                double dur = o.optDouble("dur", 0);
+                boolean durOk = dur > 1 && !Double.isInfinite(dur) && !Double.isNaN(dur);
+                JSONObject best = null, bestA = null; double bestD = 1e9;
+                java.util.List<JSONObject[]> vids = new java.util.ArrayList<>(), auds = new java.util.ArrayList<>();
+                int probed = 0;
+                for (JSONObject c : cand) {
+                    if (probed >= 10) break;
+                    String u = c.optString("url"), k = c.optString("kind");
+                    JSONObject p = "hls".equals(k) ? VidProxy.probeHls(u, ref) : VidProxy.probeMp4(u, ref);
+                    probed++;
+                    if (p == null) continue;
+                    p.put("url", u).put("kind", "hls".equals(k) ? "hls" : "video");
+                    if (p.optBoolean("v") || "hls".equals(k)) vids.add(new JSONObject[] {p});
+                    else if (p.optBoolean("a")) auds.add(new JSONObject[] {p});
+                }
+                for (JSONObject[] w : vids) {
+                    JSONObject p = w[0];
+                    double d = p.optDouble("dur", 0);
+                    double diff = durOk && d > 0 ? Math.abs(d - dur) : (durOk ? 999 : 0);
+                    if (best == null || diff < bestD - 0.01) { best = p; bestD = diff; }
+                }
+                /* 有長度可以比時，差太多就不是這一部 */
+                if (best != null && durOk && best.optDouble("dur", 0) > 0 && bestD > Math.max(2.5, dur * 0.04)) best = null;
+                if (best == null) { resumePage(); return; }
+                if (!best.optBoolean("a", true) && !"hls".equals(best.optString("kind"))) {
+                    double bd = 1e9;
+                    for (JSONObject[] w : auds) {
+                        double d = w[0].optDouble("dur", 0);
+                        double diff = durOk && d > 0 ? Math.abs(d - dur) : 0;
+                        if (bestA == null || diff < bd) { bestA = w[0]; bd = diff; }
+                    }
+                }
+                o.put("src", best.optString("url")).put("kind", best.optString("kind"));
+                if (bestA != null) o.put("audio", VidProxy.wrap(bestA.optString("url"), ref)).put("audioSrc", bestA.optString("url"));
+                final String out = o.toString();
+                Util.MAIN.post(new Runnable() { @Override public void run() { webVideo(out); } });
+            } catch (Throwable t) { resumePage(); }
+        } }, "vp-pick").start();
+    }
+
+    private void resumePage() {
+        Util.MAIN.post(new Runnable() { @Override public void run() { try { wv.evaluateJavascript("window.__wsVpFail&&__wsVpFail()", null); } catch (Throwable t) { /* ignore */ } } });
     }
 
     /** 網頁上的影片改用 App 內建播放器播放 */

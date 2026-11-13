@@ -584,7 +584,8 @@ async function viewVideo(it, body){
   });
   show();
   Viewer.cleanup = function(){
-    try{ if(!it.web){ posM = lsGet('ws.vpos', {}); posM[it.id] = v.currentTime; lsSet('ws.vpos', posM); } v.pause(); if(v.__hls) v.__hls.destroy(); v.removeAttribute('src'); v.load(); }catch(e){}
+    try{ if(!it.web){ posM = lsGet('ws.vpos', {}); posM[it.id] = v.currentTime; lsSet('ws.vpos', posM); } v.pause(); if(v.__hls) v.__hls.destroy(); if(v.__aud){ v.__aud.pause(); v.__aud.removeAttribute('src'); } v.removeAttribute('src'); v.load(); }catch(e){}
+    if(it.web && isApp && !Viewer.__back) NAT.call('brRun', 'window.__wsVpHold=0', '');
     window.removeEventListener('resize', onRot);
     cancelAnimationFrame(subRaf);
     if(FS) setFs(false);
@@ -592,6 +593,20 @@ async function viewVideo(it, body){
 }
 /* ---------- 網頁影片用內建播放器播放 ---------- */
 function webVideoSrc(v, it){
+  /* 影像和聲音分開的網站（例如 IG）：另外放一個聲音，跟著影片同步 */
+  if(it.audio){
+    var a = new Audio(); a.preload = 'auto'; a.src = it.audio; v.__aud = a;
+    var sync = function(force){ if(Math.abs(a.currentTime - v.currentTime) > (force ? 0.05 : 0.3)) try{ a.currentTime = v.currentTime; }catch(e){} };
+    v.addEventListener('play', function(){ sync(true); a.play().catch(function(){}); });
+    v.addEventListener('playing', function(){ sync(true); if(a.paused) a.play().catch(function(){}); });
+    v.addEventListener('pause', function(){ a.pause(); });
+    v.addEventListener('waiting', function(){ a.pause(); });
+    v.addEventListener('seeked', function(){ sync(true); });
+    v.addEventListener('ratechange', function(){ a.playbackRate = v.playbackRate; });
+    v.addEventListener('volumechange', function(){ a.muted = v.muted; a.volume = v.volume; });
+    v.addEventListener('timeupdate', function(){ if(!v.paused) sync(false); });
+    v.addEventListener('ended', function(){ a.pause(); });
+  }
   var fail = function(){
     if(v.__failed) return; v.__failed = true;
     var d = dialog('這部影片無法用內建播放器播放', '網站可能有保護或用了特殊格式。要改回網頁裡播放嗎？', [['回網頁播放', function(){ webVideoBack(it, it.t); }], ['關閉', null, '']]);
@@ -619,7 +634,9 @@ function webVideoBack(it, t){
 function webVideoDl(it){
   var mo = CFG.media || {};
   var name = (it.name || '影片').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80);
-  var req = {page: it.src, title: it.name, items: [{url: it.url, kind: it.kind || 'video', name: name, variant: '', referer: it.src, seq: 1}],
+  var item = it.audioSrc ? {url: it.url, audioUrl: it.audioSrc, container: 'mp4', kind: 'merge', name: name, variant: '', referer: it.src, seq: 1}
+    : {url: it.url, kind: it.kind || 'video', name: name, variant: '', referer: it.src, seq: 1};
+  var req = {page: it.src, title: it.name, items: [item],
     opts: {imgFmt: mo.imgFmt, imgMax: +mo.imgMax || 0, imgQ: +mo.imgQ || 90, vidOut: mo.vidOut, vidQ: mo.vidQ, zip: false}};
   req.job = dlJobId(name);
   dlCard(0, 1, '準備下載…', 0);
@@ -637,7 +654,7 @@ function webVideoMenu(it){
 on('webVideo', function(d){
   if(!d || !d.play) return;
   if(typeof showView === 'function' && curView !== 'browse') return;
-  Viewer.open({id: 'web_' + Date.now(), web: true, cat: 'video', name: d.title || hostOf(d.ref) || '網頁影片', src: d.ref, url: d.src, play: d.play, kind: d.kind || 'video', t: +d.t || 0, w: d.w || 0, h: d.h || 0});
+  Viewer.open({id: 'web_' + Date.now(), web: true, cat: 'video', name: d.title || hostOf(d.ref) || '網頁影片', src: d.ref, url: d.src, play: d.play, audio: d.audio || '', audioSrc: d.audioSrc || '', kind: d.kind || 'video', t: +d.t || 0, w: d.w || 0, h: d.h || 0});
 });
 async function viewAudio(it, body){
   var t = Lib.thumb(it);

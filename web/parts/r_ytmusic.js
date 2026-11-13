@@ -238,8 +238,19 @@ function ytmuSearch(q){
    兩種都不會暫停正在播的影片或音樂。 */
 var LSN = {cb: null};
 on('tapAudio', function(d){ if(LSN.cb) LSN.cb(d || {}); });
-var LSN_JSON = '只回傳 JSON：{"found": true 或 false, "title": "歌名（原文）", "artist": "歌手／演出者（原文）", "lyrics": "你實際聽到的一兩句歌詞（原文照寫，沒有聽到人聲就留空）", "confidence": 0 到 1 的數字, "note": "一句話說明（繁體中文）"}\n' +
-  '規則：不確定是哪首歌時 found 填 false，不要亂猜歌名；但只要聽得到歌詞，lyrics 一定要照實寫下來（我會用歌詞去搜尋）。';
+var LSN_JSON = '只回傳 JSON：{"lyrics": "實際聽到的歌詞（原文逐字照寫，最多兩三句；聽不清楚的字不要自己補；沒有人聲就留空）", "found": true 或 false, "title": "歌名（原文）", "artist": "歌手／演出者（原文）", "lyrics_match": true 或 false（你確定聽到的歌詞就是這首歌的原歌詞才填 true）, "confidence": 0 到 1 的數字, "note": "一句話說明（繁體中文）"}\n' +
+  '規則：先專心聽寫歌詞，再判斷是哪首歌。只有在歌詞（或非常有名、你完全認得的旋律）明確對得上某首歌時 found 才填 true；只是曲風、語言、聲線、節奏像，都不算。不要拿同一位歌手的其他歌充數。翻唱或現場版填原曲名稱並在 note 說明。寧可 found 填 false 也不要猜錯；但只要聽得到歌詞，lyrics 一定要照實寫下來（我會用歌詞去搜尋）。';
+/* 判斷結果：只有很確定（而且歌詞對得上）才直接給歌名；不確定時優先用聽到的歌詞搜尋，猜的歌名只當「可能是」 */
+function lsnDecide(r){
+  r = r || {};
+  var title = String(r.title || '').trim(), artist = String(r.artist || '').trim(), ly = String(r.lyrics || '').trim();
+  var conf = r.confidence == null ? 0.6 : +r.confidence;
+  var sure = !!(r.found && title && conf >= 0.85 && (r.lyrics_match === true || !ly));
+  var lyQ = ly ? ly.split(/[\n。！？!?]/)[0].slice(0, 40) : '';
+  var guess = r.found && title && conf >= 0.5 ? (title + ' ' + artist).trim() : '';
+  var q = sure ? (title + ' ' + artist).trim() : lyQ || guess;
+  return {sure: sure, q: q, title: title, artist: artist, lyQ: lyQ, guess: sure ? '' : guess, note: r.note || ''};
+}
 function lsnPrompt(mode){ return (mode === 'tap' ? '這是一段從影片或音樂直接錄下的聲音（可能同時有人講話、音效或背景音樂）。請辨識裡面的音樂是哪一首歌。\n' : '這是一段用手機麥克風錄下的音樂（可能有環境雜音，也可能是有人在哼唱）。請辨識這是哪一首歌。\n') + LSN_JSON; }
 /* 懸浮聽歌：浮在其他 App 上的 ♫ 按鈕，點一下聽手機正在播的聲音（不支援或沒聲音就用麥克風） */
 function lsnFloatToggle(){
@@ -292,16 +303,16 @@ function ytmuListen(force){
         {audio: audio, signal: ctl.signal});
       if(done) return;
       r = r || {};
-      var title = String(r.title || '').trim(), artist = String(r.artist || '').trim(), ly = String(r.lyrics || '').trim();
-      var sure = r.found && title && (r.confidence == null || r.confidence >= 0.5);
-      var q = sure ? (title + ' ' + artist).trim() : ly ? ly.split(/[\n。！？!?]/)[0].slice(0, 40) : '';
+      var D = lsnDecide(r), sure = D.sure, q = D.q, title = D.title, artist = D.artist;
       if(!q){ fail(r.note || '聽不出是哪首歌，也沒有聽到歌詞。等唱到人聲時再試一次。'); return; }
       buzz(15);
       var goMu = function(){ if(!done) sheet.close(); ytmuSearch(q); };
       var goYt = function(){ if(!done) sheet.close(); showView('yt'); ytEnsure('https://m.youtube.com/results?search_query=' + encodeURIComponent(q)); };
       /* 在 YouTube Music 裡：自動去搜尋（不會中斷正在播的歌）。在 YouTube 看影片時：只顯示結果，不自動跳頁，影片繼續播 */
-      view(sure ? title : '用聽到的歌詞搜尋', sure ? (artist || '') : '「' + q + '」',
+      var goGuess = function(){ if(!done) sheet.close(); ytmuSearch(D.guess); };
+      view(sure ? title : D.lyQ ? '用聽到的歌詞搜尋' : '可能是這首（不確定）', sure ? (artist || '') : D.lyQ ? '「' + q + '」' : q,
         h('div', null,
+          !sure && D.lyQ && D.guess ? h('div', {class: 'sub', style: {textAlign: 'center', margin: '6px 0'}}, '可能是：', h('a', {href: '#', text: D.guess, onclick: function(e){ e.preventDefault(); goGuess(); }}), '（不確定）') : null,
           r.note ? h('div', {class: 'sub', style: {textAlign: 'center', margin: '6px 0'}, text: r.note}) : null,
           h('div', {class: 'btn-row', style: {justifyContent: 'center', flexWrap: 'wrap'}},
             h('button', {class: 'btn pri', html: icon('audio', 'sm') + '在 YouTube Music 搜尋', onclick: goMu}),

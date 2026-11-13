@@ -2016,5 +2016,9 @@
 "開啟懸浮聽歌（切到其他 App 也能用）": "Turn on floating song recognition (works in other apps)",
 "關閉懸浮聽歌": "Turn off floating song recognition",
 "關閉懸浮聽歌按鈕": "Turn off the floating song button",
-"馬上開始，可以邊看結果邊問問題；把 App 從最近使用清單滑掉會中斷": "Starts right away and you can ask questions as results come in; swiping the app away from recents stops it"
+"馬上開始，可以邊看結果邊問問題；把 App 從最近使用清單滑掉會中斷": "Starts right away and you can ask questions as results come in; swiping the app away from recents stops it",
+"AI 摘要在手機上分析中（可以關螢幕）": "AI summary analyzing on this phone (screen can be off)",
+"可能是這首（不確定）": "Possibly this song (not sure)",
+"可能是：": "Possibly: ",
+"（不確定）": " (not sure)"
 }

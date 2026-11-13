@@ -430,6 +430,15 @@ var AI_LISTEN_TRACK = {lang: 'ai', kind: 'ai', name: 'AI 聽寫（Gemini）', ur
 var AIJOB = {};
 Object.defineProperty(AI, 'gen', {get: function(){ return !!(AIJOB[AI.id] && AIJOB[AI.id].gen); }, set: function(){}});
 function aiJob(id){ return AIJOB[id] || (AIJOB[id] = {}); }
+/* 手機上分析中：整段工作期間都讓 App 保持在前景服務＋防休眠，螢幕關掉（App 沒被滑掉）也會跑完 */
+var AIKEEP = false;
+function aiKeepSync(){
+  var on = Object.keys(AIJOB).some(function(k){ var j = AIJOB[k]; return j.gen || j.listen || (j.prep && Date.now() - (j.prepT || 0) < 600000); }) || (typeof AIFIX !== 'undefined' && AIFIX.on);
+  if(on === AIKEEP || !isApp) return;
+  AIKEEP = on;
+  NAT.call('keep', 'aijob', on ? 'AI 摘要在手機上分析中（可以關螢幕）' : '');
+}
+setInterval(aiKeepSync, 60000);
 function aiBusyAny(){ return Object.keys(AIJOB).some(function(k){ return AIJOB[k].gen || AIJOB[k].listen; }); }
 function aiCacheMerge(id, patch){
   var c = aiDbGet(id) || {};
@@ -459,6 +468,7 @@ async function aiOpenVideo(id, opts){
   AI.cues = c && c.cues || []; AI.track = c && c.track || null; AI.tr = c && c.tr || ''; AI.tracks = []; AI.err = ''; AI.exp = false;
   AI.pmode = ''; AI.perr = 0; AI.curT = opts.t || 0;
   var J = aiJob(id);
+  if(opts.auto && !(c && c.ins)){ J.prep = true; J.prepT = Date.now(); aiKeepSync(); }
   AI.tab = AI.ins || J.gen ? (opts.tab || 'sum') : 'tr';
   AI.loading = AI.cues.length ? '' : (J.listen ? J.msg || 'AI 聽寫中…' : '讀取逐字稿…');
   aiRender();
@@ -494,11 +504,12 @@ async function aiOpenVideo(id, opts){
     if(e && e.code) aiErrDlg(e);
   }
   if(AI.id === id){ aiRender(); aiSetupPlayer(false); if(!aiUseVideo() && AI.cues.length) autoGo(); }
+  if(J.prep){ J.prep = false; aiKeepSync(); }
 }
 /* AI 聽寫逐字稿（背景工作） */
 async function aiListenJob(id, len){
   var J = aiJob(id); if(J.listen) return;
-  J.listen = true; J.msg = 'AI 正在看影片並聽寫逐字稿…';
+  J.listen = true; J.msg = 'AI 正在看影片並聽寫逐字稿…'; aiKeepSync();
   if(isApp) NAT.call('aiLabel', 'AI 聽寫逐字稿');
   var step = function(s){ J.msg = s; if(AI.id === id && AI.loading){ AI.loading = s; aiRenderPane(); } };
   try{
@@ -510,7 +521,7 @@ async function aiListenJob(id, len){
     if(AI.id === id && !AI.cues.length) AI.err = 'fail:' + (e.message || String(e));
     if(AI.id === id) aiErrDlg(e);
   }
-  J.listen = false;
+  J.listen = false; aiKeepSync();
   if(AI.id === id){ AI.loading = ''; aiRender(); aiSetupPlayer(false); }
 }
 async function aiListenNow(){
@@ -551,7 +562,7 @@ async function aiGenerate(){
   if(J.gen || !id) return;
   var video = AICFG.engine === 'gemini' && (AICFG.gmode === 'video' || !AI.cues.length);
   J.gen = true; J.msg = video ? 'Gemini 正在看整部影片分析（不用播放，可以關螢幕或切到別的 App）…' : 'AI 正在讀完整份逐字稿，通常要 20～90 秒…';
-  AI.tab = 'sum'; aiRender();
+  AI.tab = 'sum'; aiRender(); aiKeepSync();
   if(isApp) NAT.call('aiLabel', 'AI 摘要分析中');
   var prompt = aiInsPrompt(video, AI.info, AI.cues);
   var step = function(m){ J.msg = m; if(AI.id === id) aiRenderPane(); };
@@ -565,7 +576,7 @@ async function aiGenerate(){
     if(typeof buzz === 'function') buzz(30);
     aiNotifyDone(id, 'AI 摘要完成');
   }catch(e){ if(AI.id === id) aiErrDlg(e); else toast('AI 分析失敗：' + (e.message || e), true); }
-  J.gen = false;
+  J.gen = false; aiKeepSync();
   if(AI.id === id) aiRender();
 }
 async function aiSend(q){
@@ -1242,7 +1253,7 @@ function aiFixOpen(){
 async function aiFixRun(L){
   if(AIFIX.on) return;
   if(AICFG.engine === 'gemini' && !AICFG.gkey){ toast('要先設定 Gemini 金鑰', true); return; }
-  Object.assign(AIFIX, {on: true, stop: false, done: 0, total: L.length, ok: 0, fail: [], cur: ''});
+  Object.assign(AIFIX, {on: true, stop: false, done: 0, total: L.length, ok: 0, fail: [], cur: ''}); aiKeepSync();
   var wait = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };
   var busy = function(id){ var J = AIJOB[id]; return !!(J && (J.gen || J.listen)); };
   for(var i = 0; i < L.length && !AIFIX.stop; i++){
@@ -1272,7 +1283,7 @@ async function aiFixRun(L){
     AIFIX.done = i + 1;
     if(!AIFIX.stop && i < L.length - 1) await wait(4000);
   }
-  AIFIX.on = false; AIFIX.cur = '';
+  AIFIX.on = false; AIFIX.cur = ''; aiKeepSync();
   if(AI.id && AI.id === AIFIX.curId){ if(curView !== 'ai') aiClose(); else aiSetupPlayer(false); }
   AIFIX.curId = '';
   var msg = '補齊完成：成功 ' + AIFIX.ok + ' 部' + (AIFIX.fail.length ? '，失敗 ' + AIFIX.fail.length + ' 部' : '');

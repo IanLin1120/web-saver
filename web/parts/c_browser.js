@@ -141,6 +141,7 @@ on('br', function(d){
   }
   if(BR.url && !/^about:/.test(BR.url) && BR.home && urlChanged && BR.loaded){ BR.home = false; $('startPage').classList.add('hide'); updateBrVisible(); }
   renderBr();
+  bmIconFix();
 });
 on('mediaCount', function(d){ BR.mediaN = (d.dom || 0) + (d.net || 0); renderBr(); });
 on('openUrl', function(u){ u = String(u); if(isApp && YT.idOf(u)){ ytOpen('https://m.youtube.com/watch?v=' + YT.idOf(u)); return; } navigate(u); });
@@ -158,6 +159,43 @@ $('bMode').addEventListener('click', function(){
 });
 
 /* ---------- 收藏 ---------- */
+/* 收藏的網站圖示：App 給的圖示要是這個網站自己的；沒有就讀網頁宣告的圖示（或 /favicon.ico），縮成小圖存起來 */
+var BMICON_CB = null;
+on('bmIcon', function(v){ var f = BMICON_CB; BMICON_CB = null; if(f) f(typeof v === 'string' ? v : ''); });
+function bmIconNow(cb){
+  var nat = isApp ? (NAT.call('brFavicon') || '') : '';
+  if(nat){ cb(nat); return; }
+  if(!isApp){ cb(''); return; }
+  BMICON_CB = function(href){
+    if(!href || !/^https?:/.test(href)){ cb(''); return; }
+    var img = new Image(); img.crossOrigin = 'anonymous';
+    var done = false, end = function(v){ if(!done){ done = true; cb(v); } };
+    img.onload = function(){
+      try{ var c = document.createElement('canvas'); c.width = c.height = 48; c.getContext('2d').drawImage(img, 0, 0, 48, 48); end(c.toDataURL('image/png')); }catch(e){ end(''); }
+    };
+    img.onerror = function(){ end(''); };
+    setTimeout(function(){ end(''); }, 8000);
+    img.src = 'https://wslib.local/px?u=' + encodeURIComponent(href) + '&r=' + encodeURIComponent(BR.url || '');
+  };
+  NAT.call('brRun', '(function(){var L=[].slice.call(document.querySelectorAll(\'link[rel~="icon"],link[rel="apple-touch-icon"],link[rel="shortcut icon"]\'));' +
+    'L.sort(function(a,b){return (parseInt((b.sizes&&b.sizes.value)||"0")||0)-(parseInt((a.sizes&&a.sizes.value)||"0")||0)});' +
+    'var l=L.filter(function(x){return !/\\.svg(\\?|$)/i.test(x.href)})[0]||L[0];return l?l.href:location.origin+"/favicon.ico"})()', 'bmIcon');
+}
+/* 打開收藏過的網站時，順便把圖示換成這個網站自己的（修正之前存錯的圖示） */
+var BMICON_LAST = '';
+function bmIconFix(){
+  if(!isApp || !BR.url || BR.progress < 100 || BMICON_LAST === BR.url) return;
+  var host = hostOf(BR.url), L = BM.items.filter(function(x){ return hostOf(x.url) === host; });
+  if(!L.length) return;
+  BMICON_LAST = BR.url;
+  setTimeout(function(){
+    bmIconNow(function(ic){
+      if(!ic) return;
+      var ch = false; L.forEach(function(x){ if(x.icon !== ic){ x.icon = ic; ch = true; } });
+      if(ch) BM.save();
+    });
+  }, 1500);
+}
 var BM = lsGet('ws.bm', null) || {folders: [{id: 'f_def', name: '未分類', icon: '📁'}, {id: 'f_read', name: '稍後閱讀', icon: '📖'}], items: []};
 BM.trash = BM.trash || [];
 BM.save = function(){ lsSet('ws.bm', {folders: BM.folders, items: BM.items, trash: BM.trash}); };
@@ -210,6 +248,7 @@ function openStar(){
   if(!BR.url) return;
   var ex = BM.find(BR.url);
   var it = ex || {id: 'b' + uid(), url: BR.url, title: BR.title || BR.host, folder: lsGet('ws.lastFolder', BM.folders[0].id), time: Date.now(), icon: isApp ? (NAT.call('brFavicon') || '') : ''};
+  if(!ex && !it.icon) bmIconNow(function(ic){ if(ic){ it.icon = ic; if(BM.items.indexOf(it) >= 0) BM.save(); } });
   var sel = it.folder;
   var title = h('input', {type: 'text', value: it.title});
   var body = h('div', null,
