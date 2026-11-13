@@ -94,7 +94,12 @@ final class Browser {
     static final Pattern MEDIA_RE = Pattern.compile("(?i)\\.(m3u8|mpd|mp4|m4v|webm|mov|mp3|m4a|aac|ogg|oga|opus|wav|flac)(\\?|#|$)");
     static final Pattern SEG_RE = Pattern.compile("(?i)(\\.(ts|m4s|cmfv|cmfa)(\\?|#|$))|([/_-](seg|segment|chunk|frag)[-_]?\\d+)|(init\\.mp4)|(/range/)|([?&](range|bytes)=)");
 
-    private String injectBase, injectCapture, injectMedia, injectReader, injectYt;
+    private String injectBase, injectCapture, injectMedia, injectReader, injectYt, injectVp = "";
+    /** 內建播放器：網頁影片交出去後先停住；「改回網頁裡播放」的網頁；背景找來源的結果 */
+    volatile boolean vpHold = false;
+    volatile String vpOffUrl = "";
+    final java.util.Map<String, String> vpRes = java.util.Collections.synchronizedMap(new HashMap<String, String>());
+    private Object vpScript;
 
     /** 介面線上更新時，把最新的頁面腳本交給原生（不用重裝 APK 也能更新去廣告／播放器／擷取程式） */
     void setInject(String name, String code) {
@@ -104,6 +109,7 @@ final class Browser {
             case "capture": injectCapture = code; break;
             case "media": injectMedia = code; break;
             case "reader": injectReader = code; break;
+            case "vp": injectVp = code; regVp(wv); break;
             case "yt": injectYt = code; if (ytAds && curUrl != null && curUrl.contains("music.youtube.com") && wv != null) wv.evaluateJavascript(code, null); break;
             default: break;
         }
@@ -247,10 +253,12 @@ final class Browser {
         injectMedia = Util.asset(a, "inject/media.js");
         injectReader = Util.asset(a, "inject/reader.js");
         injectYt = Util.asset(a, "inject/yt.js");
+        try { injectVp = Util.asset(a, "inject/vp.js"); } catch (Throwable t) { injectVp = ""; }
         ytAds = p.getBoolean("ytAds", true);
         try { ytOpts = new JSONObject(p.getString("ytOpts", "{}")); } catch (Throwable t) { ytOpts = new JSONObject(); }
         if (ytTab) mode = "mobile";
         wv = makeWebView(false);
+        regVp(wv);
         /* 子母畫面、通知列控制要能直接繼續播放（不需要再點一下畫面） */
         wv.getSettings().setMediaPlaybackRequiresUserGesture(false);
         wv.setVisibility(View.GONE);
@@ -273,6 +281,19 @@ final class Browser {
             if (!(Boolean) f.getMethod("isFeatureSupported", String.class).invoke(null, "REQUESTED_WITH_HEADER_ALLOW_LIST")) return;
             Class.forName("androidx.webkit.WebSettingsCompat").getMethod("setRequestedWithHeaderOriginAllowList", WebSettings.class, java.util.Set.class)
                 .invoke(null, s, new java.util.HashSet<String>());
+        } catch (Throwable t) { /* ignore */ }
+    }
+
+    /** 內建播放器的腳本注入到每一個框架（包含嵌在網頁裡的其他網站播放器）；舊版 WebView 不支援時只注入主網頁 */
+    void regVp(WebView w) {
+        if (w == null || !"br".equals(tag) || injectVp == null || injectVp.length() < 50) return;
+        try {
+            Class<?> f = Class.forName("androidx.webkit.WebViewFeature");
+            if (!(Boolean) f.getMethod("isFeatureSupported", String.class).invoke(null, "DOCUMENT_START_SCRIPT")) return;
+            if (vpScript != null) { try { vpScript.getClass().getMethod("remove").invoke(vpScript); } catch (Throwable t) { /* ignore */ } vpScript = null; }
+            java.util.Set<String> all = new java.util.HashSet<>(); all.add("*");
+            vpScript = Class.forName("androidx.webkit.WebViewCompat").getMethod("addDocumentStartJavaScript", WebView.class, String.class, java.util.Set.class)
+                .invoke(null, w, injectVp, all);
         } catch (Throwable t) { /* ignore */ }
     }
 
@@ -459,7 +480,9 @@ final class Browser {
                 android.view.ViewGroup.LayoutParams lp = wv.getLayoutParams();
                 a.root.removeView(wv);
                 try { wv.destroy(); } catch (Throwable t) { /* ignore */ }
+                vpScript = null;
                 wv = makeWebView(false);
+                regVp(wv);
                 wv.getSettings().setMediaPlaybackRequiresUserGesture(false);
                 final float rad = Util.dp(a, 16);
                 wv.setOutlineProvider(new android.view.ViewOutlineProvider() {
@@ -609,7 +632,7 @@ final class Browser {
 
     void inject(WebView v, String extra) {
         if (v == null) return;
-        String code = cfgJs() + injectBase + (extra == null ? "" : ";" + extra);
+        String code = cfgJs() + injectBase + (extra == null ? "" : ";" + extra) + ("br".equals(tag) && injectVp != null ? ";" + injectVp : "");
         v.evaluateJavascript(code, null);
     }
 
@@ -1138,7 +1161,12 @@ final class Browser {
      * 分辨純影像／純聲音（IG 影像和聲音是分開的兩個檔），找到就交給內建播放器，找不到就讓網頁繼續播。
      */
     void webVideoBlob(final String json) {
-        final String ref = curUrl;
+        String r0 = curUrl;
+        try { String r1 = new JSONObject(json).optString("ref", ""); if (!r1.isEmpty()) r0 = r1; } catch (Throwable t) { /* ignore */ }
+        final String ref = r0;
+        String tk = "";
+        try { tk = new JSONObject(json).optString("tok", ""); } catch (Throwable t) { /* ignore */ }
+        final String tok = tk;
         final java.util.List<JSONObject> cand = new java.util.ArrayList<>();
         synchronized (netMedia) { for (JSONObject o : netMedia.values()) { String k = o.optString("kind"); if ("hls".equals(k) || "video".equals(k) || "audio".equals(k)) cand.add(o); } }
         java.util.Collections.sort(cand, new java.util.Comparator<JSONObject>() { @Override public int compare(JSONObject x, JSONObject y) { return Long.compare(y.optLong("last"), x.optLong("last")); } });
@@ -1147,7 +1175,7 @@ final class Browser {
                 JSONObject o = new JSONObject(json);
                 double dur = o.optDouble("dur", 0);
                 boolean durOk = dur > 1 && !Double.isInfinite(dur) && !Double.isNaN(dur);
-                JSONObject best = null, bestA = null; double bestD = 1e9;
+                JSONObject best = null, bestA = null;
                 java.util.List<JSONObject[]> vids = new java.util.ArrayList<>(), auds = new java.util.ArrayList<>();
                 int probed = 0;
                 for (JSONObject c : cand) {
@@ -1160,15 +1188,18 @@ final class Browser {
                     if (p.optBoolean("v") || "hls".equals(k)) vids.add(new JSONObject[] {p});
                     else if (p.optBoolean("a")) auds.add(new JSONObject[] {p});
                 }
+                /* 候選已照最近讀取排序：長度對得上的取最新的那個；都對不上時，取長度未知的最新一個 */
+                double tol = durOk ? Math.max(2.5, dur * 0.04) : 0;
+                JSONObject unk = null;
                 for (JSONObject[] w : vids) {
                     JSONObject p = w[0];
                     double d = p.optDouble("dur", 0);
-                    double diff = durOk && d > 0 ? Math.abs(d - dur) : (durOk ? 999 : 0);
-                    if (best == null || diff < bestD - 0.01) { best = p; bestD = diff; }
+                    if (!durOk) { best = p; break; }
+                    if (d > 0 && Math.abs(d - dur) <= tol) { best = p; break; }
+                    if (d <= 0 && unk == null) unk = p;
                 }
-                /* 有長度可以比時，差太多就不是這一部 */
-                if (best != null && durOk && best.optDouble("dur", 0) > 0 && bestD > Math.max(2.5, dur * 0.04)) best = null;
-                if (best == null) { resumePage(); return; }
+                if (best == null) best = unk;
+                if (best == null) { if (!tok.isEmpty()) vpRes.put(tok, "fail"); resumePage(); return; }
                 if (!best.optBoolean("a", true) && !"hls".equals(best.optString("kind"))) {
                     double bd = 1e9;
                     for (JSONObject[] w : auds) {
@@ -1179,9 +1210,11 @@ final class Browser {
                 }
                 o.put("src", best.optString("url")).put("kind", best.optString("kind"));
                 if (bestA != null) o.put("audio", VidProxy.wrap(bestA.optString("url"), ref)).put("audioSrc", bestA.optString("url"));
+                o.put("ref", ref);
                 final String out = o.toString();
+                if (!tok.isEmpty()) vpRes.put(tok, "ok");
                 Util.MAIN.post(new Runnable() { @Override public void run() { webVideo(out); } });
-            } catch (Throwable t) { resumePage(); }
+            } catch (Throwable t) { if (!tok.isEmpty()) vpRes.put(tok, "fail"); resumePage(); }
         } }, "vp-pick").start();
     }
 
@@ -1195,8 +1228,12 @@ final class Browser {
             JSONObject o = new JSONObject(json);
             String u = o.optString("src");
             if (!u.startsWith("http")) return;
-            o.put("ref", curUrl == null ? "" : curUrl);
-            o.put("play", VidProxy.wrap(u, curUrl));
+            String ref = o.optString("ref", "");
+            if (ref.isEmpty()) ref = curUrl == null ? "" : curUrl;
+            o.put("ref", ref);
+            o.put("page", curUrl == null ? "" : curUrl);
+            o.put("play", VidProxy.wrap(u, ref));
+            vpHold = true;
             MainActivity.emit("webVideo", o.toString());
         } catch (Throwable t) { /* ignore */ }
     }

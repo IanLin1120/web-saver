@@ -36,6 +36,14 @@ public class PageBridge {
 
     @JavascriptInterface public void webVideoBlob(String json) { b.webVideoBlob(json); }
 
+    /** 內建播放器開著嗎（設定開、是主瀏覽器、這個網頁沒有選「改回網頁裡播放」） */
+    @JavascriptInterface public boolean vpOn() {
+        return "br".equals(b.tag) && !"0".equals(b.a.prefs.getString("u_webVp", "1")) && (b.vpOffUrl.isEmpty() || !b.vpOffUrl.equals(b.curUrl));
+    }
+    @JavascriptInterface public boolean vpHeld() { return b.vpHold; }
+    @JavascriptInterface public void vpHold(boolean on) { b.vpHold = on; }
+    @JavascriptInterface public String vpResult(String tok) { String r = b.vpRes.get(tok); return r == null ? "" : r; }
+
     @JavascriptInterface public void muState(String json) { MainActivity.emit("muState", json); }
     /** 聽歌辨識：頁面把正在播的聲音（不經麥克風）錄好後傳回來 */
     @JavascriptInterface public void tapAudio(String json) { MainActivity.emit("tapAudio", json); }

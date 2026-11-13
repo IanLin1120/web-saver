@@ -150,6 +150,13 @@ final class VidProxy {
         out.put("Access-Control-Allow-Origin", "*");
         out.put("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges");
         String range = header(reqH, "Range");
+        /* 播放器要「從某個位置讀到最後」時，改成一次讀一段（4MB）：
+           不會一直佔著一條連線，影片網站也不會因為閒置太久把連線切掉（之前播到一半聲音或畫面突然斷掉） */
+        boolean playlist = url.toLowerCase().matches(".*\\.m3u8(\\?.*|#.*)?$");
+        if (range != null && !playlist) {
+            Matcher rm = Pattern.compile("bytes=(\\d+)-\\s*$").matcher(range.trim());
+            if (rm.find()) { long st = Long.parseLong(rm.group(1)); range = "bytes=" + st + "-" + (st + (4L << 20) - 1); }
+        }
         HttpURLConnection c = null;
         String cur = url;
         for (int hop = 0; hop < 6; hop++) {

@@ -441,6 +441,8 @@ public class Bridge {
         } catch (Throwable t) { micStop0(); return false; }
     }
     private void micStop0() { try { if (micRec != null) { try { micRec.stop(); } catch (Throwable t) { /* 太短 */ } micRec.release(); } } catch (Throwable t) { /* ignore */ } micRec = null; }
+    /** 內建播放器關掉：網頁裡的影片可以再播了；off＝這個網頁之後都用網頁自己的播放器 */
+    @JavascriptInterface public void vpRelease(boolean off) { if (a.br != null) { a.br.vpHold = false; if (off) a.br.vpOffUrl = a.br.curUrl == null ? "" : a.br.curUrl; } }
     @JavascriptInterface public void lsnFloat(final String cmd, final String cfg) {
         ui(new Runnable() { @Override public void run() { if ("stop".equals(cmd)) ListenFloat.stop(); else ListenFloat.start(a, cfg); } });
     }

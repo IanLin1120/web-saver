@@ -585,7 +585,7 @@ async function viewVideo(it, body){
   show();
   Viewer.cleanup = function(){
     try{ if(!it.web){ posM = lsGet('ws.vpos', {}); posM[it.id] = v.currentTime; lsSet('ws.vpos', posM); } v.pause(); if(v.__hls) v.__hls.destroy(); if(v.__aud){ v.__aud.pause(); v.__aud.removeAttribute('src'); } v.removeAttribute('src'); v.load(); }catch(e){}
-    if(it.web && isApp && !Viewer.__back) NAT.call('brRun', 'window.__wsVpHold=0', '');
+    if(it.web && isApp){ if(NAT.has('vpRelease')) NAT.call('vpRelease', false); NAT.call('brRun', 'window.__wsVpHold=0', ''); }
     window.removeEventListener('resize', onRot);
     cancelAnimationFrame(subRaf);
     if(FS) setFs(false);
@@ -606,6 +606,20 @@ function webVideoSrc(v, it){
     v.addEventListener('volumechange', function(){ a.muted = v.muted; a.volume = v.volume; });
     v.addEventListener('timeupdate', function(){ if(!v.paused) sync(false); });
     v.addEventListener('ended', function(){ a.pause(); });
+    /* 聲音中途斷掉（連線被切、讀取卡住）：自動重新接上，從影片目前的位置繼續 */
+    var lastA = -1, stuck = 0, reload = function(){
+      var t = v.currentTime; try{ a.src = it.audio; a.load(); a.currentTime = t; }catch(e){}
+      if(!v.paused) a.play().catch(function(){});
+    };
+    a.addEventListener('error', function(){ setTimeout(reload, 400); });
+    a.addEventListener('ended', function(){ if(!v.ended && v.duration && v.currentTime < v.duration - 1.5) reload(); });
+    var wd = setInterval(function(){
+      if(!v.isConnected){ clearInterval(wd); return; }
+      if(v.paused || v.readyState < 3){ stuck = 0; return; }
+      if(a.paused){ sync(true); a.play().catch(function(){}); }
+      if(Math.abs(a.currentTime - lastA) < 0.01){ if(++stuck >= 3){ stuck = 0; reload(); } } else stuck = 0;
+      lastA = a.currentTime;
+    }, 1000);
   }
   var fail = function(){
     if(v.__failed) return; v.__failed = true;
@@ -629,13 +643,14 @@ function webVideoSrc(v, it){
 }
 function webVideoBack(it, t){
   Viewer.close();
+  if(isApp && NAT.has('vpRelease')) NAT.call('vpRelease', true);
   if(isApp) NAT.call('brRun', 'window.__wsVpBack&&window.__wsVpBack(' + (+t || 0) + ')', 'vpBack');
 }
 function webVideoDl(it){
   var mo = CFG.media || {};
   var name = (it.name || '影片').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80);
-  var item = it.audioSrc ? {url: it.url, audioUrl: it.audioSrc, container: 'mp4', kind: 'merge', name: name, variant: '', referer: it.src, seq: 1}
-    : {url: it.url, kind: it.kind || 'video', name: name, variant: '', referer: it.src, seq: 1};
+  var item = it.audioSrc ? {url: it.url, audioUrl: it.audioSrc, container: 'mp4', kind: 'merge', name: name, variant: '', referer: it.ref || it.src, seq: 1}
+    : {url: it.url, kind: it.kind || 'video', name: name, variant: '', referer: it.ref || it.src, seq: 1};
   var req = {page: it.src, title: it.name, items: [item],
     opts: {imgFmt: mo.imgFmt, imgMax: +mo.imgMax || 0, imgQ: +mo.imgQ || 90, vidOut: mo.vidOut, vidQ: mo.vidQ, zip: false}};
   req.job = dlJobId(name);
@@ -654,7 +669,7 @@ function webVideoMenu(it){
 on('webVideo', function(d){
   if(!d || !d.play) return;
   if(typeof showView === 'function' && curView !== 'browse') return;
-  Viewer.open({id: 'web_' + Date.now(), web: true, cat: 'video', name: d.title || hostOf(d.ref) || '網頁影片', src: d.ref, url: d.src, play: d.play, audio: d.audio || '', audioSrc: d.audioSrc || '', kind: d.kind || 'video', t: +d.t || 0, w: d.w || 0, h: d.h || 0});
+  Viewer.open({id: 'web_' + Date.now(), web: true, cat: 'video', name: d.title || BR.title || hostOf(d.page || d.ref) || '網頁影片', src: d.page || d.ref, ref: d.ref, url: d.src, play: d.play, audio: d.audio || '', audioSrc: d.audioSrc || '', kind: d.kind || 'video', t: +d.t || 0, w: d.w || 0, h: d.h || 0});
 });
 async function viewAudio(it, body){
   var t = Lib.thumb(it);
