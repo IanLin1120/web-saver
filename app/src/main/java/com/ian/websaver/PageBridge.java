@@ -32,6 +32,12 @@ public class PageBridge {
     @JavascriptInterface public void blobChunk(String tok, String b64, boolean last, String name, String mime) { b.blobChunk(tok, b64, last, name, mime); }
     @JavascriptInterface public String pickStream() { return b.pickStream(); }
 
+    /** 網頁裡按了「分享」或「複製連結」（IG、FB、Threads、TikTok…的貼文）：交給 App 問你要怎麼下載 */
+    @JavascriptInterface public void sharedLink(String json) {
+        if (!"br".equals(b.tag)) return;
+        MainActivity.emit("pageShare", json);
+    }
+
     @JavascriptInterface public void webVideo(String json) { b.webVideo(json); }
 
     @JavascriptInterface public void webVideoBlob(String json) { b.webVideoBlob(json); }

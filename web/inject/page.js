@@ -18,6 +18,40 @@
       try { B.video(on && !v.paused, v.videoWidth || 0, v.videoHeight || 0); } catch (x) {}
     };
     ['play', 'playing', 'pause', 'ended', 'emptied'].forEach(function (t) { document.addEventListener(t, rep, true); });
+    /* 網頁裡按「分享」或「複製連結」：社群貼文（IG、FB、Threads、TikTok、X…）交給 App，問你要用內建下載還是交給其他 App 下載 */
+    if (!window.__wsShareHook && B.sharedLink) {
+      window.__wsShareHook = 1;
+      var SOC = /^https?:\/\/([a-z0-9-]+\.)*(instagram\.com\/([^/?#]+\/)?(p|reel|reels|tv|stories)\/|facebook\.com\/|fb\.watch\/|fb\.com\/|threads\.(net|com)\/|tiktok\.com\/|x\.com\/[^/]+\/status|twitter\.com\/[^/]+\/status|xiaohongshu\.com\/|xhslink\.com\/|douyin\.com\/|bilibili\.com\/video|b23\.tv\/|pinterest\.[a-z.]+\/pin\/|pin\.it\/|weibo\.(com|cn)\/|reddit\.com\/r\/[^/]+\/comments|v\.redd\.it\/|vimeo\.com\/\d|dailymotion\.com\/video|kuaishou\.com\/|snapchat\.com\/(spotlight|t)\/|tumblr\.com\/|dcard\.tw\/f\/[^/]+\/p\/|lemon8-app\.com\/)/i;
+      var lastShare = '', lastShareT = 0;
+      var share = function (t, title, via) {
+        var m = String(t || '').match(/https?:\/\/[^\s"'<>]+/);
+        if (!m) return false;
+        var u = m[0];
+        if (!via && !SOC.test(u)) return false;
+        if (u === lastShare && Date.now() - lastShareT < 2000) return true;
+        lastShare = u; lastShareT = Date.now();
+        try { B.sharedLink(JSON.stringify({url: u, title: title || document.title || '', via: via ? 'share' : 'copy'})); } catch (x) {}
+        return true;
+      };
+      try {
+        var cb = navigator.clipboard;
+        if (cb && cb.writeText) { var ow = cb.writeText.bind(cb); cb.writeText = function (t) { share(t); return ow(t); }; }
+      } catch (x) {}
+      try {
+        var oe = document.execCommand;
+        document.execCommand = function (c) {
+          if (String(c).toLowerCase() === 'copy') { try { var s = String(window.getSelection() || ''); var ae = document.activeElement; if (!s && ae && ae.value) s = ae.value; share(s); } catch (x) {} }
+          return oe.apply(document, arguments);
+        };
+      } catch (x) {}
+      /* WebView 沒有系統分享（navigator.share）：補上，網站的「分享」鈕就會交給 App */
+      if (!navigator.share) {
+        try {
+          navigator.share = function (d) { d = d || {}; share(d.url || d.text || location.href, d.title, true); return Promise.resolve(); };
+          navigator.canShare = function () { return true; };
+        } catch (x) {}
+      }
+    }
     /* 網頁影片改用內建播放器的部分在 vp.js（所有框架都會注入，嵌在別的網站框框裡的影片也能接手） */
     window.addEventListener('pagehide', function () { try { B.video(false, 0, 0); } catch (x) {} });
     var pst = null, anc = [];

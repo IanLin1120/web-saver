@@ -56,8 +56,13 @@ final class Importer {
         } catch (Throwable t) { /* ignore */ }
     }
 
-    private static boolean media(String n) {
-        return n.matches("(?i).+\\.(mp4|m4v|webm|mkv|mov|3gp|ts|mp3|m4a|aac|opus|ogg|flac|wav|srt|vtt|ass)$");
+    /** 要搬回的檔案：影片、音樂、字幕，還有圖片、文件、壓縮檔、安裝檔（之前只認影片和音樂，圖片不會搬回） */
+    private static boolean media(String n, String mime) {
+        if (n.matches("(?i).+\\.(mp4|m4v|webm|mkv|mov|3gp|ts|avi|wmv|flv|mp3|m4a|aac|opus|ogg|flac|wav|wma|srt|vtt|ass"
+            + "|jpe?g|png|webp|gif|heic|heif|avif|bmp|tiff?|jfif"
+            + "|pdf|epub|txt|docx?|xlsx?|pptx?|csv|odt|ods|odp|rtf"
+            + "|zip|rar|7z|tar|gz|apk|apks|xapk|exe|msi|html?|mhtml)$")) return true;
+        return mime != null && (mime.startsWith("image/") || mime.startsWith("video/") || mime.startsWith("audio/") || "application/pdf".equals(mime));
     }
 
     private static boolean temp(String n) {
@@ -111,7 +116,7 @@ final class Importer {
             /* 先處理影片／音樂，再把同名字幕接到影片上 */
             List<Doc> subs = new ArrayList<>(), mains = new ArrayList<>();
             for (Doc x : all) {
-                if (temp(x.name) || !media(x.name) || x.size <= 0) continue;
+                if (temp(x.name) || !media(x.name, x.mime) || x.size <= 0 || ".nomedia".equals(x.name)) continue;
                 /* 還在寫入的檔案：大小要連續兩次一樣、而且 6 秒內沒有修改 */
                 Long prev = SEEN.put(x.id, x.size);
                 boolean stable = (prev != null && prev == x.size) || (force && now - x.mod > 6000);

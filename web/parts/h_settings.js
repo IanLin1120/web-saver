@@ -45,6 +45,7 @@ function renderSettings(){
   var cssTa = h('textarea', {placeholder: '每行一個 CSS 選擇器，例如：\n.sponsor-box\n#floating-banner'}); cssTa.value = CFG.adCss || '';
   var allowTa = h('textarea', {placeholder: '每行一個網域，這些網站不阻擋廣告', style: {minHeight: '60px'}}); allowTa.value = CFG.adAllow || '';
   P.appendChild(card('shield', '廣告阻擋', [
+    swRow('複製社群貼文連結時詢問怎麼下載', '在 IG、FB、Threads、TikTok 等網站按「複製連結」時，跳出「用內建下載／交給其他 App 下載」；按網站的「分享」鈕一定會詢問', 'shareAsk'),
     swRow('啟用廣告阻擋', isApp ? '內建 ' + (st.rules || '200+') + ' 個廣告／追蹤網域規則，累計已阻擋 ' + (st.blockedTotal || 0) + ' 次' : '擷取時依規則移除廣告元素', 'ads'),
     h('div', {class: 'field'}, h('div', {class: 'lbl'}, '自訂封鎖網域'), hostsTa),
     h('div', {class: 'field'}, h('div', {class: 'lbl'}, '自訂隱藏元素（CSS 選擇器）'), cssTa),

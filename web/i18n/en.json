@@ -2033,5 +2033,16 @@
 "懸浮下載鈕：關（點一下打開）": "Floating download button: off (tap to turn on)",
 "網址／搜尋": "Address / search",
 "輸入文字搜尋，或貼上網址": "Type to search, or paste an address",
-"（首頁）": "(Home)"
+"（首頁）": "(Home)",
+"下載這則貼文": "Download this post",
+"之後按網站的「分享」鈕還是會詢問；也可以到設定重新打開": "The site's \"Share\" button still asks; you can turn this back on in Settings",
+"分享到其他 App": "Share to another app",
+"在 IG、FB、Threads、TikTok 等網站按「複製連結」時，跳出「用內建下載／交給其他 App 下載」；按網站的「分享」鈕一定會詢問": "When you tap \"Copy link\" on IG, FB, Threads, TikTok and similar sites, ask whether to download in the app or with another app; the site's \"Share\" button always asks",
+"已複製連結": "Link copied",
+"打開貼文中，載入後會自動偵測圖片和影片…": "Opening the post; pictures and videos are detected once it loads…",
+"打開這則貼文，偵測裡面的圖片和影片讓你挑選（畫質、格式、檔名都能選）": "Opens the post and detects its pictures and videos for you to pick (quality, format and file name are all adjustable)",
+"用 App 內建下載": "Download with the app",
+"複製社群貼文連結時詢問怎麼下載": "Ask how to download when copying a social post link",
+"複製連結": "Copy link",
+"複製連結時不要再詢問": "Don't ask when copying links"
 }

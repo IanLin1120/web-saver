@@ -230,10 +230,51 @@ on('shareDl', function(u){
   u = String(u || '');
   var id = YT.idOf(u);
   if(id){ ytOpen('https://m.youtube.com/watch?v=' + id); openYt(id); return; }
-  navigate(u);
-  toast('網頁載入後會自動偵測可下載的影片…');
-  setTimeout(function(){ openMedia(true); }, 4500);
+  /* 從 IG、FB、Threads 等 App 分享進來：讓你選用內建下載還是交給其他 App 下載 */
+  if(curView !== 'browse') showView('browse');
+  postDlSheet(u, '', 'app');
 });
+/* ---------- 分享進來的貼文（IG、FB、Threads、TikTok、X…）：選擇怎麼下載 ---------- */
+on('pageShare', function(d){
+  if(!d || !d.url) return;
+  if(d.via !== 'share' && CFG.shareAsk === false) return;
+  postDlSheet(d.url, d.title || '', d.via || 'copy');
+});
+function postDlInternal(url){
+  var same = BR.url && BR.url.split(/[?#]/)[0].replace(/\/$/, '') === url.split(/[?#]/)[0].replace(/\/$/, '');
+  if(same){ openMedia(true); return; }
+  navigate(url);
+  toast('打開貼文中，載入後會自動偵測圖片和影片…');
+  var t0 = Date.now(), seenLoad = false;
+  var iv = setInterval(function(){
+    if(BR.progress < 100) seenLoad = true;
+    var ok = seenLoad && BR.progress >= 100 && BR.url && !BR.home;
+    if(ok || Date.now() - t0 > 15000){ clearInterval(iv); setTimeout(function(){ openMedia(true); }, ok ? 2200 : 0); }
+  }, 400);
+}
+function postDlSheet(url, title, via){
+  var host = hostOf(url).replace(/^(www|m)\./, '');
+  var body = h('div');
+  var s = openSheet({title: '下載這則貼文', icon: 'download', body: body});
+  body.appendChild(h('div', {class: 'card glass', style: {padding: '10px 12px', marginBottom: '12px'}},
+    h('b', {class: 'ell', style: {display: 'block'}, text: title || host}),
+    h('div', {class: 'sub', style: {wordBreak: 'break-all', fontSize: '12px', marginTop: '2px'}, text: url})));
+  body.appendChild(h('div', {class: 'setRow', onclick: function(){ s.close(); postDlInternal(url); }},
+    h('span', {class: 'ic', html: icon('download')}),
+    h('div', {class: 'grow'}, h('b', {text: '用 App 內建下載'}), h('div', {class: 'sub', text: '打開這則貼文，偵測裡面的圖片和影片讓你挑選（畫質、格式、檔名都能選）'})),
+    h('span', {class: 'chev', text: '›'})));
+  var ho = handOffButtons(url, function(){ s.close(); });
+  if(ho) body.appendChild(h('div', {style: {marginTop: '8px'}}, ho));
+  var foot = h('div', {class: 'btn-row', style: {marginTop: '12px'}},
+    h('button', {class: 'btn', html: icon('copy', 'sm') + (via === 'copy' ? '已複製連結' : '複製連結'), onclick: function(){ copyText(url); s.close(); }}),
+    isApp ? h('button', {class: 'btn', html: icon('share', 'sm') + '分享到其他 App', onclick: function(){ s.close(); NAT.call('share', title || '', url); }}) : null);
+  body.appendChild(foot);
+  if(via === 'copy'){
+    var ask = h('input', {type: 'checkbox', checked: CFG.shareAsk === false, onchange: function(){ setCfg('shareAsk', !this.checked); }});
+    body.appendChild(h('label', {class: 'opt', style: {marginTop: '8px'}}, ask, h('div', {class: 'grow'}, h('b', {text: '複製連結時不要再詢問'}), h('div', {class: 'sub', text: '之後按網站的「分享」鈕還是會詢問；也可以到設定重新打開'}))));
+  }
+  paintIcons(body);
+}
 
 /* ---------- 懸浮下載按鈕（浮在所有畫面與彈出視窗上，可拖曳） ---------- */
 var FAB = {popup: false};

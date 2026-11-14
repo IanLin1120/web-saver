@@ -10,6 +10,7 @@ var CFG_DEF = {
   ytAds: true,
   yt: {bg: true, pip: true, sb: true, q: 'max', gest: true, bar: true, speed: true, skin: true, ryd: true, noShorts: false, codec: 'vp9'},
   fab: true,
+  shareAsk: true,
   webVp: true,
   lib: {sort: 'time', dir: 'desc', view: 'grid', cat: 'all'},
   autoExport: false,
