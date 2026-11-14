@@ -2023,5 +2023,15 @@
 "（不確定）": " (not sure)",
 "已經自動重試好幾次還是讀不到，網站可能有加密保護（DRM）或限制只能在它自己的頁面播放。要改回網頁裡播放嗎？": "It still can't load after several automatic retries. The site may use encryption (DRM) or only allow playback on its own page. Play it in the page instead?",
 "結束選取": "Done selecting",
-"點選收藏": "Tap bookmarks to select"
+"點選收藏": "Tap bookmarks to select",
+"① 搜尋：展開網址框，可以複製網址、重新整理、輸入文字搜尋　② 懸浮下載鈕開關　③ 內建播放器開關　④ 功能選單": "① Search: opens the address box to copy the address, reload, or search　② Floating download button on/off　③ Built-in player on/off　④ Menu",
+"內建播放器（點一下開／關）": "Built-in player (tap to turn on/off)",
+"內建播放器：開（點一下關閉）": "Built-in player: on (tap to turn off)",
+"內建播放器：關（點一下打開）": "Built-in player: off (tap to turn on)",
+"懸浮下載鈕（點一下開／關）": "Floating download button (tap to turn on/off)",
+"懸浮下載鈕：開（點一下關閉）": "Floating download button: on (tap to turn off)",
+"懸浮下載鈕：關（點一下打開）": "Floating download button: off (tap to turn on)",
+"網址／搜尋": "Address / search",
+"輸入文字搜尋，或貼上網址": "Type to search, or paste an address",
+"（首頁）": "(Home)"
 }

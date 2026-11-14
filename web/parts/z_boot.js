@@ -14,6 +14,7 @@ window.onNativeBack = function(){
   if(Viewer.isOpen()){ Viewer.close(); return true; }
   if(LV.selMode){ LV.selMode = false; LV.sel.clear(); renderLib(); return true; }
   if(BR.zap){ $('bZap').click(); return true; }
+  if(!$('urlPop').classList.contains('hide')){ urlPop(false); return true; }
   if(document.activeElement === urlIn){ urlIn.blur(); return true; }
   /* YouTube 分頁：返回＝YouTube 的上一頁，不會跳到「瀏覽」分頁 */
   if(curView === 'yt'){
@@ -43,7 +44,7 @@ window.onNativeBack = function(){
 };
 document.addEventListener('keydown', function(e){
   if(e.key === 'Escape' && window.onNativeBack()) e.preventDefault();
-  if((e.ctrlKey || e.metaKey) && e.key === 'l'){ e.preventDefault(); showView('browse'); urlIn.focus(); }
+  if((e.ctrlKey || e.metaKey) && e.key === 'l'){ e.preventDefault(); showView('browse'); urlPop(true); }
 });
 
 (async function boot(){

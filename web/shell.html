@@ -7,13 +7,26 @@
       <button class="ib" id="bFwd" title="下一頁" data-ic="fwd"></button>
       <button class="ib" id="bHome" title="首頁" data-ic="home"></button>
       <button class="ib" id="bTabs" title="分頁"><span id="tabN">1</span></button>
-      <div class="url" id="urlBox"><span id="incogBadge">無痕</span>
+      <button class="ib" id="bSearch" title="網址／搜尋" data-ic="search"></button>
+      <button class="ib tgl" id="bFabT" title="懸浮下載鈕（點一下開／關）" data-ic="download"></button>
+      <button class="ib tgl" id="bVpT" title="內建播放器（點一下開／關）" data-ic="play"></button>
+      <button class="ib" id="bMore" title="功能選單" data-ic="grid"></button>
+    </div>
+    <!-- 點「搜尋」才展開：目前網址＋複製＋重新整理，下面輸入文字搜尋或貼網址 -->
+    <div id="urlPop" class="hide">
+      <div class="upRow">
         <span class="lock warn" id="urlLock" data-ic="search" data-sm="1"></span>
-        <input id="urlIn" type="url" inputmode="url" enterkeyhint="go" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上網址或輸入關鍵字">
-        <button class="ib" id="urlClear" title="清除" data-ic="x" data-sm="1"></button>
+        <div id="urlShow" class="grow"></div>
+        <button class="chip" id="urlCopy"><span data-ic="copy" data-sm="1"></span>複製</button>
         <button class="ib" id="urlAct" title="重新整理" data-ic="reload" data-sm="1"></button>
       </div>
-      <button class="ib" id="bMore" title="功能選單" data-ic="grid"></button>
+      <div class="upRow">
+        <div class="url" id="urlBox"><span id="incogBadge">無痕</span>
+          <input id="urlIn" type="url" inputmode="url" enterkeyhint="go" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="輸入文字搜尋，或貼上網址">
+          <button class="ib" id="urlClear" title="清除" data-ic="x" data-sm="1"></button>
+        </div>
+        <button class="btn pri sm" id="urlGo"><span data-ic="search" data-sm="1"></span>搜尋</button>
+      </div>
     </div>
     <!-- 精簡工具列：原本第二排的按鈕收進「功能選單」與懸浮按鈕（保留元素給程式判斷狀態用） -->
     <div class="tools" hidden>

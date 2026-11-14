@@ -45,28 +45,75 @@ function toUrl(s){
 }
 var urlIn = $('urlIn');
 function setUrlText(){
-  if(document.activeElement === urlIn) return;
-  urlIn.value = BR.home || !BR.url ? '' : (BR.host && BR.url.indexOf('http') === 0 ? decodeURI(BR.url).replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '') : BR.url);
   var lk = $('urlLock');
   lk.innerHTML = icon(BR.home || !BR.url ? 'search' : (BR.secure ? 'lock' : 'globe'), 'sm');
   lk.classList.toggle('warn', !BR.secure || BR.home);
+  var us = $('urlShow'); if(us) us.textContent = BR.home || !BR.url ? '（首頁）' : decodeURIsafe(BR.url);
+  var cp = $('urlCopy'); if(cp) cp.disabled = BR.home || !BR.url;
 }
+function decodeURIsafe(u){ try{ return decodeURI(u); }catch(e){ return u; } }
+/* 「搜尋」鈕：展開／收起網址框 */
+function urlPop(open){
+  var p = $('urlPop'); if(!p) return;
+  if(open == null) open = p.classList.contains('hide');
+  p.classList.toggle('hide', !open);
+  $('bSearch').classList.toggle('on', open);
+  if(open){ setUrlText(); urlIn.value = ''; setTimeout(function(){ urlIn.focus(); }, 60); }
+  else if(document.activeElement === urlIn) urlIn.blur();
+}
+$('bSearch').addEventListener('click', function(){ urlPop(); });
+$('urlCopy').addEventListener('click', function(){ if(BR.url && !BR.home){ copyText(BR.url); } });
+$('urlGo').addEventListener('mousedown', function(e){ e.preventDefault(); });
+$('urlGo').addEventListener('click', function(){ var u = toUrl(urlIn.value); if(!u){ urlIn.focus(); return; } urlPop(false); navigate(u); });
+/* 點到網址框以外的地方就收起來 */
+document.addEventListener('pointerdown', function(e){
+  var p = $('urlPop'); if(!p || p.classList.contains('hide')) return;
+  if(p.contains(e.target) || $('bSearch').contains(e.target)) return;
+  urlPop(false);
+}, true);
+/* 兩個開關：懸浮下載鈕、內建播放器（點一下開、再點一下關） */
+function toggleFab(){
+  var on = !CFG.fab; setCfg('fab', on);
+  if(on && isApp && NAT.has('fabReset')) NAT.call('fabReset');
+  if(typeof fabSync === 'function'){ fabSync.k = null; fabSync(); }
+  syncBrToggles();
+  toast(on ? '已顯示懸浮下載按鈕（放回右側預設位置）' : '已隱藏懸浮下載按鈕');
+}
+function toggleVp(){
+  var on = CFG.webVp === false; setCfg('webVp', on);
+  if(isApp){
+    NAT.call('setPref', 'webVp', on ? '1' : '0');
+    if(BR.url && !BR.home) NAT.call('brRun', 'window.__wsCfg&&(window.__wsCfg.vp=' + on + ');' + (on ? 'window.__wsVpOff=0;' : ''), 'vpCfg');
+  }
+  syncBrToggles();
+  toast(on ? '網頁影片改用內建播放器播放' : '網頁影片用網頁自己的播放器');
+}
+function syncBrToggles(){
+  var f = $('bFabT'), v = $('bVpT');
+  if(f){ f.classList.toggle('on', !!CFG.fab); f.setAttribute('aria-pressed', !!CFG.fab); f.title = CFG.fab ? '懸浮下載鈕：開（點一下關閉）' : '懸浮下載鈕：關（點一下打開）'; }
+  if(v){ var vo = CFG.webVp !== false; v.classList.toggle('on', vo); v.setAttribute('aria-pressed', vo); v.title = vo ? '內建播放器：開（點一下關閉）' : '內建播放器：關（點一下打開）'; }
+}
+$('bFabT').addEventListener('click', toggleFab);
+$('bVpT').addEventListener('click', toggleVp);
+if(!isApp){ $('bFabT').classList.add('hide'); $('bVpT').classList.add('hide'); }
+setTimeout(syncBrToggles, 0);
 urlIn.addEventListener('focus', function(){
   $('urlBox').classList.add('focus');
-  if(!BR.home && BR.url) urlIn.value = BR.url;
+  if($('urlPop').classList.contains('hide')) urlPop(true);
   setTimeout(function(){ if(document.activeElement === urlIn) urlIn.select(); }, 30);
   $('urlClear').classList.remove('hide');
 });
-urlIn.addEventListener('blur', function(){ $('urlBox').classList.remove('focus'); setTimeout(function(){ $('urlClear').classList.add('hide'); setUrlText(); }, 150); });
+urlIn.addEventListener('blur', function(){ $('urlBox').classList.remove('focus'); setTimeout(function(){ $('urlClear').classList.add('hide'); }, 150); });
 urlIn.addEventListener('keydown', function(e){
-  if(e.key === 'Enter'){ e.preventDefault(); var u = toUrl(urlIn.value); urlIn.blur(); if(u) navigate(u); }
+  if(e.key === 'Enter'){ e.preventDefault(); var u = toUrl(urlIn.value); urlIn.blur(); if(u){ urlPop(false); navigate(u); } }
 });
 $('urlClear').classList.add('hide');
 $('urlClear').addEventListener('mousedown', function(e){ e.preventDefault(); urlIn.value = ''; urlIn.focus(); });
 $('urlClear').addEventListener('click', function(){ urlIn.value = ''; urlIn.focus(); });
-urlIn.addEventListener('paste', function(){ setTimeout(function(){ var v = urlIn.value.trim(); if(/^https?:\/\/\S+$/.test(v)){ urlIn.blur(); navigate(v); } }, 10); });
+urlIn.addEventListener('paste', function(){ setTimeout(function(){ var v = urlIn.value.trim(); if(/^https?:\/\/\S+$/.test(v)){ urlIn.blur(); urlPop(false); navigate(v); } }, 10); });
 $('urlAct').addEventListener('click', function(){
   if(BR.home){ urlIn.focus(); return; }
+  urlPop(false);
   if(BR.progress < 100){ if(isApp) NAT.call('brNav', 'stop'); else WEB.stop(); }
   else { if(isApp) NAT.call('brNav', 'reload'); else WEB.load(BR.url, false); }
 });
@@ -689,20 +736,6 @@ function openToolsMenu(){
   b(CFG.mode === 'desktop' ? 'monitor' : CFG.mode === 'reader' ? 'book' : 'phone', CFG.mode === 'desktop' ? '電腦版' : CFG.mode === 'reader' ? '閱讀模式' : '手機版', function(){ $('bMode').click(); }, {on: CFG.mode !== 'mobile'});
   b('sliders', '瀏覽設定', function(){ $('bQuick').click(); });
   b('sparkle', typeof PTR !== 'undefined' && PTR.on && PTR.url === BR.url ? '翻譯中／原文' : '翻譯網頁', function(){ pageTranslateMenu(); }, {dis: !page, on: typeof PTR !== 'undefined' && PTR.on && PTR.url === BR.url});
-  /* 懸浮下載按鈕的開關：不見了就關掉再開一次，會放回預設位置 */
-  if(isApp) b('download', '懸浮下載鈕', function(){
-    var on = !CFG.fab; setCfg('fab', on);
-    if(on && NAT.has('fabReset')) NAT.call('fabReset');
-    if(typeof fabSync === 'function'){ fabSync.k = null; fabSync(); }
-    toast(on ? '已顯示懸浮下載按鈕（放回右側預設位置）' : '已隱藏懸浮下載按鈕');
-  }, {on: !!CFG.fab});
-  /* 網頁影片用 App 內建播放器（跟檔案庫的播放器一樣，會依直式／橫式自動轉向） */
-  if(isApp) b('play', '內建播放器', function(){
-    var on = CFG.webVp === false; setCfg('webVp', on);
-    NAT.call('setPref', 'webVp', on ? '1' : '0');
-    if(page) NAT.call('brRun', 'window.__wsCfg&&(window.__wsCfg.vp=' + on + ');' + (on ? 'window.__wsVpOff=0;' : ''), 'vpCfg');
-    toast(on ? '網頁影片改用內建播放器播放' : '網頁影片用網頁自己的播放器');
-  }, {on: CFG.webVp !== false});
   b('film', '下載影片', function(){ openMedia(); }, {dis: !page, n: BR.mediaN ? (BR.mediaN > 99 ? '99+' : BR.mediaN) : ''});
   b('download', '擷取網頁', function(){ openCapture(); }, {dis: !page});
   b('copy', '複製網址', function(){ copyText(BR.url); }, {dis: !page});

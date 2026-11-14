@@ -14,7 +14,7 @@ function gMini(title, sub, cap){ return '<div class="gFig"><div class="gMini"><s
 var G_FIG = {
   intro: function(){ return gNav(-1); },
   perm: function(){ return '<div class="gFig"><div class="gDlg"><b>要允許「Terra 瀏覽器」傳送通知嗎？</b><div><span>不允許</span><span class="gHit">允許</span></div></div><em>手機跳出這種詢問時，選「允許」</em></div>'; },
-  browse: function(){ return gBar([{ic: 'back'}, {ic: 'home'}, {t: '輸入網址或關鍵字', wide: 1}, {ic: 'grid', hit: 1, n: '1'}], '① 右上角的「功能選單」：擷取網頁、下載影片、收藏、無痕模式都在裡面'); },
+  browse: function(){ return gBar([{ic: 'back'}, {ic: 'home'}, {ic: 'search', hit: 1, n: '1'}, {ic: 'download', n: '2'}, {ic: 'play', n: '3'}, {ic: 'grid', n: '4'}], '① 搜尋：展開網址框，可以複製網址、重新整理、輸入文字搜尋　② 懸浮下載鈕開關　③ 內建播放器開關　④ 功能選單'); },
   yt: function(){ return gNav(1) + '<div class="gFig"><div class="gStage"><span class="gPlay">' + gI('play', '') + '</span><span class="gFab gHit" style="position:absolute;right:14px;bottom:14px;top:auto;width:36px;height:36px;border-radius:10px;background:rgba(0,0,0,.45);color:#fff">' + gI('download') + '</span></div><em>看影片時，點一下畫面，播放器控制列上的「⬇」就是下載</em></div>'; },
   music: function(){ return gBar([{ic: 'back'}, {ic: 'home'}, {ic: 'reload'}, {ic: 'listen', hit: 1, n: '2'}, '<span class="gSeg"><i>' + gI('video') + '</i><i class="on gHit">' + gI('audio') + '</i><u>1</u></span>', {ic: 'more'}], '① 切到音符就是 YouTube Music　② 圓形聲波按鈕是「聽歌辨識」（YouTube 和 YouTube Music 都有）') +
     gMini('歌名', '歌手（有同步歌詞時顯示正在唱的那句）', '播放時下方的小播放列：點一下打開播放面板，最右邊 ✕ 停止播放'); },
@@ -59,7 +59,7 @@ var GUIDE = [
     '<p><b>翻譯網頁（AI）</b>：看外文網頁時，右上角功能選單 →「翻譯網頁」，App 會用 Gemini 把整頁文字翻成你的介面語言（預設繁體中文），版面不變。往下捲出現新內容時再按一次可以「翻譯新載入的內容」，也可以「顯示原文」。要先設定 Gemini 金鑰（見「AI 摘要」）。</p>' +
     '<p><b>http／https 自動切換</b>：網頁打不開時（連不上或伺服器錯誤），App 會自動換另一種再試一次：https 壞掉的網站改用 http，只有 https 能用的網站改用 https。</p>' +
     '<p><b>掃 QR Code</b>：首頁「瀏覽記錄」旁邊的「掃 QR Code」。用相機掃（可以拉桿放大縮小、有多顆後鏡頭時按「換鏡頭」切換，也可以從相片選、開手電筒），掃到網址就直接用 App 打開；掃到別人用這套 App 分享的傳檔 QR Code，會直接把檔案收進檔案庫。第一次會問相機權限。</p>' +
-    '<p>在上方輸入網址或關鍵字就能上網，廣告會自動擋掉。右上角的「功能選單」（格子圖示）裡有這些功能：</p>' +
+    '<p>按上方的「搜尋」（放大鏡）會展開網址框：第一行是目前的網址，可以「複製」或重新整理；下面輸入網址或關鍵字再按「搜尋」就能上網，廣告會自動擋掉。旁邊兩個按鈕是「懸浮下載鈕」和「內建播放器」的開關，點一下打開、再點一下關閉（亮起來＝開著）。右上角的「功能選單」（格子圖示）裡有這些功能：</p>' +
     '<ul>' +
     '<li><b>擷取網頁</b>：把整個網頁連同圖片存成一個離線檔，放進檔案庫的「網頁」，沒網路也能看。</li>' +
     '<li><b>下載影片</b>：自動偵測這一頁的圖片和影片，可以選格式和畫質下載。抓不到的影片，可以改用「錄製」：在背景錄，或滿版播放後用手機螢幕錄影（會自動開勿擾，播完自動停）。</li>' +

@@ -682,6 +682,9 @@ function aiSeek(t){
   if(AI.pmode === 'html'){ var v = $('aiVid'); if(v){ try{ v.currentTime = t; }catch(e){} v.play().catch(function(){}); } return; }
   if(AI.pmode === 'none'){ aiToYt(); return; }
   if(AI.pmode === 'native'){
+    /* 點到下面的縮圖＝播放器沒顯示出來（例如被之前的面板蓋住的狀態沒解除）：先把播放器放回來 */
+    if(!Sheets.stack.length) coverNative(false);
+    aiSyncPlayer();
     var st = NAT.json('aipState') || {};
     if(st.id !== AI.id || !(st.dur > 0)) NAT.call('aipLoad', AI.id, Math.floor(t), true);
     else NAT.call('aipSeek', t, true);

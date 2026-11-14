@@ -568,6 +568,22 @@ body.brFull #brArea{left:0!important;right:0!important;top:0!important;bottom:0!
 .hoBtn .ell{max-width:100%}
 
 #brTop .urlrow #bTabs{width:34px;height:38px;flex:none}
+/* 精簡網址列：搜尋鈕＋兩個開關，點搜尋才展開網址框 */
+#brTop .urlrow{justify-content:space-between}
+#brTop .urlrow .ib{flex:none}
+#brTop .urlrow .ib.tgl{border-radius:12px}
+#brTop .urlrow .ib.tgl.on{background:var(--accent-soft,rgba(160,98,60,.18));color:var(--accent)}
+#brTop .urlrow #bSearch.on{background:var(--surface-3)}
+#urlPop{display:flex;flex-direction:column;gap:8px;padding:8px 4px 6px}
+#urlPop.hide{display:none}
+#urlPop .upRow{display:flex;align-items:center;gap:6px;min-width:0}
+#urlPop #urlShow{min-width:0;font-size:12.5px;line-height:1.35;color:var(--text-muted);word-break:break-all;max-height:3.9em;overflow:hidden;user-select:text;-webkit-user-select:text}
+#urlPop .lock{color:var(--success);display:grid;place-items:center;flex:none}
+#urlPop .lock.warn{color:var(--text-muted)}
+#urlPop .chip{flex:none}
+#urlPop #urlBox{flex:1}
+#urlPop #urlGo{flex:none;height:40px;border-radius:999px;padding:0 14px}
+.incogOn #urlPop #urlShow{color:#ccc}
 #bTabs span{display:grid;place-items:center;min-width:19px;height:19px;padding:0 3px;border:2px solid currentColor;border-radius:6px;font:800 11px/1 -apple-system,sans-serif}
 .tabItem{display:flex;align-items:center;gap:10px;padding:10px 10px 10px 12px;border-radius:14px;background:var(--surface-2);margin-bottom:8px;border:2px solid transparent}
 .tabItem.on{border-color:var(--accent);background:var(--surface)}

@@ -32,8 +32,10 @@ final class AiPlayer {
                         s = s == null ? "" : s.replace("\"", "");
                         String[] p = s.split(",");
                         if (p.length == 4) {
-                            err = Integer.parseInt(p[3]);
-                            if (!"x".equals(p[0])) { t = Double.parseDouble(p[0]); dur = Double.parseDouble(p[1]); playing = "true".equals(p[2]); }
+                            int e = Integer.parseInt(p[3]);
+                            if (!"x".equals(p[0])) { ready = true; t = Double.parseDouble(p[0]); dur = Double.parseDouble(p[1]); playing = "true".equals(p[2]); }
+                            if (mode == 0 && (e != 0 || (!ready && System.currentTimeMillis() - loadAt > 9000))) fallback();
+                            else err = mode == 1 ? e : 0;
                         }
                     } catch (Throwable e) { /* ignore */ }
                 }
@@ -55,8 +57,8 @@ final class AiPlayer {
         s.setUserAgentString(s.getUserAgentString().replace("; wv", "").replace(" Version/4.0", ""));
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true);
         wv.setWebViewClient(new WebViewClient() {
-            @Override public void onPageFinished(WebView v, String url) { v.evaluateJavascript(shim(), null); }
-            @Override public void onPageCommitVisible(WebView v, String url) { v.evaluateJavascript(shim(), null); }
+            @Override public void onPageFinished(WebView v, String url) { if (mode == 1 && url != null && url.contains("youtube.com")) v.evaluateJavascript(shim(), null); }
+            @Override public void onPageCommitVisible(WebView v, String url) { if (mode == 1 && url != null && url.contains("youtube.com")) v.evaluateJavascript(shim(), null); }
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
                 String u = r.getUrl().toString();
                 if (u.contains("/embed/") || u.startsWith("about:") || u.startsWith("https://ianlin1120.github.io/")) return false;
@@ -80,14 +82,26 @@ final class AiPlayer {
     static volatile int err = 0;
     private static int startAt = 0;
     private static boolean auto = false;
+    /** 0＝嵌入播放器、1＝YouTube 手機版觀看頁（嵌入播放器被擋或一直載不出來時自動改用） */
+    private static int mode = 0;
+    private static long loadAt = 0;
+    private static boolean ready = false;
+
+    /** 嵌入播放器出錯（152／153／150／101）或 9 秒還沒準備好：改開 YouTube 手機版觀看頁 */
+    private static void fallback() {
+        if (wv == null || mode == 1 || vid.isEmpty()) return;
+        mode = 1; err = 0; loadAt = System.currentTimeMillis();
+        wv.loadUrl("https://m.youtube.com/watch?v=" + Uri.encode(vid) + (startAt > 1 ? "&t=" + startAt + "s" : ""));
+    }
 
     /** 只顯示播放器、提供 P（時間／播放／暫停／跳轉）給 App 用、自動跳過廣告、不讓它自己跳到下一部 */
     private static String shim() {
         return "(function(){if(window.__aip)return;window.__aip=1;var ID=" + JSONObject.quote(vid) + ",START=" + startAt + ",AUTO=" + auto + ";"
             + "var css=document.createElement('style');css.textContent='html,body{background:#000!important;overflow:hidden!important}"
             + "ytm-mobile-topbar-renderer,header,.mobile-topbar-header,ytm-pivot-bar-renderer,ytm-item-section-renderer,ytm-slim-video-metadata-section-renderer,.watch-below-the-player,ytm-engagement-panel,ytm-single-column-watch-next-results-renderer,ytm-companion-slot,ytm-promoted-sparkles-web-renderer,ytm-statement-banner-renderer,.mealbar-promo-renderer,ytm-mealbar-promo-renderer{display:none!important}"
-            + "#player-container-id,.player-container,ytm-player,#player,#movie_player,.html5-video-player{position:fixed!important;left:0!important;top:0!important;width:100vw!important;height:100vh!important;max-height:none!important;padding:0!important;margin:0!important;z-index:2147483646!important;transform:none!important}"
-            + ".html5-video-container,video{width:100vw!important;height:100vh!important;left:0!important;top:0!important}video{object-fit:contain!important}';"
+            /* 整個播放器容器（含 YouTube 自己的播放／暫停、快轉、全螢幕按鈕）放大到整個畫面 */
+            + "#player-container-id{position:fixed!important;left:0!important;top:0!important;width:100vw!important;height:100vh!important;max-height:none!important;padding:0!important;margin:0!important;z-index:2147483646!important;transform:none!important}"
+            + "#player-container-id #player,#player-container-id .html5-video-player{width:100%!important;height:100%!important;max-height:none!important}video{object-fit:contain!important}';"
             + "(document.head||document.documentElement).appendChild(css);"
             + "window.ERR=0;var V=function(){return document.querySelector('video')};"
             + "window.P={getCurrentTime:function(){var v=V();return v?v.currentTime:0},getDuration:function(){var v=V();return v&&isFinite(v.duration)?v.duration:0},"
@@ -108,10 +122,13 @@ final class AiPlayer {
         ensure(a);
         vid = id;
         t = start; dur = 0; playing = false; err = 0;
-        /* 直接開 YouTube 手機版的觀看頁（跟 YouTube 分頁同一套播放器、同一個登入），只留下播放器畫面；
-           之前用的嵌入播放器常被 YouTube 擋（錯誤 152／153）或一直轉圈。 */
-        startAt = Math.max(0, start); auto = autoplay;
-        wv.loadUrl("https://m.youtube.com/watch?v=" + Uri.encode(id) + (start > 1 ? "&t=" + start + "s" : ""));
+        startAt = Math.max(0, start); auto = autoplay; mode = 0; loadAt = System.currentTimeMillis(); ready = false;
+        /* 預設：YouTube 嵌入播放器（有自己的播放／暫停、快轉、全螢幕按鈕）。頁面掛在 App 的 GitHub Pages 網址底下，YouTube 才拿得到合法的來源 */
+        String base = "https://ianlin1120.github.io/web-saver/";
+        String html = "<!doctype html><html><head><meta name=viewport content='width=device-width,initial-scale=1'><style>html,body{margin:0;height:100%;background:#000;overflow:hidden}#p,iframe{position:absolute;inset:0;width:100%;height:100%;border:0}</style></head><body><div id=p></div><script>"
+            + "var P=null,ERR=0;function onYouTubeIframeAPIReady(){P=new YT.Player('p',{videoId:" + JSONObject.quote(id) + ",host:'https://www.youtube.com',playerVars:{playsinline:1,rel:0,modestbranding:1,fs:1,start:" + Math.max(0, start) + ",autoplay:" + (autoplay ? 1 : 0) + ",origin:location.origin},events:{onError:function(e){ERR=e.data||1}}});}"
+            + "</script><script src='https://www.youtube.com/iframe_api'></script></body></html>";
+        wv.loadDataWithBaseURL(base, html, "text/html", "utf-8", null);
         apply();
     }
 
