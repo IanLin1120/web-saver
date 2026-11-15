@@ -998,3 +998,6 @@ html[lang]:not([lang^="zh"]) #nav button i{font-size:11px;font-weight:700}
 .aiSrc{display:flex;flex-wrap:wrap;align-items:center;gap:6px;align-self:flex-start;max-width:92%;margin-top:-2px}
 .aiSrc>span{font-size:12px;font-weight:700;color:var(--text-muted)}
 .aiSrc .chip{font-size:12px;padding:5px 9px}
+
+.toast{max-width:calc(100vw - 40px);box-sizing:border-box}
+.toast.long{border-radius:16px;text-align:left;line-height:1.5}

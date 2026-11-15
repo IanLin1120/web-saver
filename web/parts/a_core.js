@@ -236,6 +236,7 @@ function toast(msg, warn, action){
   try{ if(isApp && (curView === 'browse' || curView === 'yt') && !Sheets.stack.length && !(curView === 'browse' && BR.home)) NAT.call('nativeToast', String(msg)); }catch(e){}
   var t = $('toast'); $('toastT').textContent = msg;
   t.classList.toggle('warn', !!warn);
+  t.classList.toggle('long', String(msg).length > 40);
   var b = $('toastB');
   if(action){ b.textContent = action[0]; b.classList.remove('hide'); b.onclick = function(){ t.classList.remove('show'); action[1](); }; }
   else b.classList.add('hide');
@@ -268,6 +269,8 @@ function openSheet(o){
   sh.appendChild(grab); sh.appendChild(head); sh.appendChild(body);
   if(o.foot) sh.appendChild(h('div', {class: 'sh-foot'}, o.foot));
   wrap.appendChild(bg); wrap.appendChild(sh);
+  /* o.buzz：面板裡按任何按鈕、項目都震一下 */
+  if(o.buzz) sh.addEventListener('click', function(e){ var t = e.target && e.target.closest && e.target.closest('button,a,label,input,select,.mItem,.row,[class*="Row"],[class*="row"],.fabBig,.chip'); if(t && !t.disabled && typeof buzz === 'function') buzz(10); }, true);
   $('sheets').appendChild(wrap);
   paintIcons(wrap);
   if(!Sheets.stack.length) coverNative(true);

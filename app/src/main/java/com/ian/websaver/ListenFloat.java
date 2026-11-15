@@ -58,6 +58,9 @@ final class ListenFloat {
     volatile int gen = 0;
     /** 開啟後要馬上聽一次（從快速設定開關打開時） */
     volatile boolean listenOnShow = false;
+    /** 上次選的聲音來源：tap＝手機內的聲音，mic＝麥克風（快速設定開關用這個） */
+    String lastSrc = "tap";
+    LinearLayout picker;
 
     private ListenFloat(Context c) {
         app = c.getApplicationContext();
@@ -123,6 +126,7 @@ final class ListenFloat {
         ListenFloat f = inst;
         if (f == null) return;
         f.hideCard();
+        f.hidePicker();
         try { if (f.bubble != null && f.shown) f.wm.removeView(f.bubble); } catch (Throwable t) { /* ignore */ }
         f.shown = false;
         try { if (f.mp != null) f.mp.stop(); } catch (Throwable t) { /* ignore */ }
@@ -153,23 +157,25 @@ final class ListenFloat {
         blp.y = dm.heightPixels / 3;
         bubble.setOnTouchListener(new View.OnTouchListener() {
             float sx, sy; int ox, oy; long t0; boolean moved, longed;
-            final Runnable lp = new Runnable() { @Override public void run() { if (!moved) { longed = true; gen++; buzz2(); stop(); } } };
+            final Runnable lp = new Runnable() { @Override public void run() { if (!moved) { longed = true; gen++; Haptic.twice(app); stop(); } } };
             @Override public boolean onTouch(View v, MotionEvent e) {
                 switch (e.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
                         sx = e.getRawX(); sy = e.getRawY(); ox = blp.x; oy = blp.y; t0 = System.currentTimeMillis(); moved = false; longed = false;
+                        Haptic.buzz(app, 8, 70);
                         v.postDelayed(lp, 800);
                         return true;
                     case MotionEvent.ACTION_MOVE:
                         float dx = e.getRawX() - sx, dy = e.getRawY() - sy;
                         if (!moved && Math.hypot(dx, dy) > dp(8)) { moved = true; v.removeCallbacks(lp); }
-                        if (moved) { blp.x = ox + Math.round(dx); blp.y = oy + Math.round(dy); try { wm.updateViewLayout(bubble, blp); } catch (Throwable t) { /* ignore */ } }
+                        if (moved) { Haptic.dragTick(app); blp.x = ox + Math.round(dx); blp.y = oy + Math.round(dy); try { wm.updateViewLayout(bubble, blp); } catch (Throwable t) { /* ignore */ } }
                         return true;
                     case MotionEvent.ACTION_UP:
                     case MotionEvent.ACTION_CANCEL:
                         v.removeCallbacks(lp);
                         if (longed) return true;
                         if (moved) {
+                            hidePicker();
                             /* 放開後靠到左右邊 */
                             android.util.DisplayMetrics d = app.getResources().getDisplayMetrics();
                             blp.x = blp.x + bubble.getWidth() / 2 < d.widthPixels / 2 ? dp(2) : d.widthPixels - bubble.getWidth() - dp(2);
@@ -185,7 +191,7 @@ final class ListenFloat {
         catch (Throwable t) { emit("err", "無法顯示懸浮按鈕：" + t.getMessage()); return; }
         emit("on", mp != null ? "懸浮聽歌已開啟：點 ♫ 開始聽，聽的時候再點一下取消，長按關閉" : "懸浮聽歌已開啟（用麥克風聽）：點 ♫ 開始聽，再點一下取消，長按關閉");
         ListenTile.update(app);
-        if (listenOnShow) { listenOnShow = false; Util.MAIN.postDelayed(new Runnable() { @Override public void run() { listen(); } }, 500); }
+        if (listenOnShow) { listenOnShow = false; Util.MAIN.postDelayed(new Runnable() { @Override public void run() { listen(lastSrc); } }, 500); }
         if (goHome && a != null) {
             Util.MAIN.postDelayed(new Runnable() { @Override public void run() { try { Intent h = new Intent(Intent.ACTION_MAIN); h.addCategory(Intent.CATEGORY_HOME); h.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK); app.startActivity(h); } catch (Throwable t) { /* ignore */ } } }, 700);
         }
@@ -204,7 +210,55 @@ final class ListenFloat {
     /** 點一下：沒在聽就開始聽；聽的時候（倒數或辨識中）再點一下就取消 */
     void tap() {
         if (busy) { cancel(); return; }
-        listen();
+        if (picker != null) { hidePicker(); buzz(12); return; }
+        showPicker();
+    }
+
+    /** 點懸浮按鈕：旁邊跳出兩個選項，自己選要聽「手機內的聲音」還是「麥克風」 */
+    private void showPicker() {
+        hideCard();
+        buzz(15);
+        final LinearLayout box = new LinearLayout(app);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(8), dp(8), dp(8), dp(8));
+        GradientDrawable g = new GradientDrawable(); g.setCornerRadius(dp(14)); g.setColor(0xF4241D17);
+        box.setBackground(g);
+        box.addView(srcBtn("📱  手機內的聲音", "影片、音樂 App 正在播的", "tap"));
+        box.addView(srcBtn("🎤  麥克風", "外面喇叭、店裡、別人手機播的", "mic"));
+        android.util.DisplayMetrics dm = app.getResources().getDisplayMetrics();
+        boolean left = blp.x + dp(34) < dm.widthPixels / 2;
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(-2, -2, overlayType(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, PixelFormat.TRANSLUCENT);
+        lp.gravity = Gravity.TOP | (left ? Gravity.START : Gravity.END);
+        lp.x = left ? blp.x + dp(72) : dm.widthPixels - blp.x + dp(4);
+        lp.y = Math.max(dp(24), blp.y - dp(20));
+        box.setOnTouchListener(new View.OnTouchListener() { @Override public boolean onTouch(View v, MotionEvent e) {
+            if (e.getActionMasked() == MotionEvent.ACTION_OUTSIDE) { hidePicker(); return true; }
+            return false;
+        } });
+        try { wm.addView(box, lp); picker = box; } catch (Throwable t) { picker = null; listen(lastSrc); }
+    }
+
+    private View srcBtn(String title, String sub, final String src) {
+        LinearLayout b = new LinearLayout(app);
+        b.setOrientation(LinearLayout.VERTICAL);
+        b.setPadding(dp(14), dp(10), dp(16), dp(10));
+        GradientDrawable g = new GradientDrawable(); g.setCornerRadius(dp(10)); g.setColor("tap".equals(src) ? 0xFFA9683C : 0xFF3F7A5E);
+        b.setBackground(g);
+        TextView t = new TextView(app); t.setText(title); t.setTextSize(15); t.setTextColor(Color.WHITE); t.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        TextView s = new TextView(app); s.setText(sub); s.setTextSize(11.5f); s.setTextColor(0xDDFFFFFF);
+        b.addView(t); b.addView(s);
+        b.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { hidePicker(); lastSrc = src; listen(src); } });
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.setMargins(0, dp(3), 0, dp(3));
+        b.setLayoutParams(p);
+        return b;
+    }
+
+    void hidePicker() {
+        final LinearLayout p = picker;
+        picker = null;
+        if (p == null) return;
+        Util.MAIN.post(new Runnable() { @Override public void run() { try { wm.removeView(p); } catch (Throwable t) { /* ignore */ } } });
     }
 
     void cancel() {
@@ -310,7 +364,10 @@ final class ListenFloat {
     }
 
     /* ---------- 聽 10 秒 → 辨識 ---------- */
-    void listen() {
+    void listen() { listen(lastSrc); }
+
+    /** src：tap＝只聽手機內的聲音，mic＝只用麥克風 */
+    void listen(final String src) {
         if (busy) return;
         if (TextUtils.isEmpty(key)) { showCard("還不能辨識", "請先在 App 的「AI 摘要」設定 Gemini 金鑰", null, null); return; }
         if (app.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -322,15 +379,17 @@ final class ListenFloat {
         buzz(25);
         ListenTile.update(app);
         new Thread(new Runnable() { @Override public void run() {
-            String mode = "tap";
+            String mode = src;
             try {
                 byte[] pcm = null;
-                if (mp != null && Build.VERSION.SDK_INT >= 29) {
+                if ("tap".equals(src)) {
+                    if (mp == null || Build.VERSION.SDK_INT < 29) { showCard("不能聽手機內的聲音", "開啟懸浮按鈕時沒有允許擷取手機播放的聲音。長按懸浮按鈕關閉後重新開啟，系統詢問時按「開始」；或改選「麥克風」。", null, "tap"); return; }
                     pcm = record(true, 10, my);
-                    if (pcm == null || rms(pcm) < 120) { pcm = null; }
+                    if (my != gen) return;
+                    if (pcm == null || rms(pcm) < 120) { showCard("沒有聽到手機內的聲音", "這 10 秒手機沒有在播聲音，或那個 App 不允許擷取（例如部分音樂 App）。要聽外面的音樂請改選「麥克風」。", null, "tap"); return; }
+                } else {
+                    pcm = record(false, 10, my);
                 }
-                if (my != gen) return;
-                if (pcm == null) { mode = "mic"; pcm = record(false, 10, my); }
                 if (my != gen) return;
                 if (pcm == null || pcm.length < 16000) throw new Exception("沒有錄到聲音");
                 setState(Bubble.THINK, 0, 0, true);
@@ -523,7 +582,9 @@ final class ListenFloat {
                     hideCard();
                 } }));
             }
-            row.addView(btn("再聽一次", q == null, new View.OnClickListener() { @Override public void onClick(View v) { hideCard(); listen(); } }));
+            final String other = "mic".equals(mode) ? "tap" : "mic";
+            row.addView(btn("再聽一次", q == null, new View.OnClickListener() { @Override public void onClick(View v) { hideCard(); listen(mode == null ? lastSrc : mode); } }));
+            if (mode != null) row.addView(btn("mic".equals(other) ? "🎤 改用麥克風" : "📱 改聽手機", false, new View.OnClickListener() { @Override public void onClick(View v) { hideCard(); lastSrc = other; listen(other); } }));
             row.addView(btn("✕", false, new View.OnClickListener() { @Override public void onClick(View v) { hideCard(); } }));
             card.addView(hs);
             android.util.DisplayMetrics dm = app.getResources().getDisplayMetrics();

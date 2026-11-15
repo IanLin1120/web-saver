@@ -662,7 +662,8 @@ async function aiSendGemini(q){
   paint();
   var dead = lsGet('ws.aiGDead', {}), chain = [AICFG.gmodel || AI_GFALLBACK[0]];
   if(AICFG.gfallback !== false) AI_GFALLBACK.forEach(function(m){ if(chain.indexOf(m) < 0 && !dead[m]) chain.push(m); });
-  var err = null, useSearch = true;
+  /* Google 搜尋的額度比一般對話少（免費方案用完就會回「超過額度」）：用完後 3 小時內先不搜尋，直接回答 */
+  var useSearch = !(lsGet('ws.aiNoSearch', 0) > Date.now()), err = null, searchQuota = false;
   for(var k = 0; k < chain.length; k++){
     var model = chain[k];
     var gc = {maxOutputTokens: 8192};
@@ -687,9 +688,11 @@ async function aiSendGemini(q){
       var m = String(e.message || e);
       /* 這個模型不能同時搜尋：不搜尋再試一次同一個模型 */
       if(useSearch && /search|tool|grounding/i.test(m) && e.status === 400){ useSearch = false; k--; continue; }
+      /* 超過額度：先拿掉搜尋用同一個模型再試（搜尋的額度通常先用完） */
+      if(useSearch && (e.status === 429 || /quota|RESOURCE_EXHAUSTED|billing/i.test(m))){ useSearch = false; searchQuota = true; lsSet('ws.aiNoSearch', Date.now() + 3 * 3600000); k--; continue; }
       if(think && /think/i.test(m) && e.status === 400){ k--; think = false; continue; }
       if(/no longer available|deprecated|retired/i.test(m)){ dead[model] = Date.now(); lsSet('ws.aiGDead', dead); continue; }
-      if(e.status === 429 || e.status === 404 || e.status >= 500 || e.status === -1) continue;
+      if(e.status === 429 || /quota|RESOURCE_EXHAUSTED/i.test(m) || e.status === 404 || e.status >= 500 || e.status === -1) continue;
       break;
     }
   }
@@ -697,13 +700,16 @@ async function aiSendGemini(q){
   if(err && !msg.text.trim()){
     AI.chat = AI.chat.filter(function(x){ return x !== msg; });
     AI.chat.pop();
-    AI.asking = false; aiRenderPane(); aiErrDlg(err);
+    AI.asking = false; aiRenderPane();
+    if(err.status === 429 || /quota|RESOURCE_EXHAUSTED|rate.?limit|billing/i.test(String(err.message))) err = aiErr('rate', 'Gemini 免費額度暫時用完了（每分鐘或每天有次數上限），已經試過所有備用模型。請等一下再問；每天的額度在台灣時間下午 3～4 點左右重置。');
+    aiErrDlg(err);
     var inp = $('aiQ'); if(inp && !inp.value) inp.value = q;
     return;
   }
   var mm = msg.text.match(/【追問】([\s\S]*)$/);
   if(mm){ msg.suggest = mm[1].split(/[｜|\n]/).map(function(x){ return x.replace(/^[\s\-•・\d.、]+/, '').trim(); }).filter(Boolean).slice(0, 3); }
   msg.text = aiChatStrip(msg.text).trim();
+  if(searchQuota) msg.text += '\n\n（Google 搜尋的免費額度暫時用完，這次只根據影片內容回答）';
   if(typeof buzz === 'function') buzz(12);
   AI.asking = false; aiSaveCache(); aiRenderPane();
 }

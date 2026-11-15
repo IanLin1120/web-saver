@@ -45,7 +45,7 @@ function openMedia(force){
   var dlBtn = h('button', {class: 'btn pri lg', html: icon('download', 'sm') + '下載', disabled: true});
   var selAll = h('button', {class: 'btn', html: icon('checks', 'sm') + '全選'});
   MEDIA.sel = new Set(); MEDIA.tab = 'all';
-  MEDIA.sheet = openSheet({title: '媒體下載', icon: 'film', body: body, tall: true, foot: h('div', {style: {display: 'contents'}}, selAll, dlBtn), onClose: function(){ MEDIA.sheet = null; MEDIA.inject = null; }});
+  MEDIA.sheet = openSheet({title: '媒體下載', icon: 'film', body: body, tall: true, buzz: true, foot: h('div', {style: {display: 'contents'}}, selAll, dlBtn), onClose: function(){ MEDIA.sheet = null; MEDIA.inject = null; }});
   MEDIA.dlBtn = dlBtn; MEDIA.selAll = selAll;
   dlBtn.onclick = startMediaDl;
   selAll.onclick = function(){

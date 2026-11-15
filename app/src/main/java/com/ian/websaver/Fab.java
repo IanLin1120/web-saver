@@ -59,11 +59,13 @@ final class Fab {
                 switch (e.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
                         dx = box.getX() - e.getRawX(); dy = box.getY() - e.getRawY(); sx = e.getRawX(); sy = e.getRawY(); moved = false;
+                        Haptic.buzz(a, 10);
                         btn.animate().scaleX(0.9f).scaleY(0.9f).setDuration(80).start();
                         return true;
                     case MotionEvent.ACTION_MOVE:
                         if (Math.abs(e.getRawX() - sx) + Math.abs(e.getRawY() - sy) > Util.dp(a, 8)) moved = true;
                         if (moved) {
+                            Haptic.dragTick(a);
                             View p = (View) box.getParent();
                             box.setX(Math.max(0, Math.min(p.getWidth() - box.getWidth(), e.getRawX() + dx)));
                             box.setY(Math.max(0, Math.min(p.getHeight() - box.getHeight(), e.getRawY() + dy)));
@@ -76,8 +78,10 @@ final class Fab {
                             View p = (View) box.getParent();
                             float x = box.getX() + box.getWidth() / 2f < p.getWidth() / 2f ? Util.dp(a, 6) : p.getWidth() - box.getWidth() - Util.dp(a, 6);
                             box.animate().x(x).setDuration(160).start();
+                            Haptic.buzz(a, 18);
                             a.prefs.edit().putFloat("fabX", x).putFloat("fabY", box.getY()).apply();
                         } else if (e.getActionMasked() == MotionEvent.ACTION_UP) {
+                            Haptic.buzz(a, 22);
                             MainActivity.emit("fab", a.yt != null && a.yt.isShown() ? "yt" : "br");
                         }
                         return true;

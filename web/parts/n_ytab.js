@@ -263,7 +263,7 @@ function postDlInternal(url){
 function postDlSheet(url, title, via){
   var host = hostOf(url).replace(/^(www|m)\./, '');
   var body = h('div');
-  var s = openSheet({title: '下載這則貼文', icon: 'download', body: body});
+  var s = openSheet({title: '下載這則貼文', icon: 'download', body: body, buzz: true});
   body.appendChild(h('div', {class: 'card glass', style: {padding: '10px 12px', marginBottom: '12px'}},
     h('b', {class: 'ell', style: {display: 'block'}, text: title || host}),
     h('div', {class: 'sub', style: {wordBreak: 'break-all', fontSize: '12px', marginTop: '2px'}, text: url})));
@@ -340,7 +340,7 @@ function openFabMenu(ytId){
     big('scissors', 'var(--olive)', '手動清理', '點選要移除的區塊（廣告、浮動視窗）', function(){ $('bZap').click(); }, !page);
   }
   body.appendChild(h('div', {class: 'sub', style: {fontSize: '12px', margin: '6px 2px 0'}, text: '同時下載數：' + (isApp && NAT.has('dlMaxGet') ? NAT.call('dlMaxGet') : 3) + ' 個（在「設定 → 下載」調整）'}));
-  var s = openSheet({title: Tasks.list().length && curView !== 'browse' ? '進行中的工作' : '下載與擷取', icon: 'download', body: body, onClose: function(){ if(off) off(); }});
+  var s = openSheet({title: Tasks.list().length && curView !== 'browse' ? '進行中的工作' : '下載與擷取', icon: 'download', body: body, buzz: true, onClose: function(){ if(off) off(); }});
 }
 
 /* ---------- 交給外部下載 App（Snaptube、Quetta、影片下載工具…），下載完自動搬回檔案庫並刪掉原檔 ---------- */
