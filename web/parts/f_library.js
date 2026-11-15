@@ -222,7 +222,7 @@ async function renderStor(){
     h('div', {class: 'grow'}, h('b', {text: '音樂庫'}), h('div', {class: 'sub', text: mus.length ? mus.length + ' 首・點這裡瀏覽與播放' : '從 YouTube 或網頁下載的音樂會放在這裡'})),
     mus.length ? h('button', {class: 'btn pri sm', html: '<svg class="i sm fill" viewBox="0 0 24 24">' + IC.play + '</svg>全部播放', onclick: function(e){ e.stopPropagation(); Music.playList(mus, 0); Music.openPlayer(); }}) : h('span', {class: 'chev', text: '›'})));
   if(isApp && s.cache > 20 * 1048576) card.appendChild(h('div', {class: 'note', html: '瀏覽器快取 ' + fmtSize(s.cache) + '・<a href="#" id="clrCache">清除</a>'}));
-  var cc = $('clrCache'); if(cc) cc.onclick = function(e){ e.preventDefault(); NAT.call('clearData', 'cache'); setTimeout(renderStor, 600); };
+  var cc = $('clrCache'); if(cc) cc.onclick = function(e){ e.preventDefault(); NAT.call('clearData', 'cache'); setTimeout(renderStor, 600); setTimeout(renderStor, 2500); };
   paintIcons(card);
 }
 function renderCats(){

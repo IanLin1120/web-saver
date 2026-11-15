@@ -461,20 +461,15 @@ function renderStart(){
   /* 立即上鎖（跟「隱私與安全」裡的按鈕一樣）：有設定密碼才顯示 */
   if(SEC.has()) tiles.appendChild(h('div', {class: 'tile', onclick: function(){ if(isApp) NAT.call('lockRelock'); SEC.webOk = false; fire('secChanged'); toast('🔒 已上鎖'); renderStart(); }},
     h('div', {class: 'fav', html: icon('lock')}), h('span', {text: '立即上鎖'}), h('small', {class: 'sub', text: SEC.open() ? '目前已解鎖' : '目前已上鎖'})));
-  /* 第二排：聽歌辨識（從 YouTube 分頁移過來）、無痕模式 */
-  tiles.appendChild(h('div', {class: 'tile', style: {gridColumnStart: 1}, onclick: function(){ buzz(10); if(typeof ytmuListen === 'function') ytmuListen(); }},
+  /* 第二排：聽歌辨識（懸浮按鈕）、辨識紀錄、無痕模式 */
+  tiles.appendChild(h('div', {class: 'tile', style: {gridColumnStart: 1}, onclick: function(){ buzz(10); if(typeof lsnHome === 'function') lsnHome(); }},
     h('div', {class: 'fav', html: icon('listen')}), h('span', {text: '聽歌辨識'}), h('small', {class: 'sub', text: '找出歌名'})));
+  tiles.appendChild(h('div', {class: 'tile', onclick: function(){ buzz(10); if(typeof openLsnHist === 'function') openLsnHist(); }},
+    h('div', {class: 'fav', html: icon('history')}), h('span', {text: '辨識紀錄'}), h('small', {class: 'sub', text: (typeof LSNH !== 'undefined' ? LSNH.items.length : 0) + ' 首'})));
   tiles.appendChild(h('div', {class: 'tile' + (INCOG.on ? ' on' : ''), onclick: function(){ setIncog(!INCOG.on); setTimeout(renderStart, 300); }},
-    h('div', {class: 'fav', html: icon('incog')}), h('span', {text: INCOG.on ? '離開無痕' : '無痕模式'}), h('small', {class: 'sub', text: INCOG.on ? '離開時全部刪除' : '獨立的帳號／記錄'})));
+    h('div', {class: 'fav', html: icon('incog')}), h('span', {text: INCOG.on ? '離開無痕' : '無痕模式'}), h('small', {class: 'sub', text: INCOG.on ? '離開時全部刪除' : '不保留記錄'})));
   sects.appendChild(h('div', {class: 'sect-h'}, h('span', {text: '⭐ 收藏'}), h('button', {text: '管理收藏夾', onclick: function(){ manageFolders(renderStart); }})));
   sects.appendChild(tiles);
-  /* 說明 */
-  sects.appendChild(h('div', {class: 'sect-h'}, h('span', {text: '💡 怎麼用'})));
-  sects.appendChild(h('div', {class: 'tips'},
-    h('div', {class: 'tip glass', html: '<b>' + icon('download', 'sm') + '擷取網頁</b>開啟網頁後按「擷取」，去除廣告，存成單一離線 HTML 或 PDF'}),
-    h('div', {class: 'tip glass', html: '<b>' + icon('film', 'sm') + '媒體下載</b>自動偵測圖片與影片，可選格式、解析度，打包成 ZIP'}),
-    h('div', {class: 'tip glass', html: '<b>' + icon('star', 'sm') + '分類收藏</b>按 ☆ 收藏網頁，放進自己命名的收藏夾'}),
-    h('div', {class: 'tip glass', html: '<b>' + icon('scissors', 'sm') + '手動清理</b>還有漏網的廣告？按 ✂ 點選區塊移除後再擷取'})));
   sp.appendChild(sects);
   paintIcons(sp);
 }

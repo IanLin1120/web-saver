@@ -50,7 +50,7 @@ final class ListenFloat {
     volatile MediaProjection mp;
     String key = "", pTap = "", pMic = "";
     JSONArray chain = new JSONArray();
-    TextView bubble;
+    Bubble bubble;
     LinearLayout card;
     WindowManager.LayoutParams blp, clp;
     volatile boolean busy = false, shown = false;
@@ -83,9 +83,13 @@ final class ListenFloat {
             if (inst.shown) { emit("on", "懸浮聽歌按鈕已經開著"); return; }
             if (Build.VERSION.SDK_INT >= 29 && inst.mp == null) {
                 MediaProjectionManager pm = (MediaProjectionManager) a.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-                try { a.startActivityForResult(pm.createScreenCaptureIntent(), REQ); return; } catch (Throwable t) { /* 改用麥克風 */ }
+                /* Android 14 起：直接要求「整個螢幕」，系統就不會再問「單個應用程式／整個螢幕」（聽其他 App 的聲音本來就要選整個螢幕） */
+                Intent ci = null;
+                if (Build.VERSION.SDK_INT >= 34) { try { ci = pm.createScreenCaptureIntent(android.media.projection.MediaProjectionConfig.createConfigForDefaultDisplay()); } catch (Throwable t) { ci = null; } }
+                if (ci == null) ci = pm.createScreenCaptureIntent();
+                try { a.startActivityForResult(ci, REQ); return; } catch (Throwable t) { /* 改用麥克風 */ }
             }
-            inst.show(a, true);
+            inst.show(a, false);
         } catch (Throwable t) { emit("err", "無法開啟懸浮聽歌：" + t.getMessage()); }
     }
 
@@ -94,7 +98,7 @@ final class ListenFloat {
         if (f == null) return;
         wantProj = res == android.app.Activity.RESULT_OK && data != null;
         KeepAlive.set(a, "lsnf", "懸浮聽歌辨識開著（長按懸浮按鈕可以關閉）");
-        if (res != android.app.Activity.RESULT_OK || data == null) { f.show(a, true); emit("on", "沒有允許擷取手機的聲音，懸浮按鈕會改用麥克風聽"); return; }
+        if (res != android.app.Activity.RESULT_OK || data == null) { f.show(a, false); emit("on", "沒有允許擷取手機的聲音，懸浮按鈕會改用麥克風聽"); return; }
         /* Android 14 起要先跑「螢幕擷取」類型的前景服務，才拿得到 MediaProjection */
         Util.MAIN.postDelayed(new Runnable() {
             int tries = 0;
@@ -103,10 +107,10 @@ final class ListenFloat {
                     MediaProjectionManager pm = (MediaProjectionManager) a.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
                     f.mp = pm.getMediaProjection(res, data);
                     if (f.mp != null && Build.VERSION.SDK_INT >= 34) f.mp.registerCallback(new MediaProjection.Callback() { @Override public void onStop() { f.mp = null; } }, Util.MAIN);
-                    f.show(a, true);
+                    f.show(a, false);
                 } catch (SecurityException e) {
-                    if (++tries < 6) Util.MAIN.postDelayed(this, 400); else { wantProj = false; f.show(a, true); }
-                } catch (Throwable e) { f.show(a, true); }
+                    if (++tries < 6) Util.MAIN.postDelayed(this, 400); else { wantProj = false; f.show(a, false); }
+                } catch (Throwable e) { f.show(a, false); }
             }
         }, 500);
     }
@@ -134,24 +138,13 @@ final class ListenFloat {
     void show(MainActivity a, boolean goHome) {
         KeepAlive.set(app, "lsnf", "懸浮聽歌辨識開著（長按懸浮按鈕可以關閉）");
         if (shown) return;
-        bubble = new TextView(app);
-        bubble.setText("♫");
-        bubble.setTextColor(Color.WHITE);
-        bubble.setTextSize(24);
-        bubble.setTypeface(Typeface.DEFAULT_BOLD);
-        bubble.setGravity(Gravity.CENTER);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setShape(GradientDrawable.OVAL);
-        bg.setColor(0xF08A6A48);
-        bg.setStroke(dp(2), 0xCCFFFFFF);
-        bubble.setBackground(bg);
-        if (Build.VERSION.SDK_INT >= 21) bubble.setElevation(dp(6));
-        int s = dp(56);
+        bubble = new Bubble(app);
+        int s = dp(68);
         blp = new WindowManager.LayoutParams(s, s, overlayType(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, PixelFormat.TRANSLUCENT);
         blp.gravity = Gravity.TOP | Gravity.START;
         android.util.DisplayMetrics dm = app.getResources().getDisplayMetrics();
-        blp.x = dm.widthPixels - s - dp(12);
+        blp.x = dm.widthPixels - s - dp(4);
         blp.y = dm.heightPixels / 3;
         bubble.setOnTouchListener(new View.OnTouchListener() {
             float sx, sy; int ox, oy; long t0; boolean moved, longed;
@@ -174,7 +167,7 @@ final class ListenFloat {
                         if (moved) {
                             /* 放開後靠到左右邊 */
                             android.util.DisplayMetrics d = app.getResources().getDisplayMetrics();
-                            blp.x = blp.x + bubble.getWidth() / 2 < d.widthPixels / 2 ? dp(6) : d.widthPixels - bubble.getWidth() - dp(6);
+                            blp.x = blp.x + bubble.getWidth() / 2 < d.widthPixels / 2 ? dp(2) : d.widthPixels - bubble.getWidth() - dp(2);
                             try { wm.updateViewLayout(bubble, blp); } catch (Throwable t) { /* ignore */ }
                         } else if (e.getActionMasked() == MotionEvent.ACTION_UP) listen();
                         return true;
@@ -184,7 +177,7 @@ final class ListenFloat {
         });
         try { wm.addView(bubble, blp); shown = true; }
         catch (Throwable t) { emit("err", "無法顯示懸浮按鈕：" + t.getMessage()); return; }
-        emit("on", mp != null ? "懸浮聽歌已開啟：切到其他 App，點 ♫ 就會聽手機正在播的聲音" : "懸浮聽歌已開啟（用麥克風聽）");
+        emit("on", mp != null ? "懸浮聽歌已開啟：點畫面邊緣的 ♫ 就會聽手機正在播的聲音，切到其他 App 也能用（長按關閉）" : "懸浮聽歌已開啟（用麥克風聽；長按 ♫ 關閉）");
         if (goHome && a != null) {
             Util.MAIN.postDelayed(new Runnable() { @Override public void run() { try { Intent h = new Intent(Intent.ACTION_MAIN); h.addCategory(Intent.CATEGORY_HOME); h.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK); app.startActivity(h); } catch (Throwable t) { /* ignore */ } } }, 700);
         }
@@ -198,13 +191,86 @@ final class ListenFloat {
         } catch (Throwable t) { /* ignore */ }
     }
 
-    private void setBubble(final String txt, final int color) {
-        Util.MAIN.post(new Runnable() { @Override public void run() {
-            if (bubble == null) return;
-            bubble.setText(txt);
-            bubble.setTextSize(txt.length() > 1 ? 18 : 24);
-            ((GradientDrawable) bubble.getBackground()).setColor(color);
-        } });
+    private void setState(final int st, final long endMs, final int totalMs, final boolean tap) {
+        Util.MAIN.post(new Runnable() { @Override public void run() { if (bubble != null) bubble.set(st, endMs, totalMs, tap); } });
+    }
+
+    /** 懸浮按鈕：圓形漸層底＋白色細框。待機畫音符；聆聽中顯示置中的倒數秒數與一圈進度；辨識中顯示轉動的圓弧 */
+    final class Bubble extends View {
+        static final int IDLE = 0, REC = 1, THINK = 2;
+        int st = IDLE; long endMs; int totalMs = 10000; boolean tap = true;
+        final android.graphics.Paint pf = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        final android.graphics.Paint ps = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        final android.graphics.Paint pt = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG | android.graphics.Paint.SUBPIXEL_TEXT_FLAG);
+        final android.graphics.RectF rf = new android.graphics.RectF();
+        final android.graphics.Rect tb = new android.graphics.Rect();
+        final android.graphics.Path note = new android.graphics.Path();
+        Bubble(Context c) {
+            super(c);
+            setLayerType(LAYER_TYPE_SOFTWARE, null);
+            ps.setStyle(android.graphics.Paint.Style.STROKE);
+            ps.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+            ps.setStrokeJoin(android.graphics.Paint.Join.ROUND);
+            Typeface tf;
+            try { tf = Typeface.create("sans-serif-medium", Typeface.BOLD); } catch (Throwable t) { tf = Typeface.DEFAULT_BOLD; }
+            pt.setTypeface(tf);
+            pt.setColor(Color.WHITE);
+            pt.setTextAlign(android.graphics.Paint.Align.CENTER);
+            if (Build.VERSION.SDK_INT >= 21) pt.setFontFeatureSettings("tnum");
+        }
+        void set(int s, long end, int total, boolean t) { st = s; endMs = end; totalMs = Math.max(1000, total); tap = t; invalidate(); }
+        @Override protected void onDraw(android.graphics.Canvas c) {
+            float w = getWidth(), h = getHeight(), cx = w / 2f, cy = h / 2f, r = Math.min(w, h) / 2f - dp(6);
+            int c1, c2;
+            if (st == REC) { c1 = tap ? 0xFFD0693F : 0xFF3F9A72; c2 = tap ? 0xFF9A3F22 : 0xFF246349; }
+            else if (st == THINK) { c1 = 0xFF74859A; c2 = 0xFF475666; }
+            else { c1 = 0xFFB8834F; c2 = 0xFF7A4E2C; }
+            pf.setStyle(android.graphics.Paint.Style.FILL);
+            pf.setShader(new android.graphics.LinearGradient(cx - r, cy - r, cx + r, cy + r, c1, c2, android.graphics.Shader.TileMode.CLAMP));
+            pf.setShadowLayer(dp(4), 0, dp(2), 0x55000000);
+            c.drawCircle(cx, cy, r, pf);
+            pf.setShadowLayer(0, 0, 0, 0);
+            pf.setShader(null);
+            /* 白色細框 */
+            ps.setShader(null); ps.setColor(0xD9FFFFFF); ps.setStrokeWidth(dp(1.6f));
+            c.drawCircle(cx, cy, r - dp(0.8f), ps);
+            if (st == REC) {
+                long left = Math.max(0, endMs - System.currentTimeMillis());
+                float fr = Math.min(1f, left / (float) totalMs);
+                float rr = r - dp(5.5f);
+                rf.set(cx - rr, cy - rr, cx + rr, cy + rr);
+                ps.setStrokeWidth(dp(3)); ps.setColor(0x38FFFFFF);
+                c.drawCircle(cx, cy, rr, ps);
+                ps.setColor(Color.WHITE);
+                c.drawArc(rf, -90, 360f * fr, false, ps);
+                String t = String.valueOf(Math.max(1, (int) Math.ceil(left / 1000.0)));
+                pt.setTextSize(dp(t.length() > 1 ? 19 : 22));
+                /* 用數字實際的筆畫範圍置中（不受字型上下留白影響） */
+                pt.getTextBounds(t, 0, t.length(), tb);
+                c.drawText(t, cx - (tb.left + tb.right) / 2f + tb.width() * 0f, cy - (tb.top + tb.bottom) / 2f, pt);
+                postInvalidateOnAnimation();
+            } else if (st == THINK) {
+                float rr = r - dp(5.5f);
+                rf.set(cx - rr, cy - rr, cx + rr, cy + rr);
+                ps.setStrokeWidth(dp(3)); ps.setColor(0x38FFFFFF);
+                c.drawCircle(cx, cy, rr, ps);
+                ps.setColor(Color.WHITE);
+                float a0 = (System.currentTimeMillis() % 1100L) / 1100f * 360f;
+                c.drawArc(rf, a0 - 90, 100, false, ps);
+                pf.setColor(Color.WHITE);
+                for (int i = -1; i <= 1; i++) c.drawCircle(cx + i * dp(6.5f), cy, dp(2.1f), pf);
+                postInvalidateOnAnimation();
+            } else {
+                /* 音符（線條圖示，跟 App 裡的音樂圖示同一種畫法） */
+                float u = r * 2f * 0.50f / 24f, ox = cx - 12f * u, oy = cy - 11.5f * u;
+                note.reset();
+                note.moveTo(ox + 9 * u, oy + 18 * u); note.lineTo(ox + 9 * u, oy + 5 * u); note.lineTo(ox + 21 * u, oy + 3 * u); note.lineTo(ox + 21 * u, oy + 16 * u);
+                ps.setColor(Color.WHITE); ps.setStrokeWidth(2.3f * u);
+                c.drawPath(note, ps);
+                c.drawCircle(ox + 6 * u, oy + 18 * u, 3 * u, ps);
+                c.drawCircle(ox + 18 * u, oy + 16 * u, 3 * u, ps);
+            }
+        }
     }
 
     /* ---------- 聽 10 秒 → 辨識 ---------- */
@@ -227,7 +293,7 @@ final class ListenFloat {
                 }
                 if (pcm == null) { mode = "mic"; pcm = record(false, 10); }
                 if (pcm == null || pcm.length < 16000) throw new Exception("沒有錄到聲音");
-                setBubble("…", 0xF05C6B7A);
+                setState(Bubble.THINK, 0, 0, true);
                 JSONObject r = ask(wav(pcm), "tap".equals(mode) ? pTap : pMic);
                 String title = r.optString("title").trim(), artist = r.optString("artist").trim(), ly = r.optString("lyrics").trim(), note = r.optString("note").trim();
                 double conf = r.has("confidence") ? r.optDouble("confidence", 0.6) : 0.6;
@@ -237,6 +303,7 @@ final class ListenFloat {
                 if (lyQ.length() > 40) lyQ = lyQ.substring(0, 40);
                 String guess = r.optBoolean("found") && !title.isEmpty() && conf >= 0.5 ? (title + " " + artist).trim() : "";
                 String q = sure ? (title + " " + artist).trim() : !lyQ.isEmpty() ? lyQ : guess;
+                if (!q.isEmpty()) saveRec(sure ? title : "", artist, q, sure, r.optString("lang"), mode, lyQ, guess);
                 if (q.isEmpty()) showCard("沒有辨識出來", note.isEmpty() ? "聽不出是哪首歌，也沒有聽到歌詞。等唱到人聲時再試一次。" : note, null, mode);
                 else if (sure) { buzz(30); showCard(title, artist + (note.isEmpty() ? "" : "\n" + note), q, mode); }
                 else if (!lyQ.isEmpty()) { buzz(30); showCard("用聽到的歌詞搜尋", "「" + lyQ + "」" + (guess.isEmpty() ? "" : "\n可能是：" + guess + "（不確定）"), q, mode); }
@@ -245,9 +312,36 @@ final class ListenFloat {
                 showCard("沒有辨識出來", t.getMessage() == null ? "辨識失敗" : t.getMessage(), null, mode);
             } finally {
                 busy = false;
-                setBubble("♫", 0xF08A6A48);
+                setState(Bubble.IDLE, 0, 0, true);
             }
         } }, "lsn-float").start();
+    }
+
+    /** 辨識結果記下來（存在手機裡，App 之後讀走放進「辨識紀錄」） */
+    private void saveRec(String title, String artist, String q, boolean sure, String lang, String mode, String lyQ, String guess) {
+        try {
+            android.content.SharedPreferences sp = app.getSharedPreferences("lsn", 0);
+            JSONArray arr;
+            synchronized (ListenFloat.class) {
+                try { arr = new JSONArray(sp.getString("pending", "[]")); } catch (Throwable t) { arr = new JSONArray(); }
+                arr.put(new JSONObject().put("t", System.currentTimeMillis()).put("title", title).put("artist", artist).put("q", q).put("sure", sure)
+                    .put("lang", lang == null ? "" : lang).put("mode", mode).put("lyQ", lyQ).put("guess", guess).put("src", "float"));
+                sp.edit().putString("pending", arr.toString()).apply();
+            }
+            MainActivity.emit("lsnRec", "{}");
+        } catch (Throwable t) { /* ignore */ }
+    }
+
+    /** App 讀走還沒收進紀錄的辨識結果 */
+    static String drain(Context c) {
+        try {
+            android.content.SharedPreferences sp = c.getSharedPreferences("lsn", 0);
+            synchronized (ListenFloat.class) {
+                String v = sp.getString("pending", "[]");
+                if (!"[]".equals(v)) sp.edit().putString("pending", "[]").apply();
+                return v;
+            }
+        } catch (Throwable t) { return "[]"; }
     }
 
     private byte[] record(boolean tap, int sec) throws Exception {
@@ -267,13 +361,11 @@ final class ListenFloat {
         byte[] buf = new byte[4096];
         long end = System.currentTimeMillis() + sec * 1000L, start = System.currentTimeMillis();
         ar.startRecording();
-        int last = -1;
+        setState(Bubble.REC, end, sec * 1000, tap);
         try {
             while (System.currentTimeMillis() < end && bo.size() < rate * 2 * sec) {
                 int n = ar.read(buf, 0, buf.length);
                 if (n > 0) bo.write(buf, 0, n);
-                int left = (int) Math.ceil((end - System.currentTimeMillis()) / 1000.0);
-                if (left != last) { last = left; setBubble(String.valueOf(Math.max(1, left)), tap ? 0xF0B5532F : 0xF02F7A5B); }
             }
         } finally { try { ar.stop(); } catch (Throwable t) { /* ignore */ } ar.release(); }
         return bo.toByteArray();
@@ -347,7 +439,7 @@ final class ListenFloat {
         b.setText(t); b.setTextSize(14); b.setTextColor(pri ? Color.WHITE : 0xFFF3E9DC);
         b.setTypeface(Typeface.DEFAULT_BOLD);
         b.setPadding(dp(14), dp(9), dp(14), dp(9));
-        GradientDrawable g = new GradientDrawable(); g.setCornerRadius(dp(18)); g.setColor(pri ? 0xFF8A6A48 : 0x33FFFFFF);
+        GradientDrawable g = new GradientDrawable(); g.setCornerRadius(dp(10)); g.setColor(pri ? 0xFFA9683C : 0x30FFFFFF);
         b.setBackground(g);
         b.setOnClickListener(l);
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, -2); p.setMargins(dp(4), dp(4), dp(4), dp(4));
@@ -370,18 +462,19 @@ final class ListenFloat {
             card = new LinearLayout(app);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setPadding(dp(18), dp(14), dp(18), dp(12));
-            GradientDrawable g = new GradientDrawable(); g.setCornerRadius(dp(20)); g.setColor(0xF2241D17); g.setStroke(dp(1), 0x40FFFFFF);
+            GradientDrawable g = new GradientDrawable(); g.setCornerRadius(dp(16)); g.setColor(0xF4241D17); g.setStroke(dp(1), 0x40FFFFFF);
             card.setBackground(g);
             if (Build.VERSION.SDK_INT >= 21) card.setElevation(dp(10));
             TextView h = new TextView(app); h.setText("♫ 聽歌辨識" + ("mic".equals(mode) ? "（麥克風）" : "")); h.setTextSize(12); h.setTextColor(0xFFC9B49A);
             card.addView(h);
-            TextView t = new TextView(app); t.setText(big); t.setTextSize(19); t.setTextColor(Color.WHITE); t.setTypeface(Typeface.DEFAULT_BOLD); t.setPadding(0, dp(4), 0, dp(2));
+            TextView t = new TextView(app); t.setText(big); t.setTextSize(19); t.setTextColor(Color.WHITE); t.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD)); t.setPadding(0, dp(4), 0, dp(2));
             card.addView(t);
             if (sub != null && !sub.isEmpty()) { TextView s = new TextView(app); s.setText(sub); s.setTextSize(14); s.setTextColor(0xFFE6DACB); card.addView(s); }
             LinearLayout row = new LinearLayout(app); row.setOrientation(LinearLayout.HORIZONTAL); row.setPadding(0, dp(8), 0, 0);
             android.widget.HorizontalScrollView hs = new android.widget.HorizontalScrollView(app); hs.setHorizontalScrollBarEnabled(false); hs.addView(row);
             if (q != null) {
-                row.addView(btn("YouTube Music", true, new View.OnClickListener() { @Override public void onClick(View v) { openApp("mu", q); } }));
+                row.addView(btn("▶ 播放", true, new View.OnClickListener() { @Override public void onClick(View v) { openApp("play", q); } }));
+                row.addView(btn("YouTube Music", false, new View.OnClickListener() { @Override public void onClick(View v) { openApp("mu", q); } }));
                 row.addView(btn("YouTube", false, new View.OnClickListener() { @Override public void onClick(View v) { openApp("yt", q); } }));
                 row.addView(btn("複製", false, new View.OnClickListener() { @Override public void onClick(View v) {
                     try { ((android.content.ClipboardManager) app.getSystemService(Context.CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("song", q)); } catch (Throwable x) { /* ignore */ }

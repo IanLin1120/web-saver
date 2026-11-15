@@ -318,10 +318,39 @@ public class Bridge {
         } catch (Throwable t) { /* ignore */ }
     }
 
+    /** 快取資料夾裡 WebView「清除快取」不會清的東西：下載過的更新檔、暫存錄音、程式碼快取、繪圖快取（都可以重新產生） */
+    private void clearCacheDir() {
+        final java.io.File root = a.getCacheDir();
+        new Thread(new Runnable() { @Override public void run() {
+            try {
+                java.io.File[] fs = root.listFiles();
+                if (fs != null) for (java.io.File f : fs) {
+                    String n = f.getName();
+                    if (n.equals("work")) continue;
+                    if (n.equals("WebView") || n.startsWith("org.chromium") || n.startsWith("WebView")) { sweepCode(f, 0); continue; }
+                    if (f.isDirectory()) Util.deleteTree(f); else f.delete();
+                }
+            } catch (Throwable t) { /* ignore */ }
+            MainActivity.emit("lib", "");
+        } }, "clr-cache").start();
+    }
+    private static void sweepCode(java.io.File d, int depth) {
+        java.io.File[] fs = d.listFiles();
+        if (fs == null || depth > 6) return;
+        for (java.io.File f : fs) {
+            if (!f.isDirectory()) continue;
+            String n = f.getName();
+            if (n.equals("Code Cache") || n.equals("GPUCache") || n.equals("GrShaderCache") || n.equals("ShaderCache") || n.equals("DawnCache") || n.equals("DawnGraphiteCache") || n.equals("DawnWebGPUCache")) {
+                java.io.File[] in = f.listFiles();
+                if (in != null) for (java.io.File x : in) { if (x.isDirectory()) Util.deleteTree(x); else x.delete(); }
+            } else sweepCode(f, depth + 1);
+        }
+    }
+
     @JavascriptInterface public void clearData(final String what) {
         ui(new Runnable() {
             @Override public void run() {
-                if (what.contains("cache")) { a.br.wv.clearCache(true); Util.deleteTree(Lib.get(a).tmp); Lib.get(a).tmp.mkdirs(); }
+                if (what.contains("cache")) { a.br.wv.clearCache(true); Util.deleteTree(Lib.get(a).tmp); Lib.get(a).tmp.mkdirs(); clearCacheDir(); }
                 /* 無痕中：只清無痕自己的 Cookie 與網站資料，不碰一般瀏覽 */
                 if (what.contains("cookies")) { if (Incog.active) Incog.clearInside(); else { CookieManager.getInstance().removeAllCookies(null); CookieManager.getInstance().flush(); clearWebStorage(); } }
                 if (what.contains("history")) a.br.wv.clearHistory();
@@ -456,8 +485,10 @@ public class Bridge {
     /** 內建播放器關掉：網頁裡的影片可以再播了；off＝這個網頁之後都用網頁自己的播放器 */
     @JavascriptInterface public void vpRelease(boolean off) { if (a.br != null) { a.br.vpHold = false; if (off) a.br.vpOffUrl = a.br.curUrl == null ? "" : a.br.curUrl; } }
     @JavascriptInterface public void lsnFloat(final String cmd, final String cfg) {
-        ui(new Runnable() { @Override public void run() { if ("stop".equals(cmd)) ListenFloat.stop(); else ListenFloat.start(a, cfg); } });
+        ui(new Runnable() { @Override public void run() { if ("stop".equals(cmd)) ListenFloat.stop(); else if ("listen".equals(cmd)) { if (ListenFloat.inst != null) ListenFloat.inst.listen(); } else ListenFloat.start(a, cfg); } });
     }
+    /** 懸浮聽歌辨識出來、還沒收進紀錄的結果（讀走就清空） */
+    @JavascriptInterface public String lsnDrain() { return ListenFloat.drain(a); }
     @JavascriptInterface public boolean lsnFloatOn() { return ListenFloat.on(); }
     @JavascriptInterface public String micStop() {
         micStop0();

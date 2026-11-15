@@ -2087,5 +2087,21 @@
 "這個資料夾是空的": "This folder is empty",
 "還沒有收藏": "Nothing saved yet",
 "還沒有資料夾，按下方「新增母資料夾」": "No folders yet; tap \"New main folder\" below",
-"總收藏數：": "Total saved: "
+"總收藏數：": "Total saved: ",
+"・可能是": "· maybe ",
+"不保留記錄": "Nothing is kept",
+"不確定": "Not sure",
+"刪除這筆": "Delete this entry",
+"在 YouTube Music 播放": "Play in YouTube Music",
+"播放這首": "Play this song",
+"改語言分類": "Change language category",
+"每次聽歌辨識出來的結果都會記在這裡，點一下就到 YouTube Music 播放": "Every song recognition result is recorded here; tap one to play it in YouTube Music",
+"清空": "Clear all",
+"清空紀錄": "Clear history",
+"清空聽歌辨識紀錄？": "Clear the song recognition history?",
+"筆都會刪除，不能復原。": " entries will all be deleted. This cannot be undone.",
+"複製歌名": "Copy song name",
+"辨識紀錄": "Recognition history",
+"這個語言還沒有紀錄": "No entries for this language yet",
+"還沒有辨識紀錄": "No recognition history yet"
 }

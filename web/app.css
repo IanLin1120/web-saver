@@ -991,3 +991,6 @@ html[lang]:not([lang^="zh"]) #nav button i{font-size:11px;font-weight:700}
 .aiStor{display:flex;align-items:center;gap:10px;margin:12px 4px 2px;padding:10px 14px;border-radius:16px;background:var(--surface-2);border:1px solid var(--border-soft)}
 .aiStor b{display:block;font-size:14px}.aiStor small{color:var(--text-muted);font-size:12px}
 @media (max-width:352px){.ytMode>span,.ytMode::before{width:40px}.ytMode.music::before{transform:translateX(40px)}.ytMode.favm::before{transform:translateX(80px)}}
+.lsnHist .chips{margin-bottom:6px}
+.lsnHList .bmItem .fav.sm{color:var(--accent)}
+.lsnHList .bmItem .t b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

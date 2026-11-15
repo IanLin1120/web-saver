@@ -1089,7 +1089,7 @@
 (function () {
   'use strict';
   if (!/^music\./.test(location.hostname)) return;
-  var VER = 22;
+  var VER = 23;
   if (window.__wsMu === VER) return;
   if (window.__wsMuT) clearInterval(window.__wsMuT);
   window.__wsMu = VER;
@@ -1503,7 +1503,7 @@
   function click(el) { if (!el) return false; try { el.click(); return true; } catch (e) { return false; } }
   window.__wsMuCmd = function (c, a) {
     var v = q('video');
-    if (/^(play|playVid|toggle|next|prev|q)$/.test(c)) { try { localStorage.removeItem('__wsMuStopped'); } catch (e) {} tapAt = Date.now(); document.documentElement.classList.remove('wsMuOff'); }
+    if (/^(play|playVid|playQuery|toggle|next|prev|q)$/.test(c)) { try { localStorage.removeItem('__wsMuStopped'); } catch (e) {} tapAt = Date.now(); document.documentElement.classList.remove('wsMuOff'); }
     if (c === 'diag') {
       var lay = q('ytmusic-app-layout'), pp = q('ytmusic-player-page'), v0 = q('video'), r0 = pp ? pp.getBoundingClientRect() : null;
       var at = lay ? Array.prototype.map.call(lay.attributes, function (x) { return x.name + (x.value ? '=' + x.value.slice(0, 30) : ''); }).join(' ') : '(無 layout)';
@@ -1530,6 +1530,29 @@
         if (!v2.paused && v2.currentTime > 0.2) { clearInterval(window.__wsPVt); state(true); return; }
         if (v2.paused && pn % 2 === 0) { var pb2 = findBtn(['ytmusic-player-bar #play-pause-button', '#play-pause-button']); if (!(pb2 && click(pb2))) { try { var pr = v2.play(); if (pr && pr.catch) pr.catch(function () {}); } catch (e) {} } }
       }, 500);
+      return;
+    }
+    /* 從辨識紀錄播放：等搜尋結果出來，播最上面那首歌（最佳結果是歌曲／影片就播它，否則播清單第一首） */
+    if (c === 'playQuery') {
+      if (window.__wsPQ && window.__wsPQ.q === a && Date.now() - window.__wsPQ.t < 30000) return;
+      clearInterval(window.__wsPQt); var qn = 0, seen = 0;
+      window.__wsPQt = setInterval(function () {
+        if (++qn > 50) { clearInterval(window.__wsPQt); return; }
+        if (!/^\/search/.test(location.pathname)) return;
+        var cur = ''; try { cur = new URLSearchParams(location.search).get('q') || ''; } catch (e) {}
+        if (cur !== a) return;
+        var card = q('ytmusic-card-shelf-renderer'), cardSong = card && q('a[href*="watch?v="]', card);
+        var rows = qa('ytmusic-shelf-renderer ytmusic-responsive-list-item-renderer').filter(function (x) { return q('a[href*="watch?v="]', x); });
+        if (!cardSong && !rows.length) return;
+        if (++seen < 2) return;
+        var box = cardSong ? card : rows[0];
+        var pb = q('ytmusic-play-button-renderer', box) || (cardSong ? q('yt-button-shape button, a.yt-spec-button-shape-next', card) : null) || q('a[href*="watch?v="]', box);
+        clearInterval(window.__wsPQt);
+        window.__wsPQ = {q: a, t: Date.now()};
+        click(pb);
+        /* 點了之後確認有開始播 */
+        setTimeout(function () { var v3 = q('video'); if (v3 && v3.paused && v3.currentSrc) { var p3 = findBtn(['ytmusic-player-bar #play-pause-button', '#play-pause-button']); if (p3) click(p3); } state(true); }, 2500);
+      }, 400);
       return;
     }
     if (c === 'toggle' || c === 'play' || c === 'pause') {

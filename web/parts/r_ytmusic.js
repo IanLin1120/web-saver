@@ -243,7 +243,7 @@ function ytmuSearch(q){
    兩種都不會暫停正在播的影片或音樂。 */
 var LSN = {cb: null};
 on('tapAudio', function(d){ if(LSN.cb) LSN.cb(d || {}); });
-var LSN_JSON = '只回傳 JSON：{"lyrics": "實際聽到的歌詞（原文逐字照寫，最多兩三句；聽不清楚的字不要自己補；沒有人聲就留空）", "found": true 或 false, "title": "歌名（原文）", "artist": "歌手／演出者（原文）", "lyrics_match": true 或 false（你確定聽到的歌詞就是這首歌的原歌詞才填 true）, "confidence": 0 到 1 的數字, "note": "一句話說明（繁體中文）"}\n' +
+var LSN_JSON = '只回傳 JSON：{"lyrics": "實際聽到的歌詞（原文逐字照寫，最多兩三句；聽不清楚的字不要自己補；沒有人聲就留空）", "found": true 或 false, "title": "歌名（原文）", "artist": "歌手／演出者（原文）", "lyrics_match": true 或 false（你確定聽到的歌詞就是這首歌的原歌詞才填 true）, "confidence": 0 到 1 的數字, "lang": "這首歌演唱的語言：zh、en、ja、ko 其中之一，都不是就填 other", "note": "一句話說明（繁體中文）"}\n' +
   '規則：先專心聽寫歌詞，再判斷是哪首歌。只有在歌詞（或非常有名、你完全認得的旋律）明確對得上某首歌時 found 才填 true；只是曲風、語言、聲線、節奏像，都不算。不要拿同一位歌手的其他歌充數。翻唱或現場版填原曲名稱並在 note 說明。寧可 found 填 false 也不要猜錯；但只要聽得到歌詞，lyrics 一定要照實寫下來（我會用歌詞去搜尋）。';
 /* 判斷結果：只有很確定（而且歌詞對得上）才直接給歌名；不確定時優先用聽到的歌詞搜尋，猜的歌名只當「可能是」 */
 function lsnDecide(r){
@@ -270,9 +270,117 @@ function lsnFloatToggle(){
 on('lsnFloat', function(d){ if(d && d.msg) toast(d.msg, d.st === 'err' || d.st === 'need'); });
 on('lsnSearch', function(d){
   if(!d || !d.q) return;
+  if(d.where === 'play'){ lsnDrain(); lsnPlay(LSNH.items.filter(function(x){ return x.q === d.q; })[0] || {q: d.q}); return; }
   if(d.where === 'mu') ytmuSearch(d.q);
   else { showView('yt'); ytEnsure('https://m.youtube.com/results?search_query=' + encodeURIComponent(d.q)); }
 });
+/* 首頁的「聽歌辨識」：直接開懸浮按鈕（浮在 App 和其他 App 上面，不會跳回桌面）；已經開著就馬上聽一次。
+   手機不支援懸浮按鈕時才用原本的視窗 */
+function lsnHome(){
+  if(isApp && NAT.has('lsnFloat') && NAT.has('lsnDrain')){
+    if(NAT.call('lsnFloatOn')){ NAT.call('lsnFloat', 'listen', ''); return; }
+    lsnFloatToggle(); return;
+  }
+  ytmuListen();
+}
+/* ============================================================
+   聽歌辨識紀錄：每次辨識出來的結果（App 裡的視窗、懸浮按鈕都算）依時間排列，可依語言篩選；點一下到 YouTube Music 播放
+   跟「YouTube／YouTube Music 收藏」是分開的兩份資料，互不影響
+   ============================================================ */
+var LSNH = {items: lsGet('ws.lsnHist', []), tab: ''};
+if(!Array.isArray(LSNH.items)) LSNH.items = [];
+LSNH.save = function(){ lsSet('ws.lsnHist', LSNH.items); fire('lsnHist'); };
+var LSN_LANGS = [['', '全部'], ['zh', '中文'], ['en', '英文'], ['ja', '日文'], ['ko', '韓文'], ['other', '其他']];
+function lsnLang(o){
+  var t = (o.title || '') + ' ' + (o.lyQ || '') + ' ' + (o.sure ? '' : (o.guess || o.q || '')), a = o.artist || '';
+  /* 先看歌名／歌詞實際用的文字，再參考 Gemini 說的語言 */
+  if(/[\uac00-\ud7af\u1100-\u11ff]/.test(t)) return 'ko';
+  if(/[\u3040-\u30ff]/.test(t)) return 'ja';
+  var g = String(o.lang || '').toLowerCase().slice(0, 2);
+  if(g === 'zh' || g === 'en' || g === 'ja' || g === 'ko') return g;
+  if(/[\u3400-\u9fff]/.test(t)) return 'zh';
+  if(/[\uac00-\ud7af]/.test(a)) return 'ko';
+  if(/[\u3040-\u30ff]/.test(a)) return 'ja';
+  if(/[\u3400-\u9fff]/.test(a)) return 'zh';
+  return /[A-Za-z]/.test(t) ? 'en' : 'other';
+}
+function lsnRecAdd(o){
+  if(!o || !o.q) return;
+  var r = {id: 'l' + uid(), t: +o.t || Date.now(), title: o.title || '', artist: o.artist || '', q: o.q, sure: !!o.sure, lyQ: o.lyQ || '', guess: o.guess || '', mode: o.mode || '', src: o.src || '', vid: ''};
+  r.lang = lsnLang(o);
+  /* 同一首連續辨識（5 分鐘內）只留一筆 */
+  var dup = LSNH.items.filter(function(x){ return x.q === r.q && Math.abs(x.t - r.t) < 300000; })[0];
+  if(dup){ dup.t = Math.max(dup.t, r.t); }
+  else LSNH.items.push(r);
+  LSNH.items.sort(function(a, b){ return b.t - a.t; });
+  if(LSNH.items.length > 500) LSNH.items.length = 500;
+  LSNH.save();
+}
+function lsnDrain(){
+  if(!isApp || !NAT.has('lsnDrain')) return;
+  try{ var arr = JSON.parse(NAT.call('lsnDrain') || '[]'); (arr || []).forEach(lsnRecAdd); }catch(e){}
+}
+on('lsnRec', lsnDrain);
+setTimeout(lsnDrain, 1200);
+function lsnRecName(r){ return r.sure && r.title ? r.title : r.lyQ ? '「' + r.lyQ + '」' : r.q; }
+/* 播放紀錄裡的歌：切到 YouTube Music；知道是哪一首（播過一次就記得）直接播，否則搜尋後播第一個結果 */
+function lsnPlay(r){
+  if(!r || !r.q) return;
+  buzz(14);
+  var byId = !!r.vid, u = byId ? 'https://music.youtube.com/watch?v=' + r.vid : 'https://music.youtube.com/search?q=' + encodeURIComponent(r.q);
+  showView('yt'); YTB.fav = false; YTB.modeMusic = true; YTB.modeHold = Date.now(); ytModeUi(); if(typeof favShow === 'function') favShow();
+  if(isApp && NAT.has('ytSwitch')){ YTB.started = true; NAT.call('ytSwitch', true, u); NAT.call('ytLoad', u); ytUpdateVisible(); } else { ytEnsure(u); return; }
+  if(!NAT.has('muCmd')) return;
+  var tok = lsnPlay.tok = Date.now();
+  [1200, 3000, 5500, 9000].forEach(function(ms){ setTimeout(function(){ if(lsnPlay.tok === tok && YTB.modeMusic && !YTB.fav) NAT.call('muCmd', byId ? 'playVid' : 'playQuery', byId ? r.vid : r.q); }, ms); });
+  if(byId) return;
+  /* 記下這次實際播的是哪一首，下次直接播 */
+  var before = YTMU.it && YTMU.it.vid, n = 0;
+  var tm = setInterval(function(){
+    var v = YTMU.it && YTMU.it.vid;
+    if(lsnPlay.tok !== tok || ++n > 30){ clearInterval(tm); return; }
+    if(n > 3 && v && v !== before && LSNH.items.indexOf(r) >= 0){ r.vid = v; LSNH.save(); clearInterval(tm); }
+  }, 1000);
+}
+function openLsnHist(){
+  lsnDrain();
+  var body = h('div', {class: 'lsnHist'}), chips = h('div', {class: 'chips'}), list = h('div', {class: 'lsnHList'});
+  body.appendChild(chips); body.appendChild(list);
+  var clrB = h('button', {class: 'ib', title: '清空紀錄', html: icon('trash'), onclick: async function(){
+    if(!LSNH.items.length) return;
+    if(!(await confirmDlg('清空聽歌辨識紀錄？', '全部 ' + LSNH.items.length + ' 筆都會刪除，不能復原。', '清空', true))) return;
+    buzz(14); LSNH.items = []; LSNH.save(); draw();
+  }});
+  var sheet = openSheet({title: '辨識紀錄', icon: 'history', body: body, headExtra: clrB});
+  function draw(){
+    chips.textContent = ''; list.textContent = '';
+    LSN_LANGS.forEach(function(L){
+      var n = L[0] ? LSNH.items.filter(function(x){ return x.lang === L[0]; }).length : LSNH.items.length;
+      if(L[0] === 'other' && !n) return;
+      chips.appendChild(h('button', {class: 'fchip' + (LSNH.tab === L[0] ? ' on' : ''), onclick: function(){ buzz(10); LSNH.tab = L[0]; draw(); }}, L[1] + ' ', h('span', {class: 'c', text: n})));
+    });
+    var items = LSNH.items.filter(function(x){ return !LSNH.tab || x.lang === LSNH.tab; });
+    if(!items.length){ list.appendChild(h('div', {class: 'empty', html: '<div class="big">♫</div>' + (LSNH.items.length ? '這個語言還沒有紀錄' : '還沒有辨識紀錄') + '<br><span class="sub">每次聽歌辨識出來的結果都會記在這裡，點一下就到 YouTube Music 播放</span>'})); return; }
+    items.forEach(function(r){
+      var lg = LSN_LANGS.filter(function(L){ return L[0] === r.lang; })[0];
+      list.appendChild(h('div', {class: 'bmItem', onclick: function(){ sheet.close(); lsnPlay(r); }},
+        h('div', {class: 'fav sm', html: icon(r.sure ? 'audio' : 'search')}),
+        h('div', {class: 't'}, h('b', {text: lsnRecName(r)}),
+          h('div', {class: 'sub', text: (r.sure ? (r.artist || '') : '不確定' + (r.guess ? '・可能是 ' + r.guess : '')) + (lg && !LSNH.tab ? '・' + lg[1] : '') + '・' + fmtDate(r.t)})),
+        h('button', {class: 'ib', html: icon('more'), onclick: function(e){ e.stopPropagation(); buzz(10);
+          menu(lsnRecName(r), [
+            ['play', '在 YouTube Music 播放', function(){ sheet.close(); lsnPlay(r); }],
+            ['audio', '在 YouTube Music 搜尋', function(){ buzz(10); sheet.close(); ytmuSearch(r.sure ? (r.title + ' ' + r.artist).trim() : r.q); }],
+            ['video', '在 YouTube 搜尋', function(){ buzz(10); sheet.close(); showView('yt'); YTB.fav = false; YTB.modeMusic = false; ytModeUi(); if(typeof favShow === 'function') favShow(); ytEnsure('https://m.youtube.com/results?search_query=' + encodeURIComponent(r.sure ? (r.title + ' ' + r.artist).trim() : r.q)); }],
+            ['copy', '複製歌名', function(){ buzz(10); copyText(r.sure ? (r.title + ' ' + r.artist).trim() : r.q); }],
+            ['folder', '改語言分類', function(){ menu('改語言分類', LSN_LANGS.slice(1).map(function(L){ return [r.lang === L[0] ? 'check' : 'folder', L[1], function(){ buzz(10); r.lang = L[0]; LSNH.save(); draw(); }]; })); }],
+            ['trash', '刪除這筆', function(){ buzz(14); LSNH.items = LSNH.items.filter(function(x){ return x !== r; }); LSNH.save(); draw(); }]
+          ]); }})));
+    });
+    paintIcons(body);
+  }
+  draw();
+}
 function ytmuListen(force){
   if(!isApp || !NAT.has('micStart')){ toast('聽歌辨識需要新版 App（請安裝最新的 APK）', true); return; }
   if(!AICFG.gkey){ toast('聽歌辨識要用 Gemini：請先到「AI 摘要」設定 Gemini 金鑰', true, ['去設定', function(){ showView('ai'); if(typeof aiSettings === 'function') aiSettings(); }]); return; }
@@ -311,6 +419,7 @@ function ytmuListen(force){
       var D = lsnDecide(r), sure = D.sure, q = D.q, title = D.title, artist = D.artist;
       if(!q){ fail(r.note || '聽不出是哪首歌，也沒有聽到歌詞。等唱到人聲時再試一次。'); return; }
       buzz(15);
+      lsnRecAdd({t: Date.now(), title: sure ? title : '', artist: artist, q: q, sure: sure, lang: r.lang || '', mode: mode, lyQ: D.lyQ, guess: D.guess, src: 'app'});
       var goMu = function(){ if(!done) sheet.close(); ytmuSearch(q); };
       var goYt = function(){ if(!done) sheet.close(); showView('yt'); ytEnsure('https://m.youtube.com/results?search_query=' + encodeURIComponent(q)); };
       /* 在 YouTube Music 裡：自動去搜尋（不會中斷正在播的歌）。在 YouTube 看影片時：只顯示結果，不自動跳頁，影片繼續播 */
@@ -320,7 +429,8 @@ function ytmuListen(force){
           !sure && D.lyQ && D.guess ? h('div', {class: 'sub', style: {textAlign: 'center', margin: '6px 0'}}, '可能是：', h('a', {href: '#', text: D.guess, onclick: function(e){ e.preventDefault(); goGuess(); }}), '（不確定）') : null,
           r.note ? h('div', {class: 'sub', style: {textAlign: 'center', margin: '6px 0'}, text: r.note}) : null,
           h('div', {class: 'btn-row', style: {justifyContent: 'center', flexWrap: 'wrap'}},
-            h('button', {class: 'btn pri', html: icon('audio', 'sm') + '在 YouTube Music 搜尋', onclick: goMu}),
+            h('button', {class: 'btn pri', html: icon('play', 'sm') + '播放這首', onclick: function(){ if(!done) sheet.close(); lsnPlay(LSNH.items[0] || {q: q}); }}),
+            h('button', {class: 'btn', html: icon('audio', 'sm') + '在 YouTube Music 搜尋', onclick: goMu}),
             inMusic ? null : h('button', {class: 'btn', html: icon('video', 'sm') + '在 YouTube 搜尋', onclick: goYt}),
             h('button', {class: 'btn', html: icon('copy', 'sm') + '複製', onclick: function(){ copyText(q); }}),
             h('button', {class: 'btn', html: icon('listen', 'sm') + '再聽一次', onclick: function(){ again(mode); }})),
