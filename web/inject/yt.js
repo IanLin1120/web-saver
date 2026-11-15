@@ -1089,7 +1089,7 @@
 (function () {
   'use strict';
   if (!/^music\./.test(location.hostname)) return;
-  var VER = 21;
+  var VER = 22;
   if (window.__wsMu === VER) return;
   if (window.__wsMuT) clearInterval(window.__wsMuT);
   window.__wsMu = VER;
@@ -1679,11 +1679,23 @@
     u: function (e) {
       var d = sx; sx = null;
       if (!d || Date.now() - d.t > 700 || Math.abs(e.clientX - d.x) > 12 || Math.abs(e.clientY - d.y) > 12) return;
+      /* 回首頁一律用 YouTube Music 自己的頁內切換（不重新載入網頁），正在播的音樂不會被中斷：
+         先請它切到首頁 → 不行就點標誌 → 還不行就跟按「上一頁」一樣往回退；絕不重新載入 */
       setTimeout(function () {
-        try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch (x) {}
-        var lg = q('ytmusic-nav-bar a.ytmusic-logo, ytmusic-nav-bar ytmusic-logo a, ytmusic-nav-bar a[href="/"], a.ytmusic-logo');
-        if (lg) click(lg);
-        setTimeout(function () { try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch (x) {} if (/^\/search/.test(location.pathname)) location.href = 'https://music.youtube.com/'; }, 700);
+        var onSearch = function () { return /^\/search/.test(location.pathname); };
+        var blur = function () { try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch (x) {} };
+        var steps = [
+          function () { var app = q('ytmusic-app'); if (app) app.dispatchEvent(new CustomEvent('yt-navigate', {bubbles: true, composed: true, detail: {endpoint: {browseEndpoint: {browseId: 'FEmusic_home'}}}})); },
+          function () { var lg = q('ytmusic-nav-bar a.ytmusic-logo, ytmusic-nav-bar ytmusic-logo a, ytmusic-nav-bar a[href="/"], a.ytmusic-logo'); if (lg) click(lg); },
+          function () { history.back(); }, function () { history.back(); }, function () { history.back(); }
+        ];
+        var n = 0;
+        (function go() {
+          blur();
+          if (!onSearch() || n >= steps.length) return;
+          try { steps[n++](); } catch (x) {}
+          setTimeout(go, 550);
+        })();
       }, 80);
     }
   };

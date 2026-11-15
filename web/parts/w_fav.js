@@ -166,7 +166,7 @@ function favRender(){
   crumb.appendChild(h('button', {class: 'chip' + (FAVV.cur ? '' : ' on'), html: icon('star', 'sm') + '全部', onclick: function(){ favBuzz(); FAVV.cur = ''; favRender(); }}));
   path.forEach(function(f){ crumb.appendChild(h('span', {class: 'sep', text: '›'})); crumb.appendChild(h('button', {class: 'chip' + (f.id === FAVV.cur ? ' on' : ''), text: f.name, onclick: function(){ favBuzz(); FAVV.cur = f.id; favRender(); }})); });
   crumb.appendChild(h('span', {class: 'grow'}));
-  crumb.appendChild(h('span', {class: 'favTot', text: '總收藏數：' + FAV[k].items.length + (k === 'ytm' ? ' 首' : ' 部')}));
+  crumb.appendChild(h('span', {class: 'favTot', text: '總收藏數：' + (FAVV.cur ? favItemsIn(k, FAVV.cur).length : FAV[k].items.length) + (k === 'ytm' ? ' 首' : ' 部')}));
   crumb.appendChild(h('button', {class: 'ib', title: FAVV.cur ? '新增子資料夾' : '新增母資料夾', html: icon('plus'), onclick: async function(){
     var n = await promptDlg(FAVV.cur ? '新增子資料夾' : '新增母資料夾', '', '資料夾名稱'); if(n){ favBuzz(); favNewFolder(k, FAVV.cur, n); favRender(); }
   }}));

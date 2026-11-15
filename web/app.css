@@ -441,8 +441,9 @@ input[type=range]{width:100%;accent-color:var(--accent);padding:0;border:0;backg
 .mpTools .chip{flex:none;font-size:12.5px;padding:6px 11px}
 .pdfPages.seamless{padding-top:0}.pdfPages.seamless .pdfPage{margin:0 auto;box-shadow:none}.pdfPages.seamless .pn{display:none}
 /* ===== YouTube 分頁 ===== */
-#ytTop{position:absolute;left:6px;right:6px;top:calc(env(safe-area-inset-top) + 6px);z-index:5;border-radius:22px;padding:6px 8px;display:flex;align-items:center;gap:2px;overflow:hidden}
-#ytTop .ib{width:40px;height:40px;flex:0 0 40px}
+#ytTop{position:absolute;left:6px;right:6px;top:calc(env(safe-area-inset-top) + 6px);z-index:5;border-radius:22px;padding:7px 8px;display:flex;align-items:center;gap:3px;overflow:hidden}
+#ytTop .ib{width:40px;height:40px;flex:0 0 40px;border-radius:12px}
+#ytTop .ib svg.i{width:23px;height:23px}
 #ytTop .ytTitle{padding:0}
 #ytTop .ytTitle{flex:1;min-width:0;display:flex;flex-direction:column;padding:0 4px}
 #ytTop .ytTitle b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -767,9 +768,9 @@ body.brFull #brArea{left:0!important;right:0!important;top:0!important;bottom:0!
 input[type=range].hrArmed::-webkit-slider-thumb{transform:scale(1.35);box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 25%,transparent)}
 input[type=range].hrArmed{filter:drop-shadow(0 0 5px color-mix(in srgb,var(--accent) 70%,transparent))}
 /* YouTube ⇄ YouTube Music 切換鈕 */
-.ytMode{position:relative;display:flex;align-items:center;gap:0;border:1.5px solid var(--border-soft);background:var(--surface-3);border-radius:13px;padding:3px;cursor:pointer;flex:none;margin:0 2px}
-.ytMode>span{width:46px;height:34px;border-radius:10px;display:grid;place-items:center;color:var(--text-muted);position:relative;z-index:1;transition:color .2s}
-.ytMode::before{content:'';position:absolute;top:3px;left:3px;width:46px;height:34px;border-radius:10px;background:#e5322d;transition:transform .22s cubic-bezier(.3,.7,.3,1),background .2s;box-shadow:0 2px 6px var(--sh)}
+.ytMode{position:relative;display:flex;align-items:center;gap:0;border:1.5px solid var(--border-soft);background:var(--surface-3);border-radius:13px;padding:3px;cursor:pointer;flex:none;margin:0;box-sizing:border-box;height:40px}
+.ytMode>span{width:46px;height:31px;border-radius:10px;display:grid;place-items:center;color:var(--text-muted);position:relative;z-index:1;transition:color .2s}
+.ytMode::before{content:'';position:absolute;top:3px;left:3px;width:46px;height:31px;border-radius:10px;background:#e5322d;transition:transform .22s cubic-bezier(.3,.7,.3,1),background .2s;box-shadow:0 2px 6px var(--sh)}
 .ytMode .m-yt{color:#fff}
 .ytMode.music::before{transform:translateX(46px);background:linear-gradient(135deg,#ff2d55,#c71585)}
 .ytMode.music .m-yt{color:var(--text-muted)}.ytMode.music .m-mu{color:#fff}
@@ -989,3 +990,4 @@ html[lang]:not([lang^="zh"]) #nav button i{font-size:11px;font-weight:700}
 
 .aiStor{display:flex;align-items:center;gap:10px;margin:12px 4px 2px;padding:10px 14px;border-radius:16px;background:var(--surface-2);border:1px solid var(--border-soft)}
 .aiStor b{display:block;font-size:14px}.aiStor small{color:var(--text-muted);font-size:12px}
+@media (max-width:352px){.ytMode>span,.ytMode::before{width:40px}.ytMode.music::before{transform:translateX(40px)}.ytMode.favm::before{transform:translateX(80px)}}
