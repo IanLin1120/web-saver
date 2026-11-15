@@ -441,7 +441,9 @@ input[type=range]{width:100%;accent-color:var(--accent);padding:0;border:0;backg
 .mpTools .chip{flex:none;font-size:12.5px;padding:6px 11px}
 .pdfPages.seamless{padding-top:0}.pdfPages.seamless .pdfPage{margin:0 auto;box-shadow:none}.pdfPages.seamless .pn{display:none}
 /* ===== YouTube 分頁 ===== */
-#ytTop{position:absolute;left:6px;right:6px;top:calc(env(safe-area-inset-top) + 6px);z-index:5;border-radius:22px;padding:6px;display:flex;align-items:center;gap:4px}
+#ytTop{position:absolute;left:6px;right:6px;top:calc(env(safe-area-inset-top) + 6px);z-index:5;border-radius:22px;padding:6px 8px;display:flex;align-items:center;gap:2px;overflow:hidden}
+#ytTop .ib{width:40px;height:40px;flex:0 0 40px}
+#ytTop .ytTitle{padding:0}
 #ytTop .ytTitle{flex:1;min-width:0;display:flex;flex-direction:column;padding:0 4px}
 #ytTop .ytTitle b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #ytTop .ytTitle small{font-size:11px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -765,24 +767,25 @@ body.brFull #brArea{left:0!important;right:0!important;top:0!important;bottom:0!
 input[type=range].hrArmed::-webkit-slider-thumb{transform:scale(1.35);box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 25%,transparent)}
 input[type=range].hrArmed{filter:drop-shadow(0 0 5px color-mix(in srgb,var(--accent) 70%,transparent))}
 /* YouTube ⇄ YouTube Music 切換鈕 */
-.ytMode{position:relative;display:flex;align-items:center;gap:0;border:1.5px solid var(--border-soft);background:var(--surface-3);border-radius:999px;padding:3px;cursor:pointer;flex:none}
-.ytMode>span{width:52px;height:40px;border-radius:999px;display:grid;place-items:center;color:var(--text-muted);position:relative;z-index:1;transition:color .2s}
-.ytMode::before{content:'';position:absolute;top:3px;left:3px;width:52px;height:40px;border-radius:999px;background:#e5322d;transition:transform .22s cubic-bezier(.3,.7,.3,1),background .2s;box-shadow:0 2px 6px var(--sh)}
+.ytMode{position:relative;display:flex;align-items:center;gap:0;border:1.5px solid var(--border-soft);background:var(--surface-3);border-radius:13px;padding:3px;cursor:pointer;flex:none;margin:0 2px}
+.ytMode>span{width:46px;height:34px;border-radius:10px;display:grid;place-items:center;color:var(--text-muted);position:relative;z-index:1;transition:color .2s}
+.ytMode::before{content:'';position:absolute;top:3px;left:3px;width:46px;height:34px;border-radius:10px;background:#e5322d;transition:transform .22s cubic-bezier(.3,.7,.3,1),background .2s;box-shadow:0 2px 6px var(--sh)}
 .ytMode .m-yt{color:#fff}
-.ytMode.music::before{transform:translateX(52px);background:linear-gradient(135deg,#ff2d55,#c71585)}
+.ytMode.music::before{transform:translateX(46px);background:linear-gradient(135deg,#ff2d55,#c71585)}
 .ytMode.music .m-yt{color:var(--text-muted)}.ytMode.music .m-mu{color:#fff}
-.ytMode.favm::before{transform:translateX(104px);background:linear-gradient(135deg,#c98a3a,#9a5b2e)}
+.ytMode.favm::before{transform:translateX(92px);background:linear-gradient(135deg,#c98a3a,#9a5b2e)}
 .ytMode.favm .m-yt{color:var(--text-muted)}.ytMode.favm .m-fav{color:#fff}
 /* ---------- YouTube／YouTube Music 收藏 ---------- */
 #ytFav{position:absolute;inset:0;z-index:3;background:var(--surface-1,var(--bg));display:flex;flex-direction:column;padding:10px 10px 0;gap:8px}
 #ytFav.hide{display:none}
-.favSeg{display:flex;gap:6px;background:var(--surface-3);border-radius:999px;padding:4px;flex:none}
-.favSeg button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;height:38px;border-radius:999px;border:0;background:none;color:var(--text-muted);font:700 13.5px/1 inherit;cursor:pointer}
+.favSeg{display:flex;gap:6px;background:var(--surface-3);border-radius:13px;padding:4px;flex:none}
+.favSeg button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;height:38px;border-radius:10px;border:0;background:none;color:var(--text-muted);font:700 13.5px/1 inherit;cursor:pointer}
 .favSeg button i{font-style:normal;font-weight:600;opacity:.75;font-size:12px}
 .favSeg button.on.yt{background:#e5322d;color:#fff}.favSeg button.on.mu{background:linear-gradient(135deg,#ff2d55,#c71585);color:#fff}
 .favCrumb{display:flex;align-items:center;gap:4px;overflow-x:auto;scrollbar-width:none;flex:none}
 .favCrumb::-webkit-scrollbar{display:none}
 .favCrumb .chip{flex:none;white-space:nowrap}.favCrumb .chip.on{background:var(--accent);color:#fff}
+.favCrumb .favTot{flex:none;white-space:nowrap;font-size:12.5px;font-weight:700;color:var(--text-2);padding:0 4px}
 .favCrumb .sep{color:var(--text-muted);flex:none}.favCrumb .grow{flex:1}
 .favList{flex:1;overflow-y:auto;padding-bottom:12px;-webkit-overflow-scrolling:touch}
 .favRow{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border-soft);cursor:pointer}

@@ -108,14 +108,15 @@ $('ytReload').addEventListener('click', function(){ NAT.call('ytNav', YTB.progre
 $('ytModeB').addEventListener('click', function(e){
   /* 三段切換：YouTube／YouTube Music／收藏；點按鈕空白處＝在 YouTube 和 Music 之間切換 */
   var seg = e.target.closest && e.target.closest('[data-m]'), m = seg ? seg.getAttribute('data-m') : '';
-  if(m === 'fav'){ buzz(12); if(YTB.fav) return; YTB.fav = true; ytModeUi(); favShow(); return; }
+  /* 三區切換的震動一樣大 */
+  buzz(26);
+  if(m === 'fav'){ if(YTB.fav) return; YTB.fav = true; ytModeUi(); favShow(); return; }
   var wasFav = !!YTB.fav;
   var curMu = YTB.modeMusic != null ? YTB.modeMusic : ytIsMusic(YTB.url);
   var toMusic = m ? m === 'mu' : !curMu;
-  if(wasFav){ YTB.fav = false; favShow(); if(toMusic === curMu){ buzz(12); ytModeUi(); ytEnsure(); return; } }
+  if(wasFav){ YTB.fav = false; favShow(); if(toMusic === curMu){ ytModeUi(); ytEnsure(); return; } }
   else if(m && toMusic === curMu) return;
   YTB.modeMusic = toMusic; YTB.modeHold = Date.now(); ytModeUi();
-  if(isApp && NAT.has('buzz')) NAT.call('buzz', 12);
   var url = toMusic ? (YTB.last.music || YT_MUSIC) : (YTB.last.yt || YT_HOME);
   /* APK：YouTube 與 YouTube Music 各用一個瀏覽器，切換只是換顯示，不重新載入 */
   /* 剛才在背景用 YouTube 讀過下載資訊（停在那部影片）：切到 YouTube 時回首頁 */

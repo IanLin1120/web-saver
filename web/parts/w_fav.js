@@ -92,6 +92,8 @@ function favPlay(k, it){
     YTB.fav = false; YTB.modeMusic = true; YTB.modeHold = Date.now(); ytModeUi(); favShow();
     var u = 'https://music.youtube.com/watch?v=' + it.id;
     if(isApp && NAT.has('ytSwitch')){ YTB.started = true; NAT.call('ytSwitch', true, u); NAT.call('ytLoad', u); ytUpdateVisible(); } else ytEnsure(u);
+    /* YouTube Music 打開歌曲網址不會自己播：頁面載好後請它開始播（重試幾次，等頁面載入完成） */
+    if(isApp && NAT.has('muCmd')) [1200, 3000, 5500, 9000].forEach(function(ms){ setTimeout(function(){ if(YTB.modeMusic && !YTB.fav) NAT.call('muCmd', 'playVid', it.id); }, ms); });
   } else {
     YTB.fav = false; YTB.modeMusic = false; YTB.modeHold = Date.now(); ytModeUi(); favShow();
     var w = 'https://m.youtube.com/watch?v=' + it.id;
@@ -131,14 +133,14 @@ function favFolderMenu(k, f){
 }
 
 /* ---------- 收藏畫面（蓋在 YouTube 分頁的內容區上） ---------- */
-function favEl(){
+function favBox(){
   var el = $('ytFav');
   if(!el){ el = h('div', {id: 'ytFav', class: 'hide'}); $('ytArea').appendChild(el); }
   return el;
 }
 function favShow(){
   var on = !!YTB.fav && curView === 'yt';
-  favEl().classList.toggle('hide', !on);
+  favBox().classList.toggle('hide', !on);
   if(on) favRender();
   ytUpdateVisible();
 }
@@ -148,15 +150,15 @@ function favOpen(k, fid){
   YTB.fav = true; ytModeUi(); favShow();
 }
 function favRender(){
-  var el = favEl(); if(el.classList.contains('hide')) return;
+  var el = favBox(); if(el.classList.contains('hide')) return;
   var k = FAVV.kind === 'ytm' ? 'ytm' : 'yt';
   if(FAVV.cur && !favF(k, FAVV.cur)) FAVV.cur = '';
   var keep = el.querySelector('.favList'), sc = keep ? keep.scrollTop : 0;
   el.textContent = '';
   /* YouTube ⇄ YouTube Music 收藏切換 */
   var seg = h('div', {class: 'favSeg'},
-    h('button', {class: k === 'yt' ? 'on yt' : '', html: icon('ytplay', 'sm') + 'YouTube 影片 <i>' + FAV.yt.items.length + '</i>', onclick: function(){ favBuzz(); FAVV.kind = 'yt'; FAVV.cur = ''; lsSet('ws.favKind', 'yt'); favRender(); }}),
-    h('button', {class: k === 'ytm' ? 'on mu' : '', html: icon('audio', 'sm') + 'YouTube Music <i>' + FAV.ytm.items.length + '</i>', onclick: function(){ favBuzz(); FAVV.kind = 'ytm'; FAVV.cur = ''; lsSet('ws.favKind', 'ytm'); favRender(); }}));
+    h('button', {class: k === 'yt' ? 'on yt' : '', html: icon('ytplay', 'sm') + 'YouTube', onclick: function(){ favBuzz(); FAVV.kind = 'yt'; FAVV.cur = ''; lsSet('ws.favKind', 'yt'); favRender(); }}),
+    h('button', {class: k === 'ytm' ? 'on mu' : '', html: icon('audio', 'sm') + 'YouTube Music', onclick: function(){ favBuzz(); FAVV.kind = 'ytm'; FAVV.cur = ''; lsSet('ws.favKind', 'ytm'); favRender(); }}));
   el.appendChild(seg);
   /* 路徑＋新增資料夾 */
   var path = favPath(k, FAVV.cur);
@@ -164,6 +166,7 @@ function favRender(){
   crumb.appendChild(h('button', {class: 'chip' + (FAVV.cur ? '' : ' on'), html: icon('star', 'sm') + '全部', onclick: function(){ favBuzz(); FAVV.cur = ''; favRender(); }}));
   path.forEach(function(f){ crumb.appendChild(h('span', {class: 'sep', text: '›'})); crumb.appendChild(h('button', {class: 'chip' + (f.id === FAVV.cur ? ' on' : ''), text: f.name, onclick: function(){ favBuzz(); FAVV.cur = f.id; favRender(); }})); });
   crumb.appendChild(h('span', {class: 'grow'}));
+  crumb.appendChild(h('span', {class: 'favTot', text: '總收藏數：' + FAV[k].items.length + (k === 'ytm' ? ' 首' : ' 部')}));
   crumb.appendChild(h('button', {class: 'ib', title: FAVV.cur ? '新增子資料夾' : '新增母資料夾', html: icon('plus'), onclick: async function(){
     var n = await promptDlg(FAVV.cur ? '新增子資料夾' : '新增母資料夾', '', '資料夾名稱'); if(n){ favBuzz(); favNewFolder(k, FAVV.cur, n); favRender(); }
   }}));
