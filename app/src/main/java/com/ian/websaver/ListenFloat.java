@@ -54,6 +54,10 @@ final class ListenFloat {
     LinearLayout card;
     WindowManager.LayoutParams blp, clp;
     volatile boolean busy = false, shown = false;
+    /** 每次聽歌一個編號；取消就換號，舊的那次結果直接丟掉 */
+    volatile int gen = 0;
+    /** 開啟後要馬上聽一次（從快速設定開關打開時） */
+    volatile boolean listenOnShow = false;
 
     private ListenFloat(Context c) {
         app = c.getApplicationContext();
@@ -127,6 +131,7 @@ final class ListenFloat {
         KeepAlive.set(f.app, "lsnf", null);
         inst = null;
         emit("off", "已關閉懸浮聽歌");
+        ListenTile.update(f.app);
     }
 
     private int dp(float v) { return Math.round(v * app.getResources().getDisplayMetrics().density); }
@@ -148,7 +153,7 @@ final class ListenFloat {
         blp.y = dm.heightPixels / 3;
         bubble.setOnTouchListener(new View.OnTouchListener() {
             float sx, sy; int ox, oy; long t0; boolean moved, longed;
-            final Runnable lp = new Runnable() { @Override public void run() { if (!moved) { longed = true; buzz(40); stop(); } } };
+            final Runnable lp = new Runnable() { @Override public void run() { if (!moved) { longed = true; gen++; buzz2(); stop(); } } };
             @Override public boolean onTouch(View v, MotionEvent e) {
                 switch (e.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
@@ -169,7 +174,8 @@ final class ListenFloat {
                             android.util.DisplayMetrics d = app.getResources().getDisplayMetrics();
                             blp.x = blp.x + bubble.getWidth() / 2 < d.widthPixels / 2 ? dp(2) : d.widthPixels - bubble.getWidth() - dp(2);
                             try { wm.updateViewLayout(bubble, blp); } catch (Throwable t) { /* ignore */ }
-                        } else if (e.getActionMasked() == MotionEvent.ACTION_UP) listen();
+                            buzz(12);
+                        } else if (e.getActionMasked() == MotionEvent.ACTION_UP) tap();
                         return true;
                 }
                 return false;
@@ -177,10 +183,38 @@ final class ListenFloat {
         });
         try { wm.addView(bubble, blp); shown = true; }
         catch (Throwable t) { emit("err", "無法顯示懸浮按鈕：" + t.getMessage()); return; }
-        emit("on", mp != null ? "懸浮聽歌已開啟：點畫面邊緣的 ♫ 就會聽手機正在播的聲音，切到其他 App 也能用（長按關閉）" : "懸浮聽歌已開啟（用麥克風聽；長按 ♫ 關閉）");
+        emit("on", mp != null ? "懸浮聽歌已開啟：點 ♫ 開始聽，聽的時候再點一下取消，長按關閉" : "懸浮聽歌已開啟（用麥克風聽）：點 ♫ 開始聽，再點一下取消，長按關閉");
+        ListenTile.update(app);
+        if (listenOnShow) { listenOnShow = false; Util.MAIN.postDelayed(new Runnable() { @Override public void run() { listen(); } }, 500); }
         if (goHome && a != null) {
             Util.MAIN.postDelayed(new Runnable() { @Override public void run() { try { Intent h = new Intent(Intent.ACTION_MAIN); h.addCategory(Intent.CATEGORY_HOME); h.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK); app.startActivity(h); } catch (Throwable t) { /* ignore */ } } }, 700);
         }
+    }
+
+    /** 震兩下（關閉） */
+    private void buzz2() {
+        try {
+            android.os.Vibrator v = (android.os.Vibrator) app.getSystemService(Context.VIBRATOR_SERVICE);
+            if (v == null) return;
+            long[] w = {0, 45, 90, 45};
+            if (Build.VERSION.SDK_INT >= 26) v.vibrate(android.os.VibrationEffect.createWaveform(w, -1)); else v.vibrate(w, -1);
+        } catch (Throwable t) { /* ignore */ }
+    }
+
+    /** 點一下：沒在聽就開始聽；聽的時候（倒數或辨識中）再點一下就取消 */
+    void tap() {
+        if (busy) { cancel(); return; }
+        listen();
+    }
+
+    void cancel() {
+        if (!busy) return;
+        gen++;
+        busy = false;
+        buzz(35);
+        setState(Bubble.IDLE, 0, 0, true);
+        hideCard();
+        ListenTile.update(app);
     }
 
     private void buzz(int ms) {
@@ -215,7 +249,7 @@ final class ListenFloat {
             try { tf = Typeface.create("sans-serif-medium", Typeface.BOLD); } catch (Throwable t) { tf = Typeface.DEFAULT_BOLD; }
             pt.setTypeface(tf);
             pt.setColor(Color.WHITE);
-            pt.setTextAlign(android.graphics.Paint.Align.CENTER);
+            pt.setTextAlign(android.graphics.Paint.Align.LEFT);
             if (Build.VERSION.SDK_INT >= 21) pt.setFontFeatureSettings("tnum");
         }
         void set(int s, long end, int total, boolean t) { st = s; endMs = end; totalMs = Math.max(1000, total); tap = t; invalidate(); }
@@ -247,7 +281,7 @@ final class ListenFloat {
                 pt.setTextSize(dp(t.length() > 1 ? 19 : 22));
                 /* 用數字實際的筆畫範圍置中（不受字型上下留白影響） */
                 pt.getTextBounds(t, 0, t.length(), tb);
-                c.drawText(t, cx - (tb.left + tb.right) / 2f + tb.width() * 0f, cy - (tb.top + tb.bottom) / 2f, pt);
+                c.drawText(t, cx - (tb.left + tb.right) / 2f, cy - (tb.top + tb.bottom) / 2f, pt);
                 postInvalidateOnAnimation();
             } else if (st == THINK) {
                 float rr = r - dp(5.5f);
@@ -261,14 +295,16 @@ final class ListenFloat {
                 for (int i = -1; i <= 1; i++) c.drawCircle(cx + i * dp(6.5f), cy, dp(2.1f), pf);
                 postInvalidateOnAnimation();
             } else {
-                /* 音符（線條圖示，跟 App 裡的音樂圖示同一種畫法） */
-                float u = r * 2f * 0.50f / 24f, ox = cx - 12f * u, oy = cy - 11.5f * u;
+                /* 音符（線條圖示）：先畫在 24×24 的格子裡，再用實際外框移到正中間 */
+                float u = r * 2f * 0.50f / 24f;
                 note.reset();
-                note.moveTo(ox + 9 * u, oy + 18 * u); note.lineTo(ox + 9 * u, oy + 5 * u); note.lineTo(ox + 21 * u, oy + 3 * u); note.lineTo(ox + 21 * u, oy + 16 * u);
+                note.moveTo(9 * u, 18 * u); note.lineTo(9 * u, 5 * u); note.lineTo(21 * u, 3 * u); note.lineTo(21 * u, 16 * u);
+                note.addCircle(6 * u, 18 * u, 3 * u, android.graphics.Path.Direction.CW);
+                note.addCircle(18 * u, 16 * u, 3 * u, android.graphics.Path.Direction.CW);
+                note.computeBounds(rf, true);
+                note.offset(cx - rf.centerX(), cy - rf.centerY());
                 ps.setColor(Color.WHITE); ps.setStrokeWidth(2.3f * u);
                 c.drawPath(note, ps);
-                c.drawCircle(ox + 6 * u, oy + 18 * u, 3 * u, ps);
-                c.drawCircle(ox + 18 * u, oy + 16 * u, 3 * u, ps);
             }
         }
     }
@@ -281,20 +317,25 @@ final class ListenFloat {
             showCard("需要錄音權限", "請回到 App 允許錄音（麥克風）權限", null, null); return;
         }
         busy = true;
+        final int my = ++gen;
         hideCard();
-        buzz(20);
+        buzz(25);
+        ListenTile.update(app);
         new Thread(new Runnable() { @Override public void run() {
             String mode = "tap";
             try {
                 byte[] pcm = null;
                 if (mp != null && Build.VERSION.SDK_INT >= 29) {
-                    pcm = record(true, 12);
+                    pcm = record(true, 10, my);
                     if (pcm == null || rms(pcm) < 120) { pcm = null; }
                 }
-                if (pcm == null) { mode = "mic"; pcm = record(false, 10); }
+                if (my != gen) return;
+                if (pcm == null) { mode = "mic"; pcm = record(false, 10, my); }
+                if (my != gen) return;
                 if (pcm == null || pcm.length < 16000) throw new Exception("沒有錄到聲音");
                 setState(Bubble.THINK, 0, 0, true);
                 JSONObject r = ask(wav(pcm), "tap".equals(mode) ? pTap : pMic);
+                if (my != gen) return;
                 String title = r.optString("title").trim(), artist = r.optString("artist").trim(), ly = r.optString("lyrics").trim(), note = r.optString("note").trim();
                 double conf = r.has("confidence") ? r.optDouble("confidence", 0.6) : 0.6;
                 /* 只有很確定（而且歌詞對得上）才直接給歌名；不確定時用聽到的歌詞搜尋，猜的歌名只當「可能是」 */
@@ -309,10 +350,10 @@ final class ListenFloat {
                 else if (!lyQ.isEmpty()) { buzz(30); showCard("用聽到的歌詞搜尋", "「" + lyQ + "」" + (guess.isEmpty() ? "" : "\n可能是：" + guess + "（不確定）"), q, mode); }
                 else { buzz(30); showCard("可能是這首（不確定）", guess + (note.isEmpty() ? "" : "\n" + note), q, mode); }
             } catch (Throwable t) {
-                showCard("沒有辨識出來", t.getMessage() == null ? "辨識失敗" : t.getMessage(), null, mode);
+                if (my == gen) showCard("沒有辨識出來", t.getMessage() == null ? "辨識失敗" : t.getMessage(), null, mode);
             } finally {
-                busy = false;
-                setState(Bubble.IDLE, 0, 0, true);
+                /* 已經取消（換號了）就不要動新的那次的狀態 */
+                if (my == gen) { busy = false; setState(Bubble.IDLE, 0, 0, true); ListenTile.update(app); }
             }
         } }, "lsn-float").start();
     }
@@ -344,7 +385,7 @@ final class ListenFloat {
         } catch (Throwable t) { return "[]"; }
     }
 
-    private byte[] record(boolean tap, int sec) throws Exception {
+    private byte[] record(boolean tap, int sec, int my) throws Exception {
         final int rate = 16000;
         AudioRecord ar;
         int min = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
@@ -363,7 +404,7 @@ final class ListenFloat {
         ar.startRecording();
         setState(Bubble.REC, end, sec * 1000, tap);
         try {
-            while (System.currentTimeMillis() < end && bo.size() < rate * 2 * sec) {
+            while (System.currentTimeMillis() < end && bo.size() < rate * 2 * sec && my == gen) {
                 int n = ar.read(buf, 0, buf.length);
                 if (n > 0) bo.write(buf, 0, n);
             }
@@ -441,7 +482,8 @@ final class ListenFloat {
         b.setPadding(dp(14), dp(9), dp(14), dp(9));
         GradientDrawable g = new GradientDrawable(); g.setCornerRadius(dp(10)); g.setColor(pri ? 0xFFA9683C : 0x30FFFFFF);
         b.setBackground(g);
-        b.setOnClickListener(l);
+        final View.OnClickListener l0 = l;
+        b.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { buzz(15); l0.onClick(v); } });
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, -2); p.setMargins(dp(4), dp(4), dp(4), dp(4));
         b.setLayoutParams(p);
         return b;

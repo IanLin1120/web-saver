@@ -77,6 +77,17 @@
         </activity>
 
         <service
+            android:name=".ListenTile"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_listen"
+            android:label="聽歌辨識"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <service
             android:name=".KeepAlive"
             android:exported="false"
             android:foregroundServiceType="dataSync|mediaPlayback|mediaProjection" />

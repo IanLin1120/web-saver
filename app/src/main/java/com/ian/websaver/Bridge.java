@@ -485,7 +485,7 @@ public class Bridge {
     /** 內建播放器關掉：網頁裡的影片可以再播了；off＝這個網頁之後都用網頁自己的播放器 */
     @JavascriptInterface public void vpRelease(boolean off) { if (a.br != null) { a.br.vpHold = false; if (off) a.br.vpOffUrl = a.br.curUrl == null ? "" : a.br.curUrl; } }
     @JavascriptInterface public void lsnFloat(final String cmd, final String cfg) {
-        ui(new Runnable() { @Override public void run() { if ("stop".equals(cmd)) ListenFloat.stop(); else if ("listen".equals(cmd)) { if (ListenFloat.inst != null) ListenFloat.inst.listen(); } else ListenFloat.start(a, cfg); } });
+        ui(new Runnable() { @Override public void run() { if ("stop".equals(cmd)) ListenFloat.stop(); else if ("listen".equals(cmd)) { if (ListenFloat.inst != null) ListenFloat.inst.tap(); } else if ("startListen".equals(cmd)) { ListenFloat.start(a, cfg); if (ListenFloat.inst != null) { if (ListenFloat.on()) ListenFloat.inst.tap(); else ListenFloat.inst.listenOnShow = true; } } else ListenFloat.start(a, cfg); } });
     }
     /** 懸浮聽歌辨識出來、還沒收進紀錄的結果（讀走就清空） */
     @JavascriptInterface public String lsnDrain() { return ListenFloat.drain(a); }

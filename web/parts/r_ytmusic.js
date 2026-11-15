@@ -263,10 +263,20 @@ function lsnFloatToggle(){
   if(NAT.call('lsnFloatOn')){ NAT.call('lsnFloat', 'stop', ''); return; }
   if(!AICFG.gkey){ toast('聽歌辨識要用 Gemini：請先到「AI 摘要」設定 Gemini 金鑰', true); return; }
   if(!NAT.call('audioOk')){ NAT.call('audioAsk'); toast('請允許使用麥克風，再按一次'); return; }
+  NAT.call('lsnFloat', 'start', lsnFloatCfg());
+}
+function lsnFloatCfg(){
   var dead = lsGet('ws.aiGDead', {}), chain = [AICFG.gmodel || AI_GFALLBACK[0]];
   AI_GFALLBACK.forEach(function(m){ if(chain.indexOf(m) < 0 && !dead[m]) chain.push(m); });
-  NAT.call('lsnFloat', 'start', JSON.stringify({key: AICFG.gkey, chain: chain, pTap: lsnPrompt('tap'), pMic: lsnPrompt('mic')}));
+  return JSON.stringify({key: AICFG.gkey, chain: chain, pTap: lsnPrompt('tap'), pMic: lsnPrompt('mic')});
 }
+/* 通知欄快速設定的「聽歌辨識」開關：開啟懸浮按鈕並馬上聽 */
+on('lsnTile', function(){
+  if(!isApp || !NAT.has('lsnFloat')) return;
+  if(!AICFG.gkey){ toast('聽歌辨識要用 Gemini：請先到「AI 摘要」設定 Gemini 金鑰', true); return; }
+  if(!NAT.call('audioOk')){ NAT.call('audioAsk'); toast('請允許使用麥克風，再從通知欄按一次', true); return; }
+  NAT.call('lsnFloat', 'startListen', lsnFloatCfg());
+});
 on('lsnFloat', function(d){ if(d && d.msg) toast(d.msg, d.st === 'err' || d.st === 'need'); });
 on('lsnSearch', function(d){
   if(!d || !d.q) return;

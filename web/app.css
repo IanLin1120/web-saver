@@ -994,3 +994,7 @@ html[lang]:not([lang^="zh"]) #nav button i{font-size:11px;font-weight:700}
 .lsnHist .chips{margin-bottom:6px}
 .lsnHList .bmItem .fav.sm{color:var(--accent)}
 .lsnHList .bmItem .t b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aiStat{margin-left:8px;font-size:12.5px;color:var(--text-muted)}
+.aiSrc{display:flex;flex-wrap:wrap;align-items:center;gap:6px;align-self:flex-start;max-width:92%;margin-top:-2px}
+.aiSrc>span{font-size:12px;font-weight:700;color:var(--text-muted)}
+.aiSrc .chip{font-size:12px;padding:5px 9px}

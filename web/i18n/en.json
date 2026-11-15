@@ -2103,5 +2103,11 @@
 "複製歌名": "Copy song name",
 "辨識紀錄": "Recognition history",
 "這個語言還沒有紀錄": "No entries for this language yet",
-"還沒有辨識紀錄": "No recognition history yet"
+"還沒有辨識紀錄": "No recognition history yet",
+"來源": "Sources",
+"問任何跟這部影片有關的問題，AI 會根據影片內容回答並標出時間點；需要影片以外的資料時會上網查。": "Ask anything about this video. The AI answers from the video and marks the timestamps, and searches the web when it needs information beyond the video.",
+"思考中…": "Thinking…",
+"思考中（需要時會上網查）…": "Thinking (searches the web if needed)…",
+"正在上網搜尋…": "Searching the web…",
+"請允許使用麥克風，再從通知欄按一次": "Allow the microphone, then tap the tile in the notification shade again"
 }

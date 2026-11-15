@@ -441,6 +441,11 @@ public class MainActivity extends Activity {
             if (id != null) Util.MAIN.postDelayed(new Runnable() { @Override public void run() { emit("aiOpen", org.json.JSONObject.quote(id)); } }, cur == null || ui == null ? 1500 : 400);
             return;
         }
+        /* 通知欄快速設定的「聽歌辨識」：開啟懸浮按鈕並馬上聽 */
+        if (ListenTile.ACT.equals(i.getAction())) {
+            Util.MAIN.postDelayed(new Runnable() { @Override public void run() { emit("lsnTile", "{}"); } }, cur == null || ui == null ? 2500 : 300);
+            return;
+        }
         /* 懸浮聽歌卡片按了「YouTube Music／YouTube」 */
         if ("com.ian.websaver.LSN_SEARCH".equals(i.getAction())) {
             try {

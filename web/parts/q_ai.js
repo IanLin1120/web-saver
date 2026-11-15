@@ -464,7 +464,7 @@ async function aiOpenVideo(id, opts){
   aiEngStart();
   var c = aiDbGet(id);
   var vNow = $('aiVid'); if(vNow) vNow.pause();
-  AI.id = id; AI.info = c && c.info || {id: id, title: '', author: ''}; AI.ins = c && c.ins || null; AI.chat = c && c.chat || [];
+  AI.id = id; AI.info = c && c.info || {id: id, title: '', author: ''}; AI.ins = c && c.ins || null; AI.chat = (c && c.chat || []).filter(function(m){ return !m.live; });
   AI.cues = c && c.cues || []; AI.track = c && c.track || null; AI.tr = c && c.tr || ''; AI.tracks = []; AI.err = ''; AI.exp = false;
   AI.pmode = ''; AI.perr = 0; AI.curT = opts.t || 0;
   var J = aiJob(id);
@@ -536,6 +536,21 @@ async function aiSwitchTrack(t, tr){
 }
 
 /* ---------- 產生洞察／對話 ---------- */
+/* 逐字稿整理成「[時間] 文字」：太長就把相鄰的句子併成較長的段落，盡量塞進字數上限 */
+function aiTranscriptText(cues, maxChars){
+  maxChars = maxChars || 70000;
+  var txt = '';
+  for(var span = 20; span <= 600; span *= 2){
+    var out = [], cur = null;
+    (cues || []).forEach(function(c){
+      if(!cur || c.s - cur.s >= span){ cur = {s: c.s, t: []}; out.push(cur); }
+      cur.t.push(c.t);
+    });
+    txt = out.map(function(o){ return '[' + aiTs(o.s) + '] ' + o.t.join(' '); }).join('\n');
+    if(txt.length <= maxChars) return txt;
+  }
+  return txt.slice(0, maxChars);
+}
 function aiVideoBlock(maxChars, video, info, cues){
   var I = info || AI.info || {}; var C = cues || AI.cues || [];
   return '影片標題：' + (I.title || '') + '\n頻道：' + (I.author || '') + '\n長度：' + aiTs(I.len || 0) +
@@ -583,16 +598,158 @@ async function aiSend(q){
   q = String(q || '').trim();
   if(!q || AI.asking || !AI.id) return;
   AI.chat.push({role: 'user', text: q, t: Date.now()}); AI.asking = true; aiRenderPane();
+  if(AICFG.engine === 'gemini' && AICFG.gkey) return aiSendGemini(q);
   var hist = AI.chat.slice(-11, -1).map(function(m){ return (m.role === 'user' ? '使用者：' : '助理：') + m.text; }).join('\n');
-  var prompt = '你是這部 YouTube 影片的問答助理。根據逐字稿回答問題，用' + aiLangName() + '，簡潔具體。提到影片內容時在句中標註時間碼，格式為 [mm:ss] 或 [h:mm:ss]。' +
+  var prompt;
+  try{ prompt = '你是這部 YouTube 影片的問答助理。根據逐字稿回答問題，用' + aiLangName() + '，簡潔具體。提到影片內容時在句中標註時間碼，格式為 [mm:ss] 或 [h:mm:ss]。' +
     '影片沒提到的要直說「影片沒有提到」，可以再補充一般知識，但要標明是補充。\n只回傳 JSON：{"answer":"回答（可分段，用 \\n 換行；可用 **粗體** 與 - 條列）","suggest":["2~3 個可以接著問的問題"]}\n\n' +
     aiVideoBlock(50000) + (hist ? '\n\n先前的對話：\n' + hist : '') + '\n\n現在的問題：' + q;
+  }catch(e){ AI.chat.pop(); AI.asking = false; aiRenderPane(); aiErrDlg(e); return; }
   try{
     var v = await aiAsk(prompt, Object.assign({noCache: true}, AI.cues.length ? {} : {video: AI.id}));
     var ans = typeof v === 'string' ? v : (v && (v.answer || v.text)) || '';
     AI.chat.push({role: 'ai', text: String(ans || '（沒有回答）'), suggest: (v && v.suggest) || [], t: Date.now()});
   }catch(e){ AI.chat.pop(); aiErrDlg(e); var inp = $('aiQ'); if(inp && !inp.value) inp.value = q; }
   AI.asking = false; aiSaveCache(); aiRenderPane();
+}
+
+/* ---------- Gemini 對話：邊想邊顯示（串流）、需要時用 Google 搜尋找答案 ----------
+   之前的作法：每問一題都要求回傳完整 JSON（沒有字幕時還要整部影片重看一次），要等全部寫完才顯示，所以很慢；
+   而且規定「只能根據逐字稿」，問到影片以外的事（例如「排除這部影片，客觀來看誰做得最好」）就不會去找答案。 */
+function aiChatContext(){
+  var I = AI.info || {};
+  if(AI.cues.length) return {text: aiVideoBlock(60000)};
+  /* 沒有字幕：已經有 AI 摘要就用摘要當影片內容（不用每次重看整部影片）；連摘要都沒有才附上影片 */
+  var ins = AI.ins;
+  if(ins && ins.overview){
+    var t = '影片標題：' + (I.title || '') + '\n頻道：' + (I.author || '') + '\n長度：' + aiTs(I.len || 0) + (I.desc ? '\n說明欄：\n' + String(I.desc).slice(0, 1500) : '') +
+      '\n\n（這部影片沒有字幕，以下是先前看過整部影片後整理的內容）\n總覽：' + ins.overview +
+      ((ins.keyPoints || []).length ? '\n重點：\n- ' + ins.keyPoints.join('\n- ') : '') +
+      ((ins.details || []).length ? '\n細節：\n- ' + ins.details.join('\n- ') : '') +
+      ((ins.chapters || []).length ? '\n章節：\n' + ins.chapters.map(function(c){ return '[' + aiTs(c.start || 0) + '] ' + (c.title || '') + '：' + (c.summary || '') + ((c.points || []).length ? '（' + c.points.join('；') + '）' : ''); }).join('\n') : '');
+    return {text: t};
+  }
+  return {text: aiVideoBlock(0, true), video: AI.id};
+}
+async function aiSendGemini(q){
+  var id = AI.id, ctx;
+  try{ ctx = aiChatContext(); }catch(e){ AI.chat.pop(); AI.asking = false; aiRenderPane(); aiErrDlg(e); return; }
+  var sys = '你是聰明、反應快的影片問答助理，用' + aiLangName() + '回答。\n' +
+    '・先用一兩句直接回答問題（給出結論），再用條列簡短補充理由或例子；不要重複問題、不要客套。\n' +
+    '・問題跟影片內容有關時，以影片為主，提到影片內容時標註時間碼，格式 [mm:ss] 或 [h:mm:ss]。\n' +
+    '・問題需要影片以外的資訊（事實查證、最新資料、背景、比較），或要求「排除這部影片／客觀分析」時，用 Google 搜尋找資料後回答，並說明根據什麼資料或指標；不要只回「影片沒有提到」。\n' +
+    '・涉及評價或有爭議的問題，列出可比較的客觀指標與不同觀點，說明各自的根據，最後再給你的綜合判斷與它的限制。\n' +
+    '・可用 **粗體** 和「- 」條列。\n' +
+    '・回答的最後另起一行，以「【追問】」開頭，列出 2~3 個可以接著問的短問題，用「｜」分隔。';
+  var contents = [];
+  /* 之前的對話用多輪的方式送出（最近 10 則） */
+  AI.chat.slice(-11, -1).forEach(function(m){ contents.push({role: m.role === 'user' ? 'user' : 'model', parts: [{text: m.text}]}); });
+  var first = {role: 'user', parts: []};
+  if(ctx.video) first.parts.push({file_data: {file_uri: 'https://www.youtube.com/watch?v=' + ctx.video, video_metadata: {fps: 0.2}}});
+  first.parts.push({text: '以下是這部影片的資料，之後的問題都跟它有關：\n\n' + ctx.text});
+  contents.unshift({role: 'model', parts: [{text: '好，我看完了，請問。'}]});
+  contents.unshift(first);
+  contents.push({role: 'user', parts: [{text: q}]});
+  var msg = {role: 'ai', text: '', suggest: [], src: [], t: Date.now(), live: true};
+  AI.chat.push(msg);
+  var paint = function(){
+    if(AI.id !== id || AI.tab !== 'chat') return;
+    var el = document.querySelector('.aiMsg.ai.live');
+    if(!el){ aiRenderPane(); el = document.querySelector('.aiMsg.ai.live'); }
+    if(el) el.innerHTML = msg.text ? aiFmt(aiChatStrip(msg.text)) : '<span class="aiDots"><i></i><i></i><i></i></span>' + (msg.stat ? '<span class="aiStat">' + esc(msg.stat) + '</span>' : '');
+    var sc = $('aiPane'); if(el && sc && sc.scrollHeight - sc.scrollTop - sc.clientHeight < 220) sc.scrollTop = sc.scrollHeight;
+  };
+  paint();
+  var dead = lsGet('ws.aiGDead', {}), chain = [AICFG.gmodel || AI_GFALLBACK[0]];
+  if(AICFG.gfallback !== false) AI_GFALLBACK.forEach(function(m){ if(chain.indexOf(m) < 0 && !dead[m]) chain.push(m); });
+  var err = null, useSearch = true;
+  for(var k = 0; k < chain.length; k++){
+    var model = chain[k];
+    var gc = {maxOutputTokens: 8192};
+    if(ctx.video) gc.mediaResolution = 'MEDIA_RESOLUTION_LOW';
+    var think = /^gemini-([3-9]|\d\d)/.test(model);
+    if(think) gc.thinkingConfig = {thinkingLevel: 'low'};
+    var body = {systemInstruction: {parts: [{text: sys}]}, contents: contents, generationConfig: gc};
+    if(useSearch) body.tools = [{google_search: {}}];
+    msg.text = ''; msg.src = []; msg.stat = useSearch ? '思考中（需要時會上網查）…' : '思考中…'; paint();
+    try{
+      await aiGemStream(model, body, function(txt, meta){
+        msg.text = txt;
+        if(meta && meta.src) msg.src = meta.src;
+        if(meta && meta.searching && !txt){ msg.stat = '正在上網搜尋…'; }
+        paint();
+      });
+      err = null;
+      if(!msg.text.trim()) throw aiErr('fail', 'Gemini 沒有回傳內容');
+      break;
+    }catch(e){
+      err = e;
+      var m = String(e.message || e);
+      /* 這個模型不能同時搜尋：不搜尋再試一次同一個模型 */
+      if(useSearch && /search|tool|grounding/i.test(m) && e.status === 400){ useSearch = false; k--; continue; }
+      if(think && /think/i.test(m) && e.status === 400){ k--; think = false; continue; }
+      if(/no longer available|deprecated|retired/i.test(m)){ dead[model] = Date.now(); lsSet('ws.aiGDead', dead); continue; }
+      if(e.status === 429 || e.status === 404 || e.status >= 500 || e.status === -1) continue;
+      break;
+    }
+  }
+  msg.live = false; delete msg.stat;
+  if(err && !msg.text.trim()){
+    AI.chat = AI.chat.filter(function(x){ return x !== msg; });
+    AI.chat.pop();
+    AI.asking = false; aiRenderPane(); aiErrDlg(err);
+    var inp = $('aiQ'); if(inp && !inp.value) inp.value = q;
+    return;
+  }
+  var mm = msg.text.match(/【追問】([\s\S]*)$/);
+  if(mm){ msg.suggest = mm[1].split(/[｜|\n]/).map(function(x){ return x.replace(/^[\s\-•・\d.、]+/, '').trim(); }).filter(Boolean).slice(0, 3); }
+  msg.text = aiChatStrip(msg.text).trim();
+  if(typeof buzz === 'function') buzz(12);
+  AI.asking = false; aiSaveCache(); aiRenderPane();
+}
+function aiChatStrip(t){ return String(t || '').replace(/\n?\s*【追問】[\s\S]*$/, '').replace(/\n?\s*【追[^】\n]{0,2}$/, ''); }
+/* 串流呼叫：一邊收一邊把目前的全文交給 onText。App 裡可以直接連（不受跨網域限制）；失敗時改用一次拿完整回答 */
+async function aiGemStream(model, body, onText){
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model);
+  var full = '', src = [], seen = {};
+  var take = function(j){
+    var c = (j.candidates || [])[0] || {};
+    (c.content && c.content.parts || []).forEach(function(p){ if(!p.thought && p.text) full += p.text; });
+    var gm = c.groundingMetadata;
+    if(gm){
+      (gm.groundingChunks || []).forEach(function(g){ var w = g.web; if(w && w.uri && !seen[w.uri]){ seen[w.uri] = 1; src.push({u: w.uri, t: w.title || w.domain || ''}); } });
+    }
+    onText(full, {src: src, searching: !!(gm && (gm.webSearchQueries || []).length)});
+    if(j.error) { var e = aiErr('fail', j.error.message || 'Gemini 錯誤'); e.status = j.error.code || 400; throw e; }
+  };
+  var r = null;
+  try{
+    r = await fetch(url + ':streamGenerateContent?alt=sse', {method: 'POST', headers: {'content-type': 'application/json', 'x-goog-api-key': AICFG.gkey}, body: JSON.stringify(body)});
+  }catch(e){ r = null; }
+  if(r && r.ok && r.body && r.body.getReader){
+    var rd = r.body.getReader(), dec = new TextDecoder(), buf = '';
+    while(true){
+      var x = await rd.read();
+      if(x.done) break;
+      buf += dec.decode(x.value, {stream: true});
+      var lines = buf.split(/\r?\n/); buf = lines.pop();
+      lines.forEach(function(l){ if(l.indexOf('data:') === 0){ var d = l.slice(5).trim(); if(d && d !== '[DONE]'){ try{ take(JSON.parse(d)); }catch(e){ if(e.status) throw e; } } } });
+    }
+    if(buf.indexOf('data:') === 0){ try{ take(JSON.parse(buf.slice(5).trim())); }catch(e){} }
+    return full;
+  }
+  if(r && !r.ok){
+    var tx = ''; try{ tx = await r.text(); }catch(e){}
+    var jj = {}; try{ jj = JSON.parse(tx); }catch(e){}
+    if(Array.isArray(jj)) jj = jj[0] || {};
+    var er = aiErr(r.status === 429 ? 'rate' : 'fail', (jj.error && jj.error.message) || ('HTTP ' + r.status)); er.status = r.status; throw er;
+  }
+  /* 串流連不上：一次拿完整回答（走 App 原生網路，忙碌時會自動重試） */
+  var rr = await aiPost(url + ':generateContent', {'content-type': 'application/json', 'x-goog-api-key': AICFG.gkey}, body, 2);
+  var j2 = {}; try{ j2 = JSON.parse(rr.body || '{}'); }catch(e){}
+  if(rr.status < 200 || rr.status >= 300){ var e2 = aiErr(rr.status === 429 ? 'rate' : 'fail', (j2.error && j2.error.message) || ('HTTP ' + rr.status)); e2.status = rr.status; throw e2; }
+  take(j2);
+  return full;
 }
 
 /* ---------- 文字格式（時間碼可點） ---------- */
@@ -847,17 +1004,23 @@ function aiPaneChap(p, f){
 function aiPaneChat(p, f){
   var list = h('div', {class: 'aiChat'});
   if(!AI.chat.length){
-    list.appendChild(h('div', {class: 'aiNote', text: '問任何跟這部影片有關的問題，AI 會根據逐字稿回答並標出時間點。'}));
+    list.appendChild(h('div', {class: 'aiNote', text: '問任何跟這部影片有關的問題，AI 會根據影片內容回答並標出時間點；需要影片以外的資料時會上網查。'}));
     var qs0 = (AI.ins && AI.ins.questions) || ['這部影片的重點是什麼？', '有哪些具體的數字或例子？', '講者的結論是什麼？'];
     var sg = h('div', {class: 'aiSug'}); qs0.forEach(function(q){ sg.appendChild(h('button', {class: 'chip', text: q, onclick: function(){ aiSend(q); }})); }); list.appendChild(sg);
   }
   AI.chat.forEach(function(m, i){
+    if(m.live){ list.appendChild(h('div', {class: 'aiMsg ai live', html: m.text ? aiFmt(aiChatStrip(m.text)) : '<span class="aiDots"><i></i><i></i><i></i></span>' + (m.stat ? '<span class="aiStat">' + esc(m.stat) + '</span>' : '')})); return; }
     list.appendChild(h('div', {class: 'aiMsg ' + (m.role === 'user' ? 'me' : 'ai'), html: m.role === 'user' ? esc(m.text) : aiFmt(m.text)}));
+    if(m.role === 'ai' && m.src && m.src.length){
+      var sr = h('div', {class: 'aiSrc'}, h('span', {text: '來源'}));
+      m.src.slice(0, 6).forEach(function(x, n){ sr.appendChild(h('button', {class: 'chip', text: (n + 1) + '. ' + (x.t || '網頁').slice(0, 24), onclick: function(){ buzz(10); showView('browse'); navigate(x.u); }})); });
+      list.appendChild(sr);
+    }
     if(m.role === 'ai' && i === AI.chat.length - 1 && m.suggest && m.suggest.length && !AI.asking){
       var sg2 = h('div', {class: 'aiSug'}); m.suggest.slice(0, 3).forEach(function(q){ sg2.appendChild(h('button', {class: 'chip', text: q, onclick: function(){ aiSend(q); }})); }); list.appendChild(sg2);
     }
   });
-  if(AI.asking) list.appendChild(h('div', {class: 'aiMsg ai'}, h('span', {class: 'aiDots'}, h('i'), h('i'), h('i'))));
+  if(AI.asking && !AI.chat.some(function(m){ return m.live; })) list.appendChild(h('div', {class: 'aiMsg ai'}, h('span', {class: 'aiDots'}, h('i'), h('i'), h('i'))));
   p.appendChild(list);
   var inp = h('textarea', {id: 'aiQ', rows: 1, placeholder: '問這部影片…', onkeydown: function(e){ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); go(); } }, oninput: function(){ this.style.height = 'auto'; this.style.height = Math.min(110, this.scrollHeight) + 'px'; }});
   function go(){ var q = inp.value; inp.value = ''; inp.style.height = ''; aiSend(q); }
