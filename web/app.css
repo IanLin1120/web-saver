@@ -771,6 +771,29 @@ input[type=range].hrArmed{filter:drop-shadow(0 0 5px color-mix(in srgb,var(--acc
 .ytMode .m-yt{color:#fff}
 .ytMode.music::before{transform:translateX(52px);background:linear-gradient(135deg,#ff2d55,#c71585)}
 .ytMode.music .m-yt{color:var(--text-muted)}.ytMode.music .m-mu{color:#fff}
+.ytMode.favm::before{transform:translateX(104px);background:linear-gradient(135deg,#c98a3a,#9a5b2e)}
+.ytMode.favm .m-yt{color:var(--text-muted)}.ytMode.favm .m-fav{color:#fff}
+/* ---------- YouTube／YouTube Music 收藏 ---------- */
+#ytFav{position:absolute;inset:0;z-index:3;background:var(--surface-1,var(--bg));display:flex;flex-direction:column;padding:10px 10px 0;gap:8px}
+#ytFav.hide{display:none}
+.favSeg{display:flex;gap:6px;background:var(--surface-3);border-radius:999px;padding:4px;flex:none}
+.favSeg button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;height:38px;border-radius:999px;border:0;background:none;color:var(--text-muted);font:700 13.5px/1 inherit;cursor:pointer}
+.favSeg button i{font-style:normal;font-weight:600;opacity:.75;font-size:12px}
+.favSeg button.on.yt{background:#e5322d;color:#fff}.favSeg button.on.mu{background:linear-gradient(135deg,#ff2d55,#c71585);color:#fff}
+.favCrumb{display:flex;align-items:center;gap:4px;overflow-x:auto;scrollbar-width:none;flex:none}
+.favCrumb::-webkit-scrollbar{display:none}
+.favCrumb .chip{flex:none;white-space:nowrap}.favCrumb .chip.on{background:var(--accent);color:#fff}
+.favCrumb .sep{color:var(--text-muted);flex:none}.favCrumb .grow{flex:1}
+.favList{flex:1;overflow-y:auto;padding-bottom:12px;-webkit-overflow-scrolling:touch}
+.favRow{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border-soft);cursor:pointer}
+.favRow:active{background:var(--surface-3)}
+.favRow .th{position:relative;width:104px;height:58px;border-radius:10px;flex:none;background:var(--surface-3) center/cover no-repeat;display:grid;place-items:center}
+.favRow .th.sq{width:58px}
+.favRow.fold .th{width:58px;border-radius:14px}
+.favRow.fold .th .fi{font-size:22px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))}
+.favRow .th .du{position:absolute;right:4px;bottom:4px;background:rgba(0,0,0,.75);color:#fff;font:700 10.5px/1 sans-serif;font-style:normal;padding:3px 4px;border-radius:4px}
+.favRow .grow{min-width:0}.favRow b{display:block;font-size:14px;line-height:1.35}
+.favRow .ell2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 
 .ytMode>span svg.i{width:22px;height:22px}
 .bmFold{gap:6px}

@@ -178,6 +178,11 @@ YTMU.draw = function(force){
     s.vid ? h('button', {class: 'ib', title: '下載', html: icon('download'), onclick: function(){ self.sheet.close(); openYt(s.vid); }}) : null));
   var tb = h('div', {class: 'mpTools'});
   var tbtn = function(ic, label, fn){ tb.appendChild(h('button', {class: 'chip', style: {background: 'var(--surface-3)', color: 'var(--text)', border: '1px solid var(--border-soft)'}, html: icon(ic, 'sm') + label, onclick: fn})); };
+  /* 收藏：放進以歌手命名的收藏夾（放在「歌詞」左邊） */
+  if(s.vid) tbtn(typeof favHas === 'function' && favHas('ytm', s.vid) ? 'star' : 'star', typeof favHas === 'function' && favHas('ytm', s.vid) ? '已收藏' : '收藏', function(){
+    favAdd('ytm', {id: s.vid, title: s.title, author: s.artist, thumb: s.art, dur: s.dur});
+    setTimeout(function(){ self.draw(true); }, 300);
+  });
   tbtn(showLyr ? 'image' : 'type', showLyr ? '封面' : '歌詞', function(){ CFG.lyr.ytView = showLyr ? 'cover' : 'lyrics'; if(!showLyr) CFG.lyr.show = true; saveCfg(); self.draw(true); });
   if(it) tbtn('search', '找歌詞', function(){ it.lrcOff = false; lyricsSearchSheet(it, function(){ self.draw(true); }); });
   if(it && Lyrics.of(it)) tbtn('trash', '移除歌詞', function(){ it.lrcOff = true; Lyrics.save(it, '', ''); toast('已移除歌詞'); self.draw(true); });

@@ -234,6 +234,56 @@ public class MainActivity extends Activity {
         return b;
     }
 
+    /* ---------- 無痕模式：獨立的分頁組＋獨立的無痕設定檔（帳號、Cookie、記錄都不共用，離開就全部刪掉） ---------- */
+    java.util.List<Browser> normalTabs = null;
+    Browser normalBr = null;
+    /** 進入無痕：一般分頁先藏起來，開一個用無痕設定檔的新分頁；回傳是否真的做到獨立（舊版 WebView 不支援） */
+    boolean enterIncog() {
+        if (normalTabs != null) return Incog.supported();
+        boolean sep = Incog.supported();
+        normalTabs = new java.util.ArrayList<>(tabs);
+        normalBr = br;
+        Browser old = br;
+        Browser.nextIncog = sep;
+        Browser b;
+        try { b = new Browser(this); } finally { Browser.nextIncog = false; }
+        root.removeView(b.wv);
+        root.addView(b.wv, root.indexOfChild(old.wv) + 1, new FrameLayout.LayoutParams((FrameLayout.LayoutParams) old.wv.getLayoutParams()));
+        b.incog = true;
+        b.wv.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_NO_CACHE);
+        b.wv.getSettings().setSaveFormData(false);
+        boolean vis = old.shown;
+        old.pauseMedia();
+        old.show(false);
+        tabs.clear();
+        tabs.add(b);
+        br = b;
+        Incog.active = sep && b.profIncog;
+        b.show(vis);
+        b.emitState();
+        if (fab != null) fab.refresh();
+        return Incog.active;
+    }
+    /** 離開無痕：關掉所有無痕分頁、刪掉無痕設定檔，回到原本的一般分頁 */
+    void exitIncog() {
+        if (normalTabs == null) return;
+        boolean vis = br != null && br.shown;
+        java.util.List<Browser> inc = new java.util.ArrayList<>(tabs);
+        tabs.clear();
+        tabs.addAll(normalTabs);
+        br = normalBr != null && tabs.contains(normalBr) ? normalBr : tabs.get(0);
+        normalTabs = null; normalBr = null;
+        for (Browser b : inc) {
+            try { b.pauseMedia(); b.show(false); root.removeView(b.wv); b.wv.stopLoading(); b.wv.clearHistory(); b.wv.clearCache(true); b.wv.destroy(); } catch (Throwable t) { /* ignore */ }
+        }
+        Incog.active = false;
+        Incog.wipe();
+        br.show(vis);
+        br.emitState();
+        if (fab != null) fab.refresh();
+        emit("tabs", "");
+    }
+
     void switchTab(int id) {
         Browser b = tabById(id);
         if (b == null || b == br) return;
@@ -293,7 +343,7 @@ public class MainActivity extends Activity {
         final Browser o = old;
         Util.MAIN.postDelayed(new Runnable() { @Override public void run() { if (o != yt && !o.shown) try { o.wv.onPause(); } catch (Throwable t) { /* ignore */ } } }, 400);
         yt = b;
-        if (b.bgQuiet) { b.bgQuiet = false; try { b.wv.evaluateJavascript("(function(){try{[].forEach.call(document.querySelectorAll('video'),function(v){v.muted=false})}catch(e){}})()", null); } catch (Throwable t) { /* ignore */ } }
+        if (b.bgQuiet) { b.bgQuiet = false; try { b.wv.evaluateJavascript("(function(){try{window.__wsBgQuiet=0;[].forEach.call(document.querySelectorAll('video'),function(v){v.muted=false});if(window.__wsUnmute)window.__wsUnmute()}catch(e){}})()", null); } catch (Throwable t) { /* ignore */ } }
         try { b.wv.onResume(); } catch (Throwable t) { /* ignore */ }
         b.show(vis);
         b.emitState();

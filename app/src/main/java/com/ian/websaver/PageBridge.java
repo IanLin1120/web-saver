@@ -56,6 +56,9 @@ public class PageBridge {
 
     @JavascriptInterface public void ytDl(String id) { MainActivity.emit("ytdl", id); }
 
+    /** YouTube 播放器的 ★：交給 App 加入收藏 */
+    @JavascriptInterface public void ytFav(String json) { MainActivity.emit("ytFav", json); }
+
     /** 網頁上正在播放的影片（下載面板用來找出真正的影片） */
     @JavascriptInterface public void played(String json) { b.notePlayed(json); }
 

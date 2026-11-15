@@ -43,7 +43,7 @@ final class VidProxy {
             c.setConnectTimeout(8000); c.setReadTimeout(10000);
             c.setRequestProperty("User-Agent", Fetcher.UA);
             if (ref != null && !ref.isEmpty()) c.setRequestProperty("Referer", ref);
-            try { String ck = CookieManager.getInstance().getCookie(cur); if (ck != null && !ck.isEmpty()) c.setRequestProperty("Cookie", ck); } catch (Throwable t) { /* ignore */ }
+            try { String ck = Incog.cookie(cur); if (ck != null && !ck.isEmpty()) c.setRequestProperty("Cookie", ck); } catch (Throwable t) { /* ignore */ }
             if (range != null) c.setRequestProperty("Range", range);
             int code = c.getResponseCode();
             if (code >= 300 && code < 400 && c.getHeaderField("Location") != null) { cur = new URL(new URL(cur), c.getHeaderField("Location")).toString(); c.disconnect(); continue; }
@@ -185,7 +185,7 @@ final class VidProxy {
                 c.setRequestProperty("Referer", ref);
                 try { Uri r = Uri.parse(ref); c.setRequestProperty("Origin", r.getScheme() + "://" + r.getHost() + (r.getPort() > 0 ? ":" + r.getPort() : "")); } catch (Throwable t) { /* ignore */ }
             }
-            try { String ck = CookieManager.getInstance().getCookie(cur); if (ck != null && !ck.isEmpty()) c.setRequestProperty("Cookie", ck); } catch (Throwable t) { /* ignore */ }
+            try { String ck = Incog.cookie(cur); if (ck != null && !ck.isEmpty()) c.setRequestProperty("Cookie", ck); } catch (Throwable t) { /* ignore */ }
             if (range != null) c.setRequestProperty("Range", range);
             int code = c.getResponseCode();
             if (code >= 300 && code < 400 && c.getHeaderField("Location") != null) {

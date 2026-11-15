@@ -12,7 +12,7 @@ function qsa(s, r){ return Array.prototype.slice.call((r || document).querySelec
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); }
 /* 重要資料（上鎖設定、資料夾、收藏、分類、垃圾桶、設定）以 App 自己的檔案為準，瀏覽器儲存空間只是副本：
    就算網站資料被清掉，鎖和資料夾也不會不見 */
-var LS_CRIT = {'ws.sec': 1, 'ws.lf': 1, 'ws.bm': 1, 'ws.area': 1, 'ws.trash': 1, 'ws.cfg': 1, 'ws.aiFolders': 1, 'ws.cloud': 1};
+var LS_CRIT = {'ws.sec': 1, 'ws.lf': 1, 'ws.bm': 1, 'ws.area': 1, 'ws.trash': 1, 'ws.cfg': 1, 'ws.aiFolders': 1, 'ws.cloud': 1, 'ws.fav': 1};
 function lsKv(){ var b = window.WSB; return b && typeof b.kvGet === 'function' ? b : null; }
 function lsGet(k, d){
   try{

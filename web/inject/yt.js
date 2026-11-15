@@ -237,7 +237,31 @@
       if (t >= g.s && t < g.e - 0.3) { v.currentTime = g.e; if (!g.done) { g.done = true; W.flash('已跳過' + (SBNAME[g.c] || '片段')); } break; }
     }
   }
-  setInterval(function () { hook(); skin(); }, 600);
+  /* YouTube 內建的 Gemini「詢問」與「生成影片摘要」：App 有自己的 AI 摘要，這些按鈕和面板一律藏起來（之前點說明欄會跑出來） */
+  var ASK_RE = /^(詢問|询问|Ask|提問|生成影片摘要|生成视频摘要|產生影片摘要|Summarize( this)? video|Summarise( this)? video|問問 Gemini|询问 Gemini|Ask Gemini|動画を要約|동영상 요약)$/i;
+  function hideAsk() {
+    if (/^music\./.test(location.hostname)) return;
+    var els = document.querySelectorAll('button,[role="button"],ytm-button-renderer,yt-button-view-model,ytm-chip-cloud-chip-renderer,.yt-spec-button-shape-next');
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i]; if (el.__wsAsk) continue;
+      var t = (el.getAttribute('aria-label') || el.textContent || '').trim();
+      if (t.length < 40 && ASK_RE.test(t)) {
+        el.__wsAsk = 1;
+        var box = el.closest('ytm-button-renderer,yt-button-view-model,button-view-model,ytm-chip-cloud-chip-renderer,.ytm-chip') || el;
+        box.style.setProperty('display', 'none', 'important');
+      }
+    }
+    /* 已經打開的「詢問關於這部影片的問題」面板：關掉 */
+    var hs = document.querySelectorAll('ytm-engagement-panel-title-header-renderer, .engagement-panel-section-list-header, h2, h3');
+    for (var j = 0; j < hs.length; j++) {
+      var tx = (hs[j].textContent || '').trim();
+      if (/^(詢問關於這部影片的問題|询问关于此视频的问题|Ask about this video|Ask questions about this video)/i.test(tx)) {
+        var pn = hs[j].closest('ytm-engagement-panel, ytm-engagement-panel-section-list-renderer, .engagement-panel-container, bottom-sheet-container, [role="dialog"]');
+        if (pn) { var cl = pn.querySelector('button[aria-label*="關閉"], button[aria-label*="Close"], button[aria-label*="关闭"]'); if (cl) cl.click(); else pn.style.setProperty('display', 'none', 'important'); }
+      }
+    }
+  }
+  setInterval(function () { hook(); skin(); try { hideAsk(); } catch (e) {} }, 600);
 
   /* 子母畫面時，只顯示影片 */
   var pipCss = null;
@@ -430,7 +454,11 @@
     cc: '<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M10.5 10.2a2.4 2.4 0 1 0 0 3.6M17 10.2a2.4 2.4 0 1 0 0 3.6"/>',
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
     unlock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>',
-    down: '<path d="M6 9l6 6 6-6"/>', more: '<circle cx="12" cy="5.5" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="18.5" r="1.4" fill="currentColor"/>'
+    down: '<path d="M6 9l6 6 6-6"/>',
+    fav: '<path d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/>',
+    favOn: '<path d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="currentColor"/>',
+    mute: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" stroke-linejoin="round"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>',
+    vol: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" stroke-linejoin="round"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>', more: '<circle cx="12" cy="5.5" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="18.5" r="1.4" fill="currentColor"/>'
   };
   function ic(n) { return '<svg viewBox="0 0 24 24">' + ICON[n] + '</svg>'; }
   function fmt(t) { t = Math.max(0, Math.floor(t || 0)); var hh = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), ss = t % 60; return (hh ? hh + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (ss < 10 ? '0' : '') + ss; }
@@ -492,6 +520,8 @@
         'html.__wsfs .html5-video-player video{position:absolute!important;left:0!important;top:0!important;width:100%!important;height:100%!important;object-fit:contain!important;transform:none!important}' +
         'html.__wsfs.__wsfill .html5-video-player video{object-fit:cover!important}' +
         'html.__wsshorts #__ws_skin{display:none!important;pointer-events:none!important}' +
+        /* YouTube 自己的「取消靜音」小框（被 App 的播放控制蓋住按不到）：改用 App 的 */
+        'html.__wsskin .ytp-unmute,html.__wsskin .ytmUnmuteButton,html.__wsskin ytm-unmute-button,html.__wsskin .ytp-unmute-inner,html.__wsskin .unmute-button,html.__wsskin .ytwPlayerUnmuteButtonHost{display:none!important}' +
         'html.__wserr #__ws_skin{display:none!important}html.__wserr.__wsskin .ytm-player-error-overlay-renderer-host{display:block!important}';
       (document.head || document.documentElement).appendChild(skinCss);
     }
@@ -544,6 +574,9 @@
       '.prev{position:absolute;bottom:52px;left:50%;transform:translateX(-50%);font:800 22px/1 sans-serif;text-shadow:0 2px 6px #000;opacity:0;pointer-events:none;background:rgba(0,0,0,.5);padding:8px 14px;border-radius:12px}.prev.on{opacity:1}' +
       '.lockb{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:42px;height:42px;border-radius:50%;background:rgba(0,0,0,.4);display:none}.root.locked .lockb{display:grid}.root.locked .ui{display:none}' +
       '.fsOnly{display:none!important}:host(.fs) .fsOnly{display:grid!important}' +
+      '.mutb{position:absolute;left:10px;top:50px;z-index:4;display:none!important;align-items:center;gap:6px;width:auto!important;height:34px;padding:0 12px 0 9px!important;border-radius:99px;background:rgba(0,0,0,.62)!important;font:700 12.5px/1 sans-serif;color:#fff}' +
+      '.mutb.on{display:flex!important}.mutb svg{width:19px;height:19px}.root.show .mutb span{display:none}.root.show .mutb{padding:0 9px!important}' +
+      '#fav.on{color:#ffcf4a}' +
       '</style><div class="root" id="root">' +
       '<div class="ripple l" id="rl"></div><div class="ripple r" id="rr"></div>' +
       '<div class="lvl" id="lvl"><span id="lvlI"></span><div class="tk"><i id="lvlB"></i></div><span id="lvlT"></span></div><div class="spin" id="spin"></div>' +
@@ -553,8 +586,8 @@
       '<button id="pp2" title="子母畫面">' + ic('pip') + '</button><button id="dl" title="下載">' + ic('dl') + '</button><button id="mo" title="更多">' + ic('more') + '</button></div>' +
       '<div class="mid"><button id="pv2" class="nv" title="上一部">' + ic('prev') + '</button><button class="sk" id="rw">' + ic('rew10') + '</button><button class="pp" id="pp">' + ic('play') + '</button><button class="sk" id="fw">' + ic('fwd10') + '</button><button id="nx" class="nv" title="下一部">' + ic('next') + '</button></div>' +
       '<div class="bot"><div class="bar" id="bar"><div class="tr"><div class="bf" id="bf"></div><div id="segs"></div><div class="pl" id="pl"></div></div><div class="kn" id="kn"></div></div>' +
-      '<div class="row"><span id="tm">0:00 / 0:00</span><span class="g"></span><span id="sb"></span><button id="fill" class="fsOnly" title="填滿螢幕">' + ic('fill') + '</button><button id="lk" class="fsOnly" title="鎖定畫面">' + ic('lock') + '</button><button id="cc" title="字幕">' + ic('cc') + '</button><button id="q" title="畫質">' + ic('gear') + '</button><button id="fs" title="全螢幕">' + ic('full') + '</button></div></div></div>' +
-      '<div class="mini" id="mini"><i id="miniB"></i></div><button class="lockb" id="ulk">' + ic('unlock') + '</button>' +
+      '<div class="row"><span id="tm">0:00 / 0:00</span><span class="g"></span><span id="sb"></span><button id="fill" class="fsOnly" title="填滿螢幕">' + ic('fill') + '</button><button id="lk" class="fsOnly" title="鎖定畫面">' + ic('lock') + '</button><button id="cc" title="字幕">' + ic('cc') + '</button><button id="q" title="畫質">' + ic('gear') + '</button><button id="fav" title="收藏">' + ic('fav') + '</button><button id="fs" title="全螢幕">' + ic('full') + '</button></div></div></div>' +
+      '<div class="mini" id="mini"><i id="miniB"></i></div><button class="lockb" id="ulk">' + ic('unlock') + '</button><button class="mutb" id="mutb" title="取消靜音">' + ic('mute') + '<span>點一下開聲音</span></button>' +
       '<div class="scrim" id="scrim"></div><div class="sheet" id="sheet"></div><div class="prev" id="pvw"></div><div class="flash" id="flash"></div></div>');
     document.documentElement.appendChild(host);
     var $ = function (id) { return sh.getElementById(id); };
@@ -623,9 +656,34 @@
     $('lp').onclick = function (e) { e.stopPropagation(); var v = vid(); if (!v) return; v.loop = !v.loop; $('lp').style.color = v.loop ? '#ff6b6b' : '#fff'; W.flash(v.loop ? '循環播放：開' : '循環播放：關'); show(); };
     $('pp2').onclick = function (e) { e.stopPropagation(); try { B.pip(); } catch (x) { W.flash('需要 App 才能使用子母畫面'); } };
     $('dl').onclick = function (e) { e.stopPropagation(); if (FS.on) setFs(false); try { B.ytDl(videoId()); } catch (x) {} };
+    /* ★ 收藏：交給 App 放進以創作者命名的收藏夾 */
+    $('fav').onclick = function (e) {
+      e.stopPropagation();
+      var id = videoId(), r = PR[id] || {}, vd = r.videoDetails || {}, v = vid();
+      var tt = document.querySelector('.slim-video-information-title, h1.title, h2.slim-video-metadata-title-modern');
+      var ch = document.querySelector('.slim-owner-channel-name, .slim-owner-bylines h3, ytm-slim-owner-renderer .yt-core-attributed-string, a.slim-owner-icon-and-title h3');
+      var info = {id: id, title: vd.title || (tt ? tt.textContent.trim() : (document.title || '').replace(/ - YouTube$/, '')), author: vd.author || (ch ? ch.textContent.trim() : ''),
+        authorId: vd.channelId || '', dur: +vd.lengthSeconds || (v && isFinite(v.duration) ? v.duration : 0), thumb: 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg'};
+      try { if (B.ytFav) { B.ytFav(JSON.stringify(info)); $('fav').classList.add('on'); setH($('fav'), ic('favOn')); if (FS.on) setFs(false); } else W.flash('需要新版 App'); } catch (x) {}
+      show();
+    };
+    /* 靜音：YouTube 播放器自己也記著靜音狀態，要用它的 API 一起解除，只改 video 的話它會再把聲音關掉（之前按了沒反應的原因） */
+    function setMute(m, user) {
+      var p = ytp(), v = vid();
+      try { if (p) { if (m) { if (p.mute) p.mute(); } else { if (p.unMute) p.unMute(); if (p.getVolume && p.setVolume && p.getVolume() < 5) p.setVolume(100); } } } catch (x) {}
+      if (v) { v.muted = m; if (!m && v.volume < 0.05) v.volume = 1; }
+      if (user) W.userMuted = m;
+      W.syncMute();
+    }
+    W.setMute = setMute;
+    window.__wsUnmute = function () { if (!W.userMuted) setMute(false); };
+    W.syncMute = function () { var v = vid(); $('mutb').classList.toggle('on', !!(v && v.muted && !prepSt && !document.querySelector('.ad-showing'))); };
+    $('mutb').onclick = function (e) { e.stopPropagation(); setMute(false, true); W.flash('聲音：開'); show(); };
     $('mo').onclick = function (e) {
       e.stopPropagation(); var v = vid();
       sheet('更多', [
+        [(v && v.muted ? '🔊  取消靜音' : '🔇  靜音'), function () { var m = !(v && v.muted); setMute(m, true); W.flash(m ? '已靜音' : '聲音：開'); }],
+        ['★  收藏這部影片', function () { $('fav').onclick(e); }],
         ['⬇  下載影片／音樂', function () { if (FS.on) setFs(false); try { B.ytDl(videoId()); } catch (x) {} }],
         ['🔗  複製目前時間點的連結', function () { var u = 'https://youtu.be/' + videoId() + (v ? '?t=' + Math.floor(v.currentTime) : ''); try { navigator.clipboard.writeText(u); W.flash('已複製連結'); } catch (x) { W.flash(u); } }],
         ['⏩  跳過 SponsorBlock 片段：' + (O.sb ? '開' : '關'), function () { O.sb = !O.sb; W.flash('SponsorBlock：' + (O.sb ? '開' : '關')); }],
@@ -679,7 +737,7 @@
         if (G.mode) { clearTimeout(G.lp); if (G.mode !== 'fsSwipe') hide(); }
       }
       var v = vid();
-      if (G.mode === 'vol' && v) { v.muted = false; v.volume = Math.max(0, Math.min(1, G.v0 + dy / (G.h * 0.75))); lvl('vol', v.volume); }
+      if (G.mode === 'vol' && v) { if (v.muted && W.setMute) W.setMute(false, true); v.muted = false; v.volume = Math.max(0, Math.min(1, G.v0 + dy / (G.h * 0.75))); lvl('vol', v.volume); }
       if (G.mode === 'bright') { bright = Math.max(0.02, Math.min(1, G.b0 + dy / (G.h * 0.75))); try { B.brightness(bright); } catch (x) {} lvl('bright', bright); }
       if (G.mode === 'seek' && v && v.duration) { var t = Math.max(0, Math.min(v.duration, G.c0 + dx / G.w * Math.min(180, v.duration))); W.scrubTo = t; $('pvw').textContent = fmt(t) + '　' + (t >= G.c0 ? '+' : '-') + fmt(Math.abs(t - G.c0)); $('pvw').classList.add('on'); }
     });
@@ -758,7 +816,11 @@
         if (v.paused && !W.wasPaused && !root.classList.contains('show') && !root.classList.contains('locked') && !prepSt) show(true);
         W.wasPaused = v.paused;
         if ($('segs').childNodes.length !== SB.segs.length && d) W.drawSegs();
+        /* 切到 YouTube Music 再回來時，YouTube 會把影片改成靜音播放：不是你自己按的靜音就自動把聲音開回來 */
+        if (v.muted && !W.userMuted && !prepSt && !window.__wsYTmuted && !window.__wsBgQuiet && !document.querySelector('.ad-showing, .ad-interrupting') && !document.hidden && nowT - (W.unmT || 0) > 1500) { W.unmT = nowT; setMute(false); }
+        W.syncMute();
       }
+      if (id !== W.favId) { W.favId = id; $('fav').classList.remove('on'); setH($('fav'), ic('fav')); }
       var ad = !!document.querySelector('.ad-showing, .ad-interrupting');
       $('adc').classList.toggle('on', ad);
       document.documentElement.classList.toggle('__wsad', ad);
@@ -1027,7 +1089,7 @@
 (function () {
   'use strict';
   if (!/^music\./.test(location.hostname)) return;
-  var VER = 19;
+  var VER = 20;
   if (window.__wsMu === VER) return;
   if (window.__wsMuT) clearInterval(window.__wsMuT);
   window.__wsMu = VER;
@@ -1067,7 +1129,24 @@
     X + '#nav-bar-divider{display:none!important}',
     X + 'ytmusic-guide-renderer,' + X + '#guide-wrapper,' + X + '#mini-guide-background,' + X + 'tp-yt-app-drawer #contentContainer{background:' + C.card + '!important}',
     X + 'ytmusic-guide-entry-renderer[active] tp-yt-paper-item,' + X + 'ytmusic-guide-entry-renderer[active] .item{background:' + C.s3 + '!important;border-radius:12px}',
-    X + 'ytmusic-search-box,' + X + 'ytmusic-search-box .search-box,' + X + 'ytmusic-search-box #input,' + X + 'ytmusic-search-box input{background:' + C.s2 + '!important;border-color:' + C.line + '!important;color:' + C.fg + '!important;border-radius:999px}',
+    /* 搜尋框：只有一層圓角框（之前外框、輸入框各畫一層，看起來像兩個疊在一起） */
+    X + 'ytmusic-search-box{background:transparent!important;border:0!important;box-shadow:none!important}',
+    X + 'ytmusic-search-box .search-box{background:' + C.s2 + '!important;border:1px solid ' + C.line + '!important;border-radius:999px!important;box-shadow:none!important}',
+    X + 'ytmusic-search-box #input,' + X + 'ytmusic-search-box input,' + X + 'ytmusic-search-box .search-container,' + X + 'ytmusic-search-box #suggestion-list,' + X + 'ytmusic-search-box tp-yt-paper-input,' + X + 'ytmusic-search-box .input-container{background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0!important;color:' + C.fg + '!important}',
+    X + 'ytmusic-search-box input::placeholder{color:' + C.mut + '!important}',
+    X + 'ytmusic-search-box[opened] .search-box,' + X + 'ytmusic-search-box[has-query] .search-box{border-radius:22px!important}',
+    /* 搜尋結果上方「YouTube Music／媒體庫」分頁列：捲動時固定在上方（像凍結窗格），底色用奶油色、不再變黑，字用深棕色看得清楚 */
+    X + 'ytmusic-tabs,' + X + 'ytmusic-tabs.stuck,' + X + 'ytmusic-tabs[stuck],' + X + 'ytmusic-tabs #tabs-container,' + X + 'ytmusic-tabs .tab-container,' + X + 'ytmusic-tabbed-search-results-renderer #tabs,' + X + 'ytmusic-tabbed-search-results-renderer .tab-header-container,' + X + 'ytmusic-tabbed-search-results-renderer tp-yt-paper-tabs{background:' + C.bg + '!important;background-image:none!important;color:' + C.fg + '!important;box-shadow:none!important}',
+    X + 'ytmusic-tabs{position:sticky!important;top:var(--ytmusic-nav-bar-height,64px)!important;z-index:3!important;border-bottom:1px solid ' + C.line + '!important}',
+    X + 'ytmusic-tabs .tab,' + X + 'ytmusic-tabs yt-formatted-string,' + X + 'ytmusic-tabs tp-yt-paper-tab,' + X + 'ytmusic-tabs .tab yt-formatted-string{color:' + C.mut + '!important;opacity:1!important}',
+    X + 'ytmusic-tabs .tab.selected,' + X + 'ytmusic-tabs .tab[aria-selected="true"],' + X + 'ytmusic-tabs .tab.selected yt-formatted-string,' + X + 'ytmusic-tabs tp-yt-paper-tab.iron-selected,' + X + 'ytmusic-tabs .iron-selected yt-formatted-string{color:' + C.fg + '!important;font-weight:800!important}',
+    X + 'ytmusic-tabs #selectionBar,' + X + 'ytmusic-tabs .selection-bar,' + X + 'ytmusic-tabs .tab.selected::after{background:' + C.acc + '!important;border-color:' + C.acc + '!important}',
+    /* 其他容易跟背景太接近的字：空白結果、說明文字、卡片標題、對話框 */
+    X + 'ytmusic-message-renderer,' + X + 'ytmusic-message-renderer yt-formatted-string,' + X + '.empty-state,' + X + 'ytmusic-shelf-renderer .header yt-formatted-string,' + X + 'ytmusic-carousel-shelf-basic-header-renderer yt-formatted-string,' + X + 'ytmusic-card-shelf-renderer yt-formatted-string,' + X + 'ytmusic-detail-header-renderer yt-formatted-string,' + X + 'ytmusic-responsive-header-renderer yt-formatted-string{color:' + C.fg + '!important}',
+    X + 'ytmusic-card-shelf-renderer .subtitle,' + X + 'ytmusic-responsive-header-renderer .subtitle,' + X + 'ytmusic-responsive-header-renderer .second-subtitle,' + X + 'ytmusic-detail-header-renderer .subtitle{color:' + C.mut + '!important}',
+    X + 'ytmusic-card-shelf-renderer,' + X + 'ytmusic-card-shelf-renderer #card{background:' + C.card + '!important;border:1px solid ' + C.line + '!important;border-radius:18px!important}',
+    X + 'ytmusic-card-shelf-renderer [class*="background"],' + X + 'ytmusic-card-shelf-renderer [id*="background"],' + X + 'ytmusic-card-shelf-renderer [class*="gradient"]{background:none!important;background-image:none!important}',
+    X + 'ytmusic-card-shelf-renderer .details-container,' + X + 'ytmusic-card-shelf-renderer .card-content-container{background:transparent!important}',
     X + 'ytmusic-search-suggestions-section{background:' + C.card + '!important}',
     /* 頁首大圖的深色漸層 → 奶油漸層 */
     X + 'ytmusic-browse-response > #background::after,' + X + 'ytmusic-browse-response > .background-gradient{background:linear-gradient(rgba(247,240,229,.25),' + C.bg + ')!important}',

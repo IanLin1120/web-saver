@@ -12,8 +12,9 @@ function ytIsMusic(u){ return /^https?:\/\/music\.youtube\.com/i.test(u || ''); 
 function ytModeUi(){
   var mu = YTB.modeMusic != null ? YTB.modeMusic : ytIsMusic(YTB.url);
   var b = $('ytModeB'); if(!b) return;
-  b.classList.toggle('music', !!mu);
-  b.title = mu ? '目前是 YouTube Music，點一下切回 YouTube' : '目前是 YouTube，點一下切換到 YouTube Music';
+  b.classList.toggle('music', !!mu && !YTB.fav);
+  b.classList.toggle('favm', !!YTB.fav);
+  b.title = YTB.fav ? '目前是收藏，點 ▶ 或 ♪ 回到 YouTube／YouTube Music' : mu ? '目前是 YouTube Music' : '目前是 YouTube';
 }
 
 function ytSyncLayout(){
@@ -30,7 +31,7 @@ function ytSyncLayout(){
 }
 function ytUpdateVisible(){
   if(!isApp) return;
-  var on = curView === 'yt' && YTB.started && !Viewer.isOpen();
+  var on = curView === 'yt' && YTB.started && !Viewer.isOpen() && !YTB.fav;
   NAT.call('ytShow', on);
 }
 function ytEnsure(url){
@@ -104,9 +105,15 @@ window.addEventListener('resize', function(){ clearTimeout(ytSyncLayout.t); ytSy
 $('ytBack').addEventListener('click', function(){ NAT.call('ytNav', 'back'); });
 $('ytHomeB').addEventListener('click', function(){ ytEnsure(ytIsMusic(YTB.url) ? YT_MUSIC : YT_HOME); });
 $('ytReload').addEventListener('click', function(){ NAT.call('ytNav', YTB.progress < 100 ? 'stop' : 'reload'); });
-$('ytStopB').addEventListener('click', function(){ buzz(10); if(typeof ytmuListen === 'function') ytmuListen(); });
-$('ytModeB').addEventListener('click', function(){
-  var toMusic = !(YTB.modeMusic != null ? YTB.modeMusic : ytIsMusic(YTB.url));
+$('ytModeB').addEventListener('click', function(e){
+  /* 三段切換：YouTube／YouTube Music／收藏；點按鈕空白處＝在 YouTube 和 Music 之間切換 */
+  var seg = e.target.closest && e.target.closest('[data-m]'), m = seg ? seg.getAttribute('data-m') : '';
+  if(m === 'fav'){ buzz(12); if(YTB.fav) return; YTB.fav = true; ytModeUi(); favShow(); return; }
+  var wasFav = !!YTB.fav;
+  var curMu = YTB.modeMusic != null ? YTB.modeMusic : ytIsMusic(YTB.url);
+  var toMusic = m ? m === 'mu' : !curMu;
+  if(wasFav){ YTB.fav = false; favShow(); if(toMusic === curMu){ buzz(12); ytModeUi(); ytEnsure(); return; } }
+  else if(m && toMusic === curMu) return;
   YTB.modeMusic = toMusic; YTB.modeHold = Date.now(); ytModeUi();
   if(isApp && NAT.has('buzz')) NAT.call('buzz', 12);
   var url = toMusic ? (YTB.last.music || YT_MUSIC) : (YTB.last.yt || YT_HOME);

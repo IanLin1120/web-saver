@@ -177,12 +177,12 @@ final class Browser {
                 c.setRequestProperty(k, e.getValue());
             }
             c.setRequestProperty("User-Agent", wv.getSettings().getUserAgentString());
-            String ck = CookieManager.getInstance().getCookie(url);
+            String ck = incog && Incog.active ? Incog.cookie(url) : CookieManager.getInstance().getCookie(url);
             if (ck != null && !ck.isEmpty()) c.setRequestProperty("Cookie", ck);
             int code = c.getResponseCode();
             java.util.List<String> sc = c.getHeaderFields().get("Set-Cookie");
             if (sc == null) sc = c.getHeaderFields().get("set-cookie");
-            if (sc != null) for (String v : sc) CookieManager.getInstance().setCookie(url, v);
+            if (sc != null) for (String v : sc) (incog && Incog.active ? Incog.cookies() : CookieManager.getInstance()).setCookie(url, v);
             String ct = c.getContentType();
             if (code != 200 || ct == null || !ct.toLowerCase().contains("text/html")) { c.disconnect(); return null; }
             String cs = "UTF-8";
@@ -307,6 +307,8 @@ final class Browser {
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     private WebView makeWebView(final boolean isPopup) {
         final WebView w = new KeepWebView(a, !isPopup && (ytTab || hiddenBr));
+        /* 無痕分頁（和它開出來的彈出視窗）：掛到獨立的無痕設定檔，跟一般瀏覽的帳號、Cookie 完全分開 */
+        if ("br".equals(tag) && (profIncog || nextIncog)) { profIncog = Incog.apply(w); }
         WebSettings s = w.getSettings();
         noXrw(s);
         s.setJavaScriptEnabled(true);
@@ -736,6 +738,10 @@ final class Browser {
     volatile long lastStopAt = 0;
     /** 無痕模式：不記錄瀏覽記錄、不詢問儲存密碼、不使用快取 */
     volatile boolean incog = false;
+    /** 這個分頁是用獨立的無痕設定檔建立的 */
+    boolean profIncog = false;
+    /** 下一個建立的瀏覽分頁要用無痕設定檔 */
+    static boolean nextIncog = false;
 
     int vidW = 0, vidH = 0;
 

@@ -97,18 +97,29 @@ public class Bridge {
     /** 無痕模式：開啟時不使用快取、不存表單、不詢問密碼；關閉時清除這段期間的快取與記錄（clearCookies＝連 Cookie 一起清，會登出所有網站） */
     @JavascriptInterface public void brIncog(final boolean on, final boolean clearCookies) {
         ui(new Runnable() { @Override public void run() {
-            Browser b = a.br;
-            b.incog = on;
-            b.wv.getSettings().setCacheMode(on ? android.webkit.WebSettings.LOAD_NO_CACHE : android.webkit.WebSettings.LOAD_DEFAULT);
-            b.wv.getSettings().setSaveFormData(!on);
-            if (!on) {
-                b.wv.clearCache(true);
-                b.wv.clearHistory();
-                b.wv.clearFormData();
-                if (clearCookies) { android.webkit.CookieManager.getInstance().removeAllCookies(null); clearWebStorage(); }
+            /* 新做法：無痕是一組獨立的分頁＋獨立設定檔，帳號、Cookie 不跟一般瀏覽共用，離開時全部刪除 */
+            if (on) {
+                boolean sep = a.enterIncog();
+                MainActivity.emit("incogMode", sep ? "sep" : "shared");
+                return;
             }
+            if (a.normalTabs != null) {
+                boolean shared = !Incog.active;
+                a.exitIncog();
+                if (shared && clearCookies) { android.webkit.CookieManager.getInstance().removeAllCookies(null); clearWebStorage(); }
+                return;
+            }
+            Browser b = a.br;
+            b.incog = false;
+            b.wv.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);
+            b.wv.getSettings().setSaveFormData(true);
+            b.wv.clearCache(true);
+            b.wv.clearHistory();
+            b.wv.clearFormData();
+            if (clearCookies) { android.webkit.CookieManager.getInstance().removeAllCookies(null); clearWebStorage(); }
         } });
     }
+    @JavascriptInterface public boolean incogSeparate() { return Incog.supported(); }
 
     /** 清空瀏覽分頁偵測到的媒體（離開網頁、回首頁時） */
     /** 目前網頁裡的影片能不能錄製（DRM／跨網域的不行）：結果用 recCan 事件回傳 */
@@ -202,7 +213,7 @@ public class Bridge {
     } }); }
     @JavascriptInterface public void ytBgPause() { ui(new Runnable() { @Override public void run() {
         Browser t = a.ytYt; if (t == null || t == a.yt) return;
-        t.wv.evaluateJavascript("(function(){try{[].forEach.call(document.querySelectorAll('video'),function(v){v.muted=true;v.pause()})}catch(e){}})()", null);
+        t.wv.evaluateJavascript("(function(){try{window.__wsBgQuiet=1;[].forEach.call(document.querySelectorAll('video'),function(v){v.muted=true;v.pause()})}catch(e){}})()", null);
     } }); }
     /** 系統的媒體控制（通知列、快速面板、鎖定畫面）顯示正在播的歌 */
     @JavascriptInterface public void mediaMeta(final String json) { KeepAlive.meta(a, json); }
@@ -311,7 +322,8 @@ public class Bridge {
         ui(new Runnable() {
             @Override public void run() {
                 if (what.contains("cache")) { a.br.wv.clearCache(true); Util.deleteTree(Lib.get(a).tmp); Lib.get(a).tmp.mkdirs(); }
-                if (what.contains("cookies")) { CookieManager.getInstance().removeAllCookies(null); CookieManager.getInstance().flush(); clearWebStorage(); }
+                /* 無痕中：只清無痕自己的 Cookie 與網站資料，不碰一般瀏覽 */
+                if (what.contains("cookies")) { if (Incog.active) Incog.clearInside(); else { CookieManager.getInstance().removeAllCookies(null); CookieManager.getInstance().flush(); clearWebStorage(); } }
                 if (what.contains("history")) a.br.wv.clearHistory();
                 MainActivity.toast("已清除");
                 MainActivity.emit("lib", "");

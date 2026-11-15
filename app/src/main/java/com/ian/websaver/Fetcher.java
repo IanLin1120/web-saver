@@ -39,7 +39,7 @@ final class Fetcher {
             if (referer != null && !referer.isEmpty() && referer.startsWith("http")) c.setRequestProperty("Referer", referer);
             if (rangeFrom > 0) c.setRequestProperty("Range", "bytes=" + rangeFrom + "-");
             try {
-                String ck = CookieManager.getInstance().getCookie(u);
+                String ck = Incog.cookie(u);
                 if (ck != null && !ck.isEmpty()) c.setRequestProperty("Cookie", ck);
             } catch (Throwable t) { /* ignore */ }
             int code = c.getResponseCode();
@@ -85,7 +85,7 @@ final class Fetcher {
             c.setRequestProperty("User-Agent", UA);
             if (referer != null && referer.startsWith("http")) c.setRequestProperty("Referer", referer);
             c.setRequestProperty("Range", "bytes=" + off + "-" + (off + len - 1));
-            try { String ck = CookieManager.getInstance().getCookie(url); if (ck != null) c.setRequestProperty("Cookie", ck); } catch (Throwable t) { /* ignore */ }
+            try { String ck = Incog.cookie(url); if (ck != null) c.setRequestProperty("Cookie", ck); } catch (Throwable t) { /* ignore */ }
             int code = c.getResponseCode();
             if (code != 206 && code != 200) throw new Exception("HTTP " + code);
             byte[] b = Util.readAllBytes(c.getInputStream(), 0);
@@ -116,7 +116,7 @@ final class Fetcher {
                         c.setRequestProperty("Accept", "*/*");
                         c.setRequestProperty("Range", "bytes=" + got + "-" + end);
                         if (referer != null && referer.startsWith("http")) c.setRequestProperty("Referer", referer);
-                        if (cookies) { try { String ck = CookieManager.getInstance().getCookie(url); if (ck != null) c.setRequestProperty("Cookie", ck); } catch (Throwable t) { /* ignore */ } }
+                        if (cookies) { try { String ck = Incog.cookie(url); if (ck != null) c.setRequestProperty("Cookie", ck); } catch (Throwable t) { /* ignore */ } }
                         int code = c.getResponseCode();
                         if (code == 416 && total > 0) return mime;
                         if (code != 206 && code != 200) throw new Exception("HTTP " + code);
@@ -168,7 +168,7 @@ final class Fetcher {
             c.setReadTimeout(30000);
             c.setRequestProperty("User-Agent", UA);
             if (headers != null) for (java.util.Map.Entry<String, String> e : headers.entrySet()) c.setRequestProperty(e.getKey(), e.getValue());
-            if (cookies) { try { String ck = CookieManager.getInstance().getCookie(url); if (ck != null) c.setRequestProperty("Cookie", ck); } catch (Throwable t) { /* ignore */ } }
+            if (cookies) { try { String ck = Incog.cookie(url); if (ck != null) c.setRequestProperty("Cookie", ck); } catch (Throwable t) { /* ignore */ } }
             if (body != null) {
                 c.setDoOutput(true);
                 byte[] b = body.getBytes("UTF-8");

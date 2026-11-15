@@ -114,18 +114,29 @@ function clearHistoryDlg(after){
 }
 
 /* ---------- 無痕模式（瀏覽分頁） ---------- */
-var INCOG = {on: false};
+var INCOG = {on: false, sep: false};
+/* 無痕模式：一組獨立的分頁＋獨立的帳號／Cookie（不跟一般瀏覽共用），離開時全部刪除 */
+on('incogMode', function(m){ INCOG.sep = m === 'sep'; });
 function setIncog(on){
   if(on === INCOG.on) return;
+  buzz(12);
   if(on){
     INCOG.on = true; document.body.classList.add('incogOn');
+    INCOG.sep = isApp && NAT.has('incogSeparate') && NAT.call('incogSeparate');
     if(isApp) NAT.call('brIncog', true, false);
-    toast('已開啟無痕模式：不記錄瀏覽記錄、不儲存密碼與快取');
-  } else {
-    var s = openSheet({title: '關閉無痕模式', icon: 'incog', body: h('div', null, h('div', {class: 'sub', style: {lineHeight: '1.7'}, text: '無痕期間的快取與上一頁記錄會被清除。登入狀態（Cookie）和一般瀏覽共用，要清除的話會一併登出所有網站。'})),
-      foot: h('div', {style: {display: 'contents'}},
-        h('button', {class: 'btn ghost', text: '只清快取', onclick: function(){ fin(false); }}),
-        h('button', {class: 'btn dang', text: '連 Cookie 一起清除', onclick: function(){ fin(true); }}))});
-    function fin(ck){ s.close(); INCOG.on = false; document.body.classList.remove('incogOn'); if(isApp) NAT.call('brIncog', false, ck); toast('已關閉無痕模式'); }
+    if(curView !== 'browse') showView('browse');
+    toast(INCOG.sep ? '已開啟無痕模式：獨立的分頁與帳號，不記錄、不共用 Cookie，離開時全部刪除' : '已開啟無痕模式：不記錄瀏覽記錄、不儲存密碼與快取（這支手機的 WebView 太舊，登入帳號仍與一般瀏覽共用）');
+    return;
   }
+  if(INCOG.sep){
+    INCOG.on = false; document.body.classList.remove('incogOn');
+    if(isApp) NAT.call('brIncog', false, true);
+    toast('已離開無痕模式：無痕期間的記錄、登入帳號、Cookie 都已刪除');
+    return;
+  }
+  var s = openSheet({title: '關閉無痕模式', icon: 'incog', body: h('div', null, h('div', {class: 'sub', style: {lineHeight: '1.7'}, text: '這支手機的 Android System WebView 版本較舊，無痕的登入狀態（Cookie）和一般瀏覽共用。更新「Android System WebView」後，無痕就會變成完全獨立的空間。'})),
+    foot: h('div', {style: {display: 'contents'}},
+      h('button', {class: 'btn ghost', text: '只清快取', onclick: function(){ fin(false); }}),
+      h('button', {class: 'btn dang', text: '連 Cookie 一起清除', onclick: function(){ fin(true); }}))});
+  function fin(ck){ s.close(); INCOG.on = false; document.body.classList.remove('incogOn'); if(isApp) NAT.call('brIncog', false, ck); toast('已關閉無痕模式'); }
 }

@@ -461,6 +461,11 @@ function renderStart(){
   /* 立即上鎖（跟「隱私與安全」裡的按鈕一樣）：有設定密碼才顯示 */
   if(SEC.has()) tiles.appendChild(h('div', {class: 'tile', onclick: function(){ if(isApp) NAT.call('lockRelock'); SEC.webOk = false; fire('secChanged'); toast('🔒 已上鎖'); renderStart(); }},
     h('div', {class: 'fav', html: icon('lock')}), h('span', {text: '立即上鎖'}), h('small', {class: 'sub', text: SEC.open() ? '目前已解鎖' : '目前已上鎖'})));
+  /* 第二排：聽歌辨識（從 YouTube 分頁移過來）、無痕模式 */
+  tiles.appendChild(h('div', {class: 'tile', style: {gridColumnStart: 1}, onclick: function(){ buzz(10); if(typeof ytmuListen === 'function') ytmuListen(); }},
+    h('div', {class: 'fav', html: icon('listen')}), h('span', {text: '聽歌辨識'}), h('small', {class: 'sub', text: '找出歌名'})));
+  tiles.appendChild(h('div', {class: 'tile' + (INCOG.on ? ' on' : ''), onclick: function(){ setIncog(!INCOG.on); setTimeout(renderStart, 300); }},
+    h('div', {class: 'fav', html: icon('incog')}), h('span', {text: INCOG.on ? '離開無痕' : '無痕模式'}), h('small', {class: 'sub', text: INCOG.on ? '離開時全部刪除' : '獨立的帳號／記錄'})));
   sects.appendChild(h('div', {class: 'sect-h'}, h('span', {text: '⭐ 收藏'}), h('button', {text: '管理收藏夾', onclick: function(){ manageFolders(renderStart); }})));
   sects.appendChild(tiles);
   /* 說明 */
