@@ -59,16 +59,25 @@ function lyrTrad(){ return !(CFG.lyr && CFG.lyr.trad === false); }
 })();
 
 /* ---------- 2. 音量一致 ---------- */
-/* 目標響度（dBFS，平均能量）。比這個大聲的檔案會調小；比較小聲的維持原本音量（網頁播放器不能把聲音放大超過 100%） */
-var Loud = {TARGET: -20, wait: {}, clipWait: {}, bad: {}, q: [], busy: false};
+/* 目標響度（LUFS，跟 YouTube／Spotify 的音量平衡同一種單位）。比這個大聲的檔案會調小；比較小聲的維持原本音量（網頁播放器不能把聲音放大超過 100%）。
+   大部分流行歌在 -7～-12 LUFS，老歌、現場錄音約 -14～-20 */
+var Loud = {TARGET: -16, wait: {}, clipWait: {}, bad: {}, q: [], busy: false, err: ''};
+/* 播放清單裡的歌曲物件可能是舊的（檔案庫重新整理後換了新物件）：量好的數值一律去檔案庫找最新的 */
+Loud.val = function(it){
+  if(!it) return null;
+  if(typeof it.lufs === 'number') return it.lufs;
+  var x = Lib.byId(it.id);
+  return x && typeof x.lufs === 'number' ? x.lufs : null;
+};
 Loud.on = function(){ return CFG.norm !== false && isApp && NAT.has('loud'); };
 Loud.gain = function(it){
-  if(CFG.norm === false || !it || typeof it.loud !== 'number') return 1;
-  return Math.max(0.1, Math.min(1, Math.pow(10, (Loud.TARGET - it.loud) / 20)));
+  var v = Loud.val(it);
+  if(CFG.norm === false || v == null) return 1;
+  return Math.max(0.1, Math.min(1, Math.pow(10, (Loud.TARGET - v) / 20)));
 };
 /* 量好才繼續（最多等 ms 毫秒，等不到就先用原本音量播，量好再套用） */
 Loud.ensure = function(it, ms){
-  if(!Loud.on() || !it || it.web || it.ytm || typeof it.loud === 'number' || Loud.bad[it.id]) return Promise.resolve();
+  if(!Loud.on() || !it || it.web || it.ytm || Loud.val(it) != null || Loud.bad[it.id]) return Promise.resolve();
   return new Promise(function(res){
     var done = false, fin = function(){ if(!done){ done = true; res(); } };
     (Loud.wait[it.id] = Loud.wait[it.id] || []).push(fin);
@@ -89,14 +98,17 @@ Loud.clip = function(it){
 on('loud', function(d){
   if(!d || !d.id) return;
   var it = Lib.byId(d.id);
-  if(d.ok && isFinite(d.db)){
-    if(it && it.loud !== d.db){ it.loud = d.db; NAT.call('libMeta', d.id, JSON.stringify({loud: d.db})); }
+  if(d.ok && isFinite(d.lufs)){
+    if(it && it.lufs !== d.lufs){ it.lufs = d.lufs; NAT.call('libMeta', d.id, JSON.stringify({lufs: d.lufs})); }
+    /* 播放清單裡同一首歌的舊物件也一起更新 */
+    try{ Music.queue.forEach(function(x){ if(x && x.id === d.id) x.lufs = d.lufs; }); }catch(e){}
     if(it && !it.dur && d.dur){ it.dur = Math.round(d.dur); NAT.call('libMeta', d.id, JSON.stringify({dur: it.dur})); }
-  } else Loud.bad[d.id] = 1;
+  } else { Loud.bad[d.id] = 1; Loud.err = d.err || ''; }
   (Loud.wait[d.id] || []).forEach(function(f){ f(); }); delete Loud.wait[d.id];
   (Loud.clipWait[d.id] || []).forEach(function(f){ f(d.clip || null); }); delete Loud.clipWait[d.id];
   Loud.apply();
   Loud.busy = false;
+  try{ var cu = Music.cur(); if(cu && cu.id === d.id){ var lb = document.querySelector('#mpBody .mpLoud'); if(lb) lb.textContent = Loud.label(cu); } }catch(e){}
 });
 /* 把目前正在播的音樂、影片調到該有的音量 */
 Loud.apply = function(){
@@ -109,13 +121,25 @@ Loud.apply = function(){
 /* 背景慢慢把音樂庫、影片都量過一遍（一次一個，App 在前景時才做），之後播放就不用等 */
 Loud.sweep = function(){
   if(!Loud.on() || Loud.busy || document.hidden) return;
-  var it = Lib.items.filter(function(x){ return (x.cat === 'audio' || x.cat === 'video') && typeof x.loud !== 'number' && !Loud.bad[x.id] && !x.web; })[0];
+  var it = Lib.items.filter(function(x){ return (x.cat === 'audio' || x.cat === 'video') && typeof x.lufs !== 'number' && !Loud.bad[x.id] && !x.web; })[0];
   if(!it) return;
   Loud.busy = true;
   NAT.call('loud', it.id, false);
   setTimeout(function(){ if(Loud.busy){ Loud.busy = false; Loud.bad[it.id] = 1; } }, 20000);
 };
-setTimeout(function(){ setInterval(Loud.sweep, 2500); }, 20000);
+setTimeout(function(){ setInterval(Loud.sweep, 2500); }, 8000);
+/* 給播放畫面顯示：這首歌的音量平衡狀態 */
+Loud.label = function(it){
+  if(CFG.norm === false || !it || it.web || it.ytm) return '';
+  var v = Loud.val(it);
+  if(v == null) return Loud.bad[it.id] ? '音量平衡：無法量測' : '音量平衡：量測中…';
+  var g = 20 * Math.log10(Loud.gain(it));
+  return '響度 ' + v.toFixed(1) + ' LUFS・' + (g < -0.3 ? '已調小 ' + (-g).toFixed(1) + ' dB' : '原音量');
+};
+Loud.stats = function(){
+  var L = Lib.items.filter(function(x){ return (x.cat === 'audio' || x.cat === 'video') && !x.web; });
+  return {all: L.length, done: L.filter(function(x){ return typeof x.lufs === 'number'; }).length, bad: L.filter(function(x){ return Loud.bad[x.id]; }).length};
+};
 (function(){
   /* 音樂庫：換歌時先量好音量再播 */
   var load0 = Music.load;

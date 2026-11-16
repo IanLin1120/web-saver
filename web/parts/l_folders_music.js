@@ -309,6 +309,7 @@ Music.drawPlayer = function(){
   body.appendChild(h('div', {class: 'row', style: {gap: '10px', marginTop: '10px'}},
     h('div', {class: 'th', style: Object.assign({width: '46px', height: '46px', borderRadius: '12px', flex: 'none', backgroundSize: 'cover'}, th ? {backgroundImage: 'url("' + th + '")'} : {background: 'var(--c-audio)'})}),
     h('div', {class: 'grow'}, h('b', {text: songTitle(it), style: {fontSize: '17px', display: 'block'}, class: 'ell'}), h('div', {class: 'sub ell', text: (it.artist || '') + '・' + (it.name.split('.').pop() || '').toUpperCase() + '・' + fmtSize(it.size) + (it.lrcSrc ? '・歌詞：' + it.lrcSrc.split('：')[0] : '')}))));
+  if(typeof Loud !== 'undefined' && Loud.label){ var ll = Loud.label(it); if(ll) body.appendChild(h('div', {class: 'mpLoud', text: ll})); }
   var tb = h('div', {class: 'mpTools'});
   var tbtn = function(ic, label, fn, on){ tb.appendChild(h('button', {class: 'chip' + (on ? ' pri' : ''), style: on ? null : {background: 'var(--surface-3)', color: 'var(--text)', border: '1px solid var(--border-soft)'}, html: icon(ic, 'sm') + label, onclick: fn})); };
   tbtn(showLyr ? 'image' : 'type', showLyr ? '封面' : '歌詞', function(){ CFG.lyr.view = showLyr ? 'cover' : 'lyrics'; if(!showLyr) CFG.lyr.show = true; saveCfg(); self.drawPlayer(); });

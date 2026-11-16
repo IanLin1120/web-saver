@@ -246,7 +246,8 @@ final class Browser {
         popups = p.getString("brPopups", "smart");
         ads = p.getBoolean("brAds", true);
         pw = p.getBoolean("brPw", true);
-        textZoom = p.getInt("brZoom", 100);
+        /* 「網頁文字大小」只給一般網頁用；YouTube／YouTube Music 有自己的版面，放大文字會整個擠在一起 */
+        textZoom = ytTab ? 100 : p.getInt("brZoom", 100);
         AdBlock.init(a, p.getString("adHosts", ""), p.getString("adCss", ""), p.getString("adAllow", ""));
         injectBase = Util.asset(a, "inject/page.js");
         injectCapture = Util.asset(a, "inject/capture.js");
@@ -867,7 +868,7 @@ final class Browser {
         ytAds = c.optBoolean("ytAds", ytAds);
         if (c.has("yt")) { ytOpts = c.optJSONObject("yt"); a.prefs.edit().putString("ytOpts", String.valueOf(ytOpts)).apply(); }
         pw = c.optBoolean("pw", pw);
-        textZoom = c.optInt("textZoom", textZoom);
+        if (!ytTab) textZoom = c.optInt("textZoom", textZoom);
         if (!ytTab) a.prefs.edit().putString("brMode", mode).putString("brPopups", popups).putBoolean("brAds", ads).putBoolean("ytAds", ytAds).putBoolean("brPw", pw).putInt("brZoom", textZoom)
             .putString("adHosts", c.optString("adHosts", a.prefs.getString("adHosts", "")))
             .putString("adCss", c.optString("adCss", a.prefs.getString("adCss", "")))

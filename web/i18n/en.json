@@ -2145,5 +2145,12 @@
 "首沒有找到": " not found",
 "首的歌詞是簡體，播放時已經自動顯示成繁體。": " songs have Simplified lyrics; they are shown in Traditional automatically during playback.",
 "首：缺歌手": " songs: no artist for ",
-"（聽歌辨識）": " (song recognition)"
+"（聽歌辨識）": " (song recognition)",
+"音量平衡：無法量測": "Volume balance: couldn't measure",
+"音量平衡：量測中…": "Volume balance: measuring…",
+"響度": "Loudness",
+"已調小": "turned down ",
+"原音量": "original volume",
+"。已量好": ". Measured ",
+"個無法量測": " couldn't be measured"
 }
