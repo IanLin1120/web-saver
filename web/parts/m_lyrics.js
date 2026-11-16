@@ -123,7 +123,7 @@ Lyrics.embed = async function(it){
 };
 
 /* ---------- 歌詞樣式 ---------- */
-CFG.lyr = Object.assign({size: 19, cur: '', other: '', align: 'center', bold: true, auto: true, trans: false}, CFG.lyr || {});
+CFG.lyr = Object.assign({size: 19, cur: '', other: '', align: 'center', bold: true, auto: true, trans: false, trad: true}, CFG.lyr || {});
 function lyrStyle(){
   var c = CFG.lyr;
   return '--lyr-size:' + c.size + 'px;--lyr-cur:' + (c.cur || 'var(--accent)') + ';--lyr-other:' + (c.other || 'var(--text-muted)') + ';text-align:' + c.align + ';--lyr-w:' + (c.bold ? 800 : 500);
@@ -132,7 +132,8 @@ function lyricsStyleSheet(after){
   var c = CFG.lyr, body = h('div');
   body.appendChild(h('div', {class: 'card glass', style: {padding: '4px 12px', marginBottom: '12px'}},
     swRow('播放時顯示歌詞', '關閉時只顯示封面（每首歌也可以在播放畫面切換）', 'lyr.show', function(){ c.view = c.show === false ? 'cover' : 'lyrics'; saveCfg(); if(after) after(); if(Music.sheet) Music.drawPlayer(); }),
-    swRow('自動搜尋歌詞', '下載、轉檔、播放時自動找歌詞（只套用歌名與長度都吻合的）', 'lyr.auto')));
+    swRow('自動搜尋歌詞', '下載、轉檔、播放時自動找歌詞（只套用歌名與長度都吻合的）', 'lyr.auto'),
+    swRow('中文歌詞顯示成繁體', '簡體歌詞自動轉成繁體（日文、韓文歌不受影響）', 'lyr.trad', function(){ Lib.items.forEach(function(x){ delete x.__lines; }); if(Music.drawPlayer) Music.drawPlayer(); })));
   var prev = h('div', {class: 'lyrView', style: 'height:150px;' + lyrStyle()}, h('div', {class: 'lyrLine', text: '上一句歌詞'}), h('div', {class: 'lyrLine on', text: '正在唱的這一句'}), h('div', {class: 'lyrLine', text: '下一句歌詞'}));
   function upd(){ prev.setAttribute('style', 'height:150px;' + lyrStyle()); saveCfg(); if(after) after(); }
   body.appendChild(prev);

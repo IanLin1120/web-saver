@@ -313,6 +313,11 @@ Music.drawPlayer = function(){
   var tbtn = function(ic, label, fn, on){ tb.appendChild(h('button', {class: 'chip' + (on ? ' pri' : ''), style: on ? null : {background: 'var(--surface-3)', color: 'var(--text)', border: '1px solid var(--border-soft)'}, html: icon(ic, 'sm') + label, onclick: fn})); };
   tbtn(showLyr ? 'image' : 'type', showLyr ? '封面' : '歌詞', function(){ CFG.lyr.view = showLyr ? 'cover' : 'lyrics'; if(!showLyr) CFG.lyr.show = true; saveCfg(); self.drawPlayer(); });
   tbtn('search', '找歌詞', function(){ delete it.lrcOff; if(isApp) NAT.call('libMeta', it.id, JSON.stringify({lrcOff: false})); lyricsSearchSheet(it, function(){ self.drawPlayer(); }); });
+  if(isApp && typeof songFix === 'function' && !it.ytm && !String(it.artist || '').trim()) tbtn('user', '找歌手', async function(){
+    toast('到 YouTube Music 比對歌名和長度…');
+    try{ var r = await songFix(it, {artist: true, lrc: true, listen: !!AICFG.gkey}); toast(r.artist ? '歌手：' + r.artist + (r.how === 'listen' ? '（聽歌辨識）' : '') : (r.note || '沒有找到吻合的歌'), !r.artist); }catch(e){ toast(String(e.message || e), true); }
+    self.drawPlayer(); self.mini();
+  });
   if(Lyrics.of(it)) tbtn('trash', '移除歌詞', async function(){
     if(!await confirmDlg('移除這首歌的歌詞？', '歌詞抓錯時用：移除後這首歌不會再自動找歌詞，之後可以按「找歌詞」手動選正確的。', '移除', true)) return;
     Lyrics.save(it, '', ''); it.lrcOff = true;

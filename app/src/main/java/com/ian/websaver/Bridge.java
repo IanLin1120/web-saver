@@ -723,6 +723,22 @@ public class Bridge {
         } catch (Throwable t) { /* ignore */ }
     }
 
+    /** 量這個檔案的音量（播放時把每個檔案調成差不多大聲）；clip=true 順便回傳一小段聲音給聽歌辨識。結果用事件 loud 回報 */
+    @JavascriptInterface public void loud(final String id, final boolean clip) {
+        new Thread(new Runnable() { @Override public void run() {
+            JSONObject o;
+            try {
+                java.io.File f = Lib.get(a).fileOf(id);
+                if (f == null || !f.exists()) throw new Exception("找不到檔案");
+                o = Loud.analyze(f, clip).put("id", id).put("ok", true);
+            } catch (Throwable t) {
+                o = new JSONObject();
+                try { o.put("id", id).put("ok", false).put("err", String.valueOf(t.getMessage())); } catch (Throwable x) { /* ignore */ }
+            }
+            MainActivity.emit("loud", o.toString());
+        } }, "loud").start();
+    }
+
     @JavascriptInterface public String libList() { return Lib.get(a).listJson(); }
 
     @JavascriptInterface public String libStats() { return Lib.get(a).stats(a); }

@@ -1005,3 +1005,12 @@ html[lang]:not([lang^="zh"]) #nav button i{font-size:11px;font-weight:700}
 .aiSrc .chip{font-size:12px;padding:5px 9px}
 
 .aiTs .aiTsTo{margin:0 3px;opacity:.75}
+.fixBtn{display:flex;align-items:center;gap:6px;margin:8px 0 2px;border-radius:10px}
+.fixBtn .c{margin-left:6px;font-size:11.5px;font-weight:600;color:var(--text-muted)}
+.fixBar{height:6px;border-radius:3px;background:var(--surface-3);overflow:hidden}
+.fixBar i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+.fixLog{margin-top:10px}
+.fixRow{padding:8px 4px;border-bottom:1px solid var(--border-soft);font-size:13px;line-height:1.45}
+.fixRow b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fixRow span{color:var(--text-muted)}
+.fixRow.ok span{color:var(--accent)}
