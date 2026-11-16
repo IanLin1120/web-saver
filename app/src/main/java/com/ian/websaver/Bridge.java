@@ -166,6 +166,7 @@ public class Bridge {
         } });
     }
     @JavascriptInterface public void muCmd(final String c, final String arg) {
+        Resume.mark();
         ui(new Runnable() { @Override public void run() {
             Browser m = a.ytMu; if (m == null || m.wv == null) return;
             m.wv.evaluateJavascript("window.__wsMuCmd&&__wsMuCmd(" + JSONObject.quote(c) + "," + JSONObject.quote(arg == null ? "" : arg) + ")", null);
@@ -173,6 +174,7 @@ public class Bridge {
     }
 
     @JavascriptInterface public void ytNav(final String what) {
+        Resume.mark();
         ui(new Runnable() {
             @Override public void run() {
                 Browser y = a.yt;
@@ -211,12 +213,17 @@ public class Bridge {
         t.show(false);              /* 一定保持隱藏：只在背景載入，不能蓋到任何畫面上 */
         t.wv.loadUrl(url);
     } }); }
-    @JavascriptInterface public void ytBgPause() { ui(new Runnable() { @Override public void run() {
+    @JavascriptInterface public void ytBgPause() { Resume.mark(); ui(new Runnable() { @Override public void run() {
         Browser t = a.ytYt; if (t == null || t == a.yt) return;
         t.wv.evaluateJavascript("(function(){try{window.__wsBgQuiet=1;[].forEach.call(document.querySelectorAll('video'),function(v){v.muted=true;v.pause()})}catch(e){}})()", null);
     } }); }
     /** 系統的媒體控制（通知列、快速面板、鎖定畫面）顯示正在播的歌 */
     @JavascriptInterface public void mediaMeta(final String json) { KeepAlive.meta(a, json); }
+
+    /** 離線音樂／影片被其他 App 打斷（不是你按的暫停） */
+    @JavascriptInterface public void mediaInt(String x) { Resume.interrupted(a, a.ui); }
+    @JavascriptInterface public void mediaMark() { Resume.mark(); }
+    @JavascriptInterface public void autoResume(boolean on) { a.prefs.edit().putBoolean("autoResume", on).apply(); }
 
     @JavascriptInterface public String ytSniff(String vid) { return YtSniff.get(vid); }
 

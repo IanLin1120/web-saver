@@ -636,7 +636,7 @@ async function aiSendGemini(q){
   try{ ctx = aiChatContext(); }catch(e){ AI.chat.pop(); AI.asking = false; aiRenderPane(); aiErrDlg(e); return; }
   var sys = '你是聰明、反應快的影片問答助理，用' + aiLangName() + '回答。\n' +
     '・先用一兩句直接回答問題（給出結論），再用條列簡短補充理由或例子；不要重複問題、不要客套。\n' +
-    '・問題跟影片內容有關時，以影片為主，提到影片內容時標註時間碼，格式 [mm:ss] 或 [h:mm:ss]。\n' +
+    '・問題跟影片內容有關時，以影片為主，提到影片內容時標註時間碼，格式 [mm:ss]；一段時間寫成 [mm:ss~mm:ss]。\n' +
     '・問題需要影片以外的資訊（事實查證、最新資料、背景、比較），或要求「排除這部影片／客觀分析」時，用 Google 搜尋找資料後回答，並說明根據什麼資料或指標；不要只回「影片沒有提到」。\n' +
     '・涉及評價或有爭議的問題，列出可比較的客觀指標與不同觀點，說明各自的根據，最後再給你的綜合判斷與它的限制。\n' +
     '・可用 **粗體** 和「- 」條列。\n' +
@@ -782,8 +782,16 @@ function aiMathHtml(t){
 function aiFmt(t){
   var s = aiMathHtml(t);
   s = s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
-  s = s.replace(/\[((?:\d{1,2}:)?\d{1,2}:\d{2})(?:\s*[-–~]\s*(?:\d{1,2}:)?\d{1,2}:\d{2})?\]/g, function(m, a){ return '<a class="aiTs" data-t="' + aiParseTs(a) + '">' + m.slice(1, -1) + '</a>'; });
-  return s.split(/\n/).map(function(l){ return /^\s*[-•・]\s+/.test(l) ? '<div class="aiLi">' + l.replace(/^\s*[-•・]\s+/, '') + '</div>' : (l.trim() ? '<p>' + l + '</p>' : ''); }).join('');
+  /* 時間碼：[05:11]、時間區間 [05:11-05:57]／[05:11][05:57]（兩個連在一起）都顯示成「05:11 ~ 05:57」，點了跳到開始的時間 */
+  var TS = '((?:\\d{1,2}:)?\\d{1,2}:\\d{2})';
+  s = s.replace(new RegExp('\\[' + TS + '\\](?:\\s{0,1})\\[' + TS + '\\]', 'g'), '[$1~$2]');
+  s = s.replace(new RegExp('\\[' + TS + '(?:\\s*[-–—~～至到]\\s*' + TS + ')?\\]', 'g'), function(m, a, b){
+    return '<a class="aiTs" data-t="' + aiParseTs(a) + '">' + a + (b ? '<span class="aiTsTo">~</span>' + b : '') + '</a>';
+  });
+  return s.split(/\n/).map(function(l){
+    if(/^\s*#{1,4}\s+/.test(l)) return '<p><b>' + l.replace(/^\s*#{1,4}\s+/, '') + '</b></p>';
+    return /^\s*[-•・*]\s+/.test(l) ? '<div class="aiLi">' + l.replace(/^\s*[-•・*]\s+/, '') + '</div>' : (l.trim() ? '<p>' + l + '</p>' : '');
+  }).join('');
 }
 /* ---------- 小播放器：優先用可直接播放的影片網址（App 內 <video>），不行再用 YouTube 嵌入播放器 ---------- */
 function aiSetupPlayer(autoplay){

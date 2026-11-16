@@ -2111,5 +2111,7 @@
 "正在上網搜尋…": "Searching the web…",
 "請允許使用麥克風，再從通知欄按一次": "Allow the microphone, then tap the tile in the notification shade again",
 "Gemini 免費額度暫時用完了（每分鐘或每天有次數上限），已經試過所有備用模型。請等一下再問；每天的額度在台灣時間下午 3～4 點左右重置。": "Gemini's free quota is used up for now (there are per-minute and per-day limits), and every backup model was tried. Please wait a bit before asking again; the daily quota resets around 3–4 pm Taiwan time.",
-"（Google 搜尋的免費額度暫時用完，這次只根據影片內容回答）": "(Google Search's free quota is used up for now, so this answer is based on the video only)"
+"（Google 搜尋的免費額度暫時用完，這次只根據影片內容回答）": "(Google Search's free quota is used up for now, so this answer is based on the video only)",
+"被打斷後自動繼續": "Auto-resume after interruptions",
+"在其他 App 時，別的 App 出聲（看影片、語音訊息）會讓音樂停下來；等手機安靜 3 秒後自動接著播（YouTube、YouTube Music、音樂庫、離線影片）。你自己按的暫停不會被接回去": "While you are in another app, sound from that app (a video, a voice message) stops the music; it resumes automatically after the phone has been quiet for 3 seconds (YouTube, YouTube Music, music library, offline videos). Pauses you make yourself are not resumed"
 }

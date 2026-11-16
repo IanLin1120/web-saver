@@ -221,6 +221,7 @@ Music.sysMeta = function(){
 };
 ['play', 'pause', 'seeked', 'loadedmetadata'].forEach(function(ev){ Music.el.addEventListener(ev, function(){ Music.sysMeta(); }); });
 on('mediaCmd', function(c){
+  window.__wsCmdT = Date.now();
   if(!Music.queue.length) return;
   if(c === 'toggle'){ if(Music.el.paused) Music.el.play(); else Music.el.pause(); }
   else if(c === 'play') Music.el.play();
@@ -231,13 +232,43 @@ on('mediaCmd', function(c){
 });
 if('mediaSession' in navigator){
   try{
-    navigator.mediaSession.setActionHandler('play', function(){ Music.el.play(); });
-    navigator.mediaSession.setActionHandler('pause', function(){ Music.el.pause(); });
+    navigator.mediaSession.setActionHandler('play', function(){ window.__wsCmdT = Date.now(); Music.el.play(); });
+    navigator.mediaSession.setActionHandler('pause', function(){ window.__wsCmdT = Date.now(); Music.el.pause(); });
     navigator.mediaSession.setActionHandler('nexttrack', function(){ Music.next(); });
     navigator.mediaSession.setActionHandler('previoustrack', function(){ if(Music.prev) Music.prev(); });
   }catch(e){}
 }
 ['play', 'pause'].forEach(function(ev){ Music.el.addEventListener(ev, function(){ Music.mini(); Music.drawPlayer(); }); });
+/* 音樂庫、離線影片被其他 App 打斷（不是你按的暫停）：交給 App 等手機安靜下來再接著播 */
+(function(){
+  if(!isApp || !NAT.has('mediaInt')) return;
+  var tapT = 0;
+  ['pointerdown', 'touchstart', 'keydown', 'click'].forEach(function(t){ document.addEventListener(t, function(){ tapT = Date.now(); }, true); });
+  function watch(el){
+    el.addEventListener('pause', function(){
+      var src = el.currentSrc || el.src;
+      if(!src || Date.now() - tapT < 2000 || Date.now() - (window.__wsCmdT || 0) < 2500) return;
+      setTimeout(function(){
+        if(!el.paused || el.ended || (el.currentSrc || el.src) !== src) return;
+        if(Date.now() - tapT < 2500 || Date.now() - (window.__wsCmdT || 0) < 3000) return;
+        if(isFinite(el.duration) && el.duration - el.currentTime < 1.5) return;
+        if(!CFG.yt || CFG.yt.resume === false) return;
+        window.__wsIntEl = el; window.__wsIntSrc = src;
+        NAT.call('mediaInt', '');
+      }, 1200);
+    });
+  }
+  watch(Music.el);
+  /* 離線影片播放器的 <video> 是之後才建立的：在整頁上監聽 */
+  document.addEventListener('play', function(e){ var v = e.target; if(v && v.tagName === 'VIDEO' && !v.__wsIntW && !v.muted){ v.__wsIntW = 1; watch(v); } }, true);
+  window.__wsIntResume = function(){
+    var el = window.__wsIntEl;
+    if(!el || !el.paused || (el.currentSrc || el.src) !== window.__wsIntSrc) return;
+    if(el !== Music.el && !el.isConnected) return;
+    try{ var p = el.play(); if(p && p.catch) p.catch(function(){}); }catch(e){}
+  };
+  setTimeout(function(){ if(NAT.has('autoResume')) NAT.call('autoResume', !(CFG.yt && CFG.yt.resume === false)); }, 1500);
+})();
 Music.el.addEventListener('timeupdate', function(){
   var t = Music.el.currentTime, d = Music.el.duration || 0;
   var pb = $('mpProg'); if(pb && !pb.__drag){ pb.max = d || 1; pb.value = t; }

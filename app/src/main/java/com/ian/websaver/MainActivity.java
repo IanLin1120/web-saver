@@ -154,6 +154,7 @@ public class MainActivity extends Activity {
                 if (b == null && KeepAlive.musicOn()) return; /* App 內音樂播放器自己處理 */
                 if (b == null && yt != null && YtSniff.vidOf(yt.curUrl).length() > 0) b = yt;
                 if (b == null) return;
+                Resume.mark();
                 if (b == ytMu) {   /* YouTube Music：交給頁面上的控制（跟 App 的播放面板同一套） */
                     String c = cmd.startsWith("seek:") ? "seek" : cmd, arg = cmd.startsWith("seek:") ? cmd.substring(5) : "";
                     b.wv.evaluateJavascript("window.__wsMuCmd&&__wsMuCmd(" + org.json.JSONObject.quote(c) + "," + org.json.JSONObject.quote(arg) + ")", null);

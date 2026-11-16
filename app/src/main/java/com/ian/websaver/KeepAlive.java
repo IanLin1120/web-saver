@@ -54,7 +54,7 @@ public class KeepAlive extends Service {
     private static android.graphics.Bitmap mArt;
     private static long mDur, mPos; private static boolean mPlaying;
 
-    private static void cmd(String c) { MainActivity.emit("mediaCmd", c); MainActivity m = MainActivity.cur; if (m != null) m.mediaCmd(c); }
+    private static void cmd(String c) { Resume.mark(); MainActivity.emit("mediaCmd", c); MainActivity m = MainActivity.cur; if (m != null) m.mediaCmd(c); }
 
     private static void ensureSession(Context c) {
         if (sess != null) return;

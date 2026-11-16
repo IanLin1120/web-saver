@@ -2,6 +2,34 @@
    由 App 插在 YouTube 網頁 <head> 最前面，比 YouTube 自己的程式更早執行。 */
 (function () {
   'use strict';
+  /* 被其他 App 打斷的暫停：回報給 App，等手機安靜下來再接著播（你自己按的暫停不算） */
+  (function () {
+    if (window.__wsIntHook) return;
+    var PB = window.WSPage;
+    if (!PB || !PB.mediaInt) return;
+    window.__wsIntHook = 1;
+    var tapT = 0;
+    ['pointerdown', 'touchstart', 'keydown', 'click'].forEach(function (t) { document.addEventListener(t, function () { tapT = Date.now(); }, true); });
+    document.addEventListener('pause', function (e) {
+      var v = e.target;
+      if (!v || (v.tagName !== 'VIDEO' && v.tagName !== 'AUDIO')) return;
+      var src = v.currentSrc || v.src;
+      if (!src || Date.now() - tapT < 2000) return;
+      setTimeout(function () {
+        if (!v.paused || v.ended || (v.currentSrc || v.src) !== src) return;
+        if (Date.now() - tapT < 2500 || window.__wsBgQuiet || window.__wsRecPaused || window.__wsMuStopped) return;
+        if (isFinite(v.duration) && v.duration - v.currentTime < 1.5) return;
+        if (document.querySelector('.ad-showing, .ad-interrupting')) return;
+        window.__wsIntEl = v; window.__wsIntSrc = src;
+        try { PB.mediaInt(''); } catch (x) {}
+      }, 1200);
+    }, true);
+    window.__wsIntResume = function () {
+      var v = window.__wsIntEl;
+      if (!v || !v.isConnected || !v.paused || (v.currentSrc || v.src) !== window.__wsIntSrc) return;
+      try { var p = v.play(); if (p && p.catch) p.catch(function () {}); } catch (x) {}
+    };
+  })();
   if (window.__wsYT) return;
   window.__wsYT = 1;
   var KEYS = ['adPlacements', 'playerAds', 'adSlots', 'adBreakHeartbeatParams', 'adBreakParams'];

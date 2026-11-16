@@ -8,6 +8,9 @@ public class PageBridge {
 
     PageBridge(Browser br) { b = br; }
 
+    /** YouTube／YouTube Music 的影片被暫停了、而且不是你按的（多半是其他 App 出聲把音樂搶走）：等手機安靜後自動接著播 */
+    @JavascriptInterface public void mediaInt(String x) { Resume.interrupted(b.a, b.wv); }
+
     @JavascriptInterface public void fetch(String token, String id, String url, String kind) { b.fetchFor(token, id, url, kind); }
 
     @JavascriptInterface public void progress(String token, int pct, String msg) {

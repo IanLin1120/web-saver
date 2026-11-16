@@ -234,7 +234,7 @@ final class Browser {
     Runnable onCommit;
 
     boolean bgQuiet;   /* 在背景靜音讀取影片資訊中 */
-    void pauseMedia() { try { wv.evaluateJavascript("(function(){try{[].forEach.call(document.querySelectorAll('video,audio'),function(m){m.pause()})}catch(e){}})()", null); } catch (Throwable t) { /* ignore */ } }
+    void pauseMedia() { Resume.mark(); try { wv.evaluateJavascript("(function(){try{[].forEach.call(document.querySelectorAll('video,audio'),function(m){m.pause()})}catch(e){}})()", null); } catch (Throwable t) { /* ignore */ } }
 
     Browser(MainActivity act, String tg) {
         a = act;
@@ -725,7 +725,7 @@ final class Browser {
     /** YouTube 背景播放：離開 App 時不暫停瀏覽器（影片聲音繼續）；其他網站照常暫停 */
     void onPause() {
         boolean bg = ytOpts != null && ytOpts.optBoolean("bg", true) && isYt(curHost) && videoPlaying;
-        if (!bg) wv.onPause();
+        if (!bg) { Resume.mark(); wv.onPause(); }
     }
 
     /* ---------- YouTube 播放器強化（Morphe 風格） ---------- */

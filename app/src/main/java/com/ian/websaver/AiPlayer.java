@@ -164,6 +164,7 @@ final class AiPlayer {
     }
 
     static void pause() {
+        Resume.mark();
         if (wv == null) return;
         wv.evaluateJavascript("(function(){try{P.pauseVideo()}catch(e){}})()", null);
     }
