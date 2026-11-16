@@ -48,6 +48,8 @@ public class MainActivity extends Activity {
         Lock.session = false;
         cur = this;
         prefs = getSharedPreferences("ws", MODE_PRIVATE);
+        /* 上次沒有先離開無痕就關掉 App：一開啟就把無痕留下的記錄、登入狀態清掉（不影響一般瀏覽） */
+        Incog.wipeLeftover();
         Window w = getWindow();
         w.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         String bar = prefs.getString("barColor", "#efe5d3");

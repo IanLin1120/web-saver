@@ -61,6 +61,21 @@ final class Incog {
         } catch (Throwable t) { /* ignore */ }
     }
 
+    /** App 每次啟動時呼叫：上次如果沒有先「離開無痕」就把 App 滑掉，無痕設定檔會留在手機裡（記錄、登入帳號都還在）。
+        這時候還沒有任何無痕分頁，直接把「terra_incognito」這個設定檔整個刪掉；刪不掉（極少見，還有分頁佔用）就改成清空它的 Cookie 與網站資料。
+        只動無痕這一個設定檔，一般瀏覽用的是預設設定檔，完全不會碰到。 */
+    static void wipeLeftover() {
+        active = false;
+        try {
+            if (!supported()) return;
+            Object st = store();
+            Object names = st.getClass().getMethod("getAllProfileNames").invoke(st);
+            if (!(names instanceof java.util.Collection) || !((java.util.Collection<?>) names).contains(NAME)) return;
+            try { st.getClass().getMethod("deleteProfile", String.class).invoke(st, NAME); }
+            catch (Throwable t) { clearInside(); }
+        } catch (Throwable t) { /* 不支援或查不到：不處理 */ }
+    }
+
     /** 離開無痕：無痕分頁都關掉之後，把整個設定檔（Cookie、帳號、儲存、快取、記錄）刪掉 */
     static void wipe() {
         clearInside();
