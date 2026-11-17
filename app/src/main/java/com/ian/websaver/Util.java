@@ -76,6 +76,62 @@ final class Util {
         return s.isEmpty() ? "未命名" : s;
     }
 
+    /** 下載檔名：照網站給的原本名稱，中文不會變成 %E4%BA%92… 這種亂碼。
+        依序看：Content-Disposition 的 filename*（RFC 5987，UTF-8 編碼）→ filename → 網址裡的檔名參數 → 網址最後一段；
+        有 %XX 的一律解碼；被當成 Latin-1 讀錯的 UTF-8（例如「äº’è©•」）也會還原；沒有副檔名就依檔案類型補上 */
+    static String dlName(String url, String cd, String mime) {
+        String n = null;
+        if (cd != null) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)filename\\*\\s*=\\s*([^';]*)'[^']*'([^;]+)").matcher(cd);
+            if (m.find()) {
+                String cs = m.group(1).trim();
+                try { n = java.net.URLDecoder.decode(m.group(2).trim().replace("+", "%2B").replaceAll("^\"|\"$", ""), cs.isEmpty() ? "UTF-8" : cs); } catch (Throwable t) { n = null; }
+            }
+            if (n == null || n.isEmpty()) {
+                m = java.util.regex.Pattern.compile("(?i)(?:^|;)\\s*filename\\s*=\\s*(\"((?:[^\"\\\\]|\\\\.)*)\"|[^;]+)").matcher(cd);
+                if (m.find()) n = m.group(2) != null ? m.group(2).replace("\\\"", "\"") : m.group(1).trim();
+            }
+        }
+        if (n == null || n.trim().isEmpty()) {
+            try {
+                android.net.Uri u = android.net.Uri.parse(url);
+                for (String k : new String[]{"filename", "fileName", "file_name", "name", "fn", "attname", "title"}) {
+                    String v = u.getQueryParameter(k);
+                    if (v != null && v.matches("(?s).+\\.[A-Za-z0-9]{1,6}")) { n = v; break; }
+                }
+                if (n == null) n = u.getLastPathSegment();
+            } catch (Throwable t) { n = null; }
+        }
+        if (n == null) n = "";
+        n = fixEnc(n.trim());
+        if (n.isEmpty() || !n.matches("(?s).*[^._\\s].*")) n = android.webkit.URLUtil.guessFileName(url, null, mime);
+        n = fixEnc(n);
+        if (extOf(n).isEmpty() || extOf(n).length() > 6) {
+            String e = extOfMime(mime);
+            if (e != null && !e.isEmpty() && !"bin".equals(e)) n = n + "." + e;
+        }
+        return safeName(n);
+    }
+
+    /** 檔名裡的 %XX 解碼（可能被編碼兩次）、Latin-1 讀錯的 UTF-8 還原 */
+    static String fixEnc(String s) {
+        if (s == null) return "";
+        for (int i = 0; i < 2 && s.matches("(?s).*%[0-9A-Fa-f]{2}.*"); i++) {
+            try { s = java.net.URLDecoder.decode(s.replace("+", "%2B"), "UTF-8"); } catch (Throwable t) { break; }
+        }
+        boolean hi = false, wide = false;
+        for (int i = 0; i < s.length(); i++) { char c = s.charAt(i); if (c >= 0x80 && c <= 0xff) hi = true; if (c > 0xff) wide = true; }
+        if (hi && !wide) {
+            try {
+                byte[] b = s.getBytes("ISO-8859-1");
+                java.nio.charset.CharsetDecoder d = java.nio.charset.StandardCharsets.UTF_8.newDecoder();
+                String t = d.decode(java.nio.ByteBuffer.wrap(b)).toString();
+                if (!t.isEmpty()) s = t;
+            } catch (Throwable t) { /* 不是 UTF-8，維持原樣 */ }
+        }
+        return s.trim();
+    }
+
     static String extOf(String name) {
         int i = name == null ? -1 : name.lastIndexOf('.');
         return i < 0 ? "" : name.substring(i + 1).toLowerCase();

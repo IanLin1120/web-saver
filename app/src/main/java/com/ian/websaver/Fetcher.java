@@ -11,6 +11,9 @@ import java.net.URL;
 
 /** 以瀏覽器的 Cookie 與 Referer 下載資源（不受網頁 CORS 限制，登入後的內容也抓得到）。 */
 final class Fetcher {
+    /** 最近一次 toFile 收到的 Content-Disposition（下載檔名用；每個下載執行緒各自一份） */
+    static final ThreadLocal<String> lastCd = new ThreadLocal<>();
+
     private Fetcher() { }
 
     static volatile String UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36";
@@ -122,6 +125,7 @@ final class Fetcher {
                         if (code != 206 && code != 200) throw new Exception("HTTP " + code);
                         String ct = c.getContentType();
                         if (ct != null) mime = ct.split(";")[0].trim().toLowerCase();
+                        lastCd.set(c.getHeaderField("Content-Disposition"));
                         String cr = c.getHeaderField("Content-Range");
                         if (code == 206 && cr != null && cr.contains("/")) {
                             String t = cr.substring(cr.lastIndexOf('/') + 1).trim();

@@ -340,7 +340,7 @@ final class Browser {
         w.setDownloadListener(new DownloadListener() {
             @Override public void onDownloadStart(String url, String ua, String cd, String mime, long len) {
                 if (url.startsWith("blob:") || url.startsWith("data:")) { blobDownload(w, url, mime); return; }
-                String name = URLUtil.guessFileName(url, cd, mime);
+                String name = Util.dlName(url, cd, mime);
                 MediaDl.single(a, url, curUrl, name, mime);
                 if (isPopup && popup != null && popup.copyBackForwardList().getSize() <= 1) closePopup();
             }
@@ -581,7 +581,7 @@ final class Browser {
             File f;
             synchronized (blobFiles) { f = blobFiles.get(tok); }
             if ("!err".equals(b64)) { if (f != null) { f.delete(); synchronized (blobFiles) { blobFiles.remove(tok); } } MainActivity.toast("下載失敗：這個網頁的檔案讀不到"); return; }
-            String nm = name == null ? "" : name.trim().replaceAll("[\\\\/:*?\"<>|\\r\\n]", "_");
+            String nm = name == null ? "" : Util.fixEnc(name.trim()).replaceAll("[\\\\/:*?\"<>|\\r\\n]", "_");
             if (nm.isEmpty()) {
                 String ext = android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(mime == null ? "" : mime.split(";")[0].trim());
                 nm = "下載_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(new java.util.Date()) + "." + (ext == null || ext.isEmpty() ? "bin" : ext);

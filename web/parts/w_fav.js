@@ -181,7 +181,8 @@ function favRender(){
     var n = favCount(k, f.id), sub = favKids(k, f.id).length;
     var cov = FAV[k].items.filter(function(x){ return x.folder === f.id || favIsAnc(k, f.id, x.folder); }).sort(function(a, b){ return (b.t || 0) - (a.t || 0); })[0];
     list.appendChild(h('div', {class: 'favRow fold', onclick: function(){ favBuzz(); FAVV.cur = f.id; favRender(); list.scrollTop = 0; }},
-      h('div', {class: 'th', style: cov && cov.thumb ? {backgroundImage: 'url("' + cov.thumb + '")'} : null}, h('span', {class: 'fi', text: f.parent ? '📁' : (k === 'ytm' ? '🎤' : '👤')})),
+      /* 有封面就只顯示封面（不再疊小圖示）；沒有封面才顯示資料夾／歌手圖示 */
+      h('div', {class: 'th' + (cov && cov.thumb ? '' : ' noCov'), style: cov && cov.thumb ? {backgroundImage: 'url("' + cov.thumb + '")'} : null}, cov && cov.thumb ? null : h('span', {class: 'fi', text: f.parent ? '📁' : (k === 'ytm' ? '🎤' : '👤')})),
       h('div', {class: 'grow'}, h('b', {class: 'ell', text: f.name}), h('div', {class: 'sub', text: n + ' 個收藏' + (sub ? '・' + sub + ' 個子資料夾' : '')})),
       h('button', {class: 'ib', title: '更多', html: icon('more'), onclick: function(e){ e.stopPropagation(); favFolderMenu(k, f); }})));
   });

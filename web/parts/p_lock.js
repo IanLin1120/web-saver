@@ -227,3 +227,51 @@ setTimeout(function(){
 /* 打開「入侵者照片」資料夾就算已經確認，不再提醒 */
 on('secChanged', function(){});
 function intruderOpened(){ if(isApp && NAT.has('intruderSeen') && NAT.call('intruderPending') > 0) NAT.call('intruderSeen'); }
+
+/* ============================================================
+   檔案庫的「分類上鎖」：不用切到設定，直接在檔案庫選要鎖哪些分類（跟設定裡的「隱私與安全」是同一份設定）
+   ============================================================ */
+function openLibLock(){
+  if(!SEC.has()){
+    confirmDlg('先設定密碼', '上鎖要先設定一組 6 位數字密碼（所有上鎖的地方共用）。', '設定密碼').then(function(ok){ if(ok) setPinFlow(); });
+    return;
+  }
+  var body = h('div');
+  var s = openSheet({title: '分類上鎖', icon: 'lock', body: body, tall: true, buzz: true});
+  function draw(){
+    body.textContent = '';
+    body.appendChild(h('div', {class: 'sub', style: {margin: '0 2px 10px', lineHeight: '1.6'}, text: '勾選的分類（包含裡面的資料夾）打開前要輸入密碼或指紋。解除上鎖要先驗證。'}));
+    var grid = h('div', {class: 'lockGrid'});
+    Object.keys(CAT).forEach(function(k){
+      var on = !!SEC.cfg.cats[k], c = CAT[k];
+      var cb = h('input', {type: 'checkbox', checked: on, onchange: lockToggle(0, function(v){ if(v) SEC.cfg.cats[k] = true; else delete SEC.cfg.cats[k]; SEC.save(); fire('secChanged'); draw(); libLockDot(); })});
+      grid.appendChild(h('label', {class: 'lockCell' + (on ? ' on' : '')},
+        h('span', c.emo ? {class: 'lc', style: {background: c.c}, text: c.emo} : {class: 'lc', style: {background: c.c}, html: icon(c.ic, 'sm')}),
+        h('b', {text: k === 'audio' ? '音樂庫' : c.name}),
+        h('span', {class: 'lk', html: icon('lock', 'sm')}),
+        cb));
+    });
+    body.appendChild(grid);
+    var lockedF = LF.folders.filter(function(f){ return f.lock && !f.sys; });
+    body.appendChild(h('div', {class: 'sub', style: {margin: '12px 2px 4px', lineHeight: '1.6'}, text: '只鎖某個資料夾：在資料夾按「⋯」→「上鎖」。' + (lockedF.length ? '目前上鎖的資料夾：' + lockedF.map(function(f){ return f.name; }).join('、') : '')}));
+    body.appendChild(h('div', {class: 'btn-row', style: {marginTop: '10px'}},
+      h('button', {class: 'btn', html: icon('lock', 'sm') + '立即上鎖', onclick: function(){ if(isApp) NAT.call('lockRelock'); SEC.webOk = false; fire('secChanged'); toast('已上鎖'); }}),
+      h('button', {class: 'btn ghost', html: icon('key', 'sm') + '更多上鎖設定', onclick: function(){ s.close(); openSecurity(); }})));
+    paintIcons(body);
+  }
+  draw();
+}
+function libLockDot(){
+  var b = $('bLibLock'); if(!b) return;
+  var n = Object.keys((SEC.cfg && SEC.cfg.cats) || {}).length;
+  var d = b.querySelector('.dot');
+  if(!n){ if(d) d.remove(); return; }
+  if(!d){ d = h('span', {class: 'dot'}); b.appendChild(d); }
+  d.textContent = n;
+}
+on('secChanged', libLockDot);
+setTimeout(function(){
+  var b = $('bLibLock');
+  if(b) b.onclick = function(){ buzz(10); openLibLock(); };
+  libLockDot();
+}, 0);

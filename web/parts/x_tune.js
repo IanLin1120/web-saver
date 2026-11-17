@@ -199,11 +199,56 @@ function ytmCollect(node, out, depth){
     /* 沒有連結的歌手（沒有歌手頁）：第一段文字，但要跳過「歌曲／影片」這種類型標示和觀看次數 */
     if(plain.length && /^(歌曲|影片|Song|Video|單曲|專輯|EP)$/i.test(plain[0])) kind = plain.shift();
     if(!artists.length && plain.length && !/(次觀看|次播放|views|plays|觀看次數)/i.test(plain[0])) artists.push(plain[0]);
-    if(vid && t0.text) out.push({vid: vid, name: String(t0.text), artist: artists.join('、'), album: album, dur: dur, kind: kind});
+    var th = '';
+    try{ var ts = r.thumbnail.musicThumbnailRenderer.thumbnail.thumbnails; th = ts[0].url; }catch(e){}
+    if(vid && t0.text) out.push({vid: vid, name: String(t0.text), artist: artists.join('、'), album: album, dur: dur, kind: kind, thumb: th});
     return;
   }
   Object.keys(node).forEach(function(k){ ytmCollect(node[k], out, depth + 1); });
 }
+/* 檔名後面常見的下載標記：(MP3_320K)、[320kbps]、_128K、(高音質) … 都去掉才拿去比對 */
+function songStrip(s){
+  return String(s || '')
+    .replace(/[\(\[（【]\s*(?:mp3|m4a|aac|flac|wav|opus|ogg)?[\s_\-]*\d{2,4}\s*k(?:bps)?\s*[\)\]）】]/ig, ' ')
+    .replace(/[\(\[（【]\s*(?:mp3|m4a|aac|flac|wav|opus|ogg|hq|hd|高音質|無損|320k)\s*[\)\]）】]/ig, ' ')
+    .replace(/[\s_\-]+(?:mp3|m4a|aac|flac)?[\s_\-]*\d{3}\s*k(?:bps)?\s*$/i, '')
+    .replace(/\s+/g, ' ').trim();
+}
+/* 封面比對：把圖縮成 9×8 灰階算「差異雜湊」（dHash），兩張圖的位元差 ≤ 12 就視為同一張封面 */
+function imgHash(url){
+  return new Promise(function(res){
+    if(!url){ res(null); return; }
+    var im = new Image(), done = false, fin = function(v){ if(!done){ done = true; res(v); } };
+    if(!/^file:|^data:/.test(url)) im.crossOrigin = 'anonymous';
+    im.onload = function(){
+      try{
+        var w = im.naturalWidth, hh = im.naturalHeight, s = Math.min(w, hh), cv = document.createElement('canvas');
+        cv.width = 9; cv.height = 8;
+        var g = cv.getContext('2d');
+        g.drawImage(im, (w - s) / 2, (hh - s) / 2, s, s, 0, 0, 9, 8);
+        var d = g.getImageData(0, 0, 9, 8).data, bits = [];
+        for(var y = 0; y < 8; y++) for(var x = 0; x < 8; x++){
+          var i = (y * 9 + x) * 4, j = i + 4;
+          bits.push((d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11) > (d[j] * 0.3 + d[j + 1] * 0.59 + d[j + 2] * 0.11) ? 1 : 0);
+        }
+        fin(bits);
+      }catch(e){ fin(null); }
+    };
+    im.onerror = function(){ fin(null); };
+    setTimeout(function(){ fin(null); }, 6000);
+    im.src = url;
+  });
+}
+function hashDist(a, b){ if(!a || !b) return 99; var n = 0; for(var i = 0; i < 64; i++) if(a[i] !== b[i]) n++; return n; }
+/* YouTube Music 搜尋：歌曲＋全部結果（影片的「歌手」就是上傳的頻道） */
+async function ytmSearchAll(q){
+  var out = [], seen = {};
+  try{ (await ytmSearchSongs(q)).forEach(function(x){ if(!seen[x.vid]){ seen[x.vid] = 1; out.push(x); } }); }catch(e){}
+  try{ var j = await ytmApi('search', {query: q}), L = []; ytmCollect(j, L, 0); L.forEach(function(x){ if(!seen[x.vid]){ seen[x.vid] = 1; out.push(x); } }); }catch(e){}
+  return out;
+}
+/* 找歌詞、比對歌名時都先去掉下載標記 */
+(function(){ var cs0 = cleanSong; cleanSong = function(x){ return songStrip(cs0(x)); }; })();
 /* 只搜尋「歌曲」 */
 async function ytmSearchSongs(q){
   var j = await ytmApi('search', {query: q, params: 'EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D'});
@@ -246,13 +291,22 @@ function songSame(a, b){
 /* 找出這個檔案是哪一首歌：回傳 {vid, name, artist, album, dur, how}；找不到回傳 null
    how：'title'＝歌名＋長度吻合，'listen'＝聽歌辨識後歌名＋長度吻合 */
 async function songIdentify(it, useListen){
-  var title = cleanSong(songTitle(it)), dur = it.dur || 0, known = String(it.artist || '').replace(/\s*-\s*Topic$/i, '').trim();
-  var pick = function(L, name){
-    var ok = L.filter(function(x){ return songSame(x.name, name) && (!dur || !x.dur || Math.abs(x.dur - dur) <= 2); });
-    /* 長度有吻合的優先；檔案沒有長度資料時只接受歌名完全相同的第一個 */
-    var exact = ok.filter(function(x){ return dur && x.dur; });
-    if(exact.length) return exact.sort(function(a, b){ return Math.abs(a.dur - dur) - Math.abs(b.dur - dur); })[0];
-    return dur ? null : (ok.filter(function(x){ return songKey(x.name) === songKey(name); })[0] || null);
+  var title = songStrip(cleanSong(songTitle(it))), dur = it.dur || 0, known = String(it.artist || '').replace(/\s*-\s*Topic$/i, '').trim();
+  /* 這首歌自己的封面（從 YouTube Music 下載的歌，封面就是 YouTube Music 上那張） */
+  var myHash = await imgHash(Lib.thumb(it));
+  var durOk = function(x, tol){ return dur && x.dur && Math.abs(x.dur - dur) <= (tol || 2); };
+  var pick = async function(L, name){
+    /* 三項裡至少兩項吻合才算：歌名、長度（差 2 秒內）、封面（看起來同一張） */
+    var best = null, bestScore = 0;
+    for(var i = 0; i < L.length && i < 12; i++){
+      var x = L[i], T = songSame(x.name, name), D = durOk(x), C = false;
+      if(myHash && x.thumb && (T || D)){ var hx = await imgHash(x.thumb); C = hashDist(myHash, hx) <= 12; x.coverOk = C; }
+      var sc = (T ? 1 : 0) + (D ? 1 : 0) + (C ? 1 : 0);
+      if(sc < 2 && !(T && !dur && songKey(x.name) === songKey(name))) continue;
+      sc += (x.kind && /歌曲|Song/i.test(x.kind) ? 0.3 : 0) + (C ? 0.2 : 0) - (dur && x.dur ? Math.abs(x.dur - dur) / 100 : 0);
+      if(sc > bestScore){ best = x; bestScore = sc; }
+    }
+    return best;
   };
   /* 檔名常見「歌手 - 歌名」或「歌名 - 歌手」：兩邊都試 */
   var names = [title], m = title.split(/\s+[-–—]\s+/);
@@ -264,9 +318,9 @@ async function songIdentify(it, useListen){
   var tried = {};
   for(var i = 0; i < qs.length; i++){
     var key = qs[i][0] + '|' + qs[i][1]; if(tried[key]) continue; tried[key] = 1;
-    var L = await ytmSearchSongs(qs[i][0]);
-    var hit = pick(L, qs[i][1]);
-    if(hit){ hit.how = 'title'; return hit; }
+    var L = await ytmSearchAll(qs[i][0]);
+    var hit = await pick(L, qs[i][1]);
+    if(hit){ hit.how = hit.coverOk ? 'cover' : 'title'; return hit; }
   }
   if(!useListen || !AICFG.gkey) return null;
   /* 聽歌辨識：剪這個檔案中間 12 秒給 Gemini 聽，再拿辨識出來的歌名＋歌手去比對長度 */
@@ -300,7 +354,7 @@ async function songFix(it, opt){
       if(hit.vid){ it.ytmVid = meta.ytmVid = hit.vid; }
       if(!it.dur && hit.dur){ it.dur = meta.dur = hit.dur; }
       if(Object.keys(meta).length && isApp) NAT.call('libMeta', it.id, JSON.stringify(meta));
-    } else if(needArtist && !res.note) res.note = '找不到歌名和長度都吻合的歌';
+    } else if(needArtist && !res.note) res.note = '找不到歌名、長度、封面有兩項吻合的歌';
   }
   if(needLrc){
     /* 先找有時間軸的同步歌詞（會跟著唱到哪句移動）；沒有才用 YouTube Music 內建的純文字歌詞 */
@@ -331,7 +385,7 @@ function songFixSheet(list){
   var sheet = openSheet({title: '補齊歌手與歌詞', icon: 'audio', body: body, tall: true, buzz: true, onClose: function(){ stop = true; }});
   function intro(){
     body.textContent = '';
-    body.appendChild(h('div', {class: 'sub', style: {marginBottom: '8px', lineHeight: '1.6'}, text: '音樂庫共 ' + L.length + ' 首：缺歌手 ' + noArtist.length + ' 首、缺歌詞 ' + noLrc.length + ' 首。用歌名加上歌曲長度到 YouTube Music 比對，兩個都吻合才會寫入，不確定的不會亂填。'}));
+    body.appendChild(h('div', {class: 'sub', style: {marginBottom: '8px', lineHeight: '1.6'}, text: '音樂庫共 ' + L.length + ' 首：缺歌手 ' + noArtist.length + ' 首、缺歌詞 ' + noLrc.length + ' 首。用歌名、歌曲長度和封面到 YouTube Music 比對，至少兩項吻合才會寫入；是影片的就用上傳的頻道當歌手。不確定的不會亂填。'}));
     body.appendChild(chk('artist', '補上歌手', '同時記下專輯名稱'));
     body.appendChild(chk('lrc', '補上歌詞', '先找會跟著唱的同步歌詞，沒有才用 YouTube Music 的純文字歌詞；中文一律轉成繁體'));
     body.appendChild(chk('listen', '找不到時用聽歌辨識確認', '讓 Gemini 聽這首歌的片段再比對（每首會用一次 Gemini 額度，比較慢）'));
@@ -357,7 +411,7 @@ function songFixSheet(list){
       var r = {};
       try{ r = await songFix(it, st); }catch(e){ r = {note: String(e.message || e)}; }
       var parts = [];
-      if(r.artist){ nA++; parts.push('歌手：' + r.artist + (r.how === 'listen' ? '（聽歌辨識）' : '')); }
+      if(r.artist){ nA++; parts.push('歌手：' + r.artist + (r.how === 'listen' ? '（聽歌辨識）' : r.how === 'cover' ? '（封面相符）' : '')); }
       if(r.lrc){ nL++; parts.push(r.lrc + '歌詞'); }
       if(!parts.length){ nF++; parts.push(r.note || '沒有找到'); }
       log.insertBefore(h('div', {class: 'fixRow' + (r.artist || r.lrc ? ' ok' : '')}, h('b', {text: songTitle(it)}), h('span', {text: parts.join('・')})), log.firstChild);

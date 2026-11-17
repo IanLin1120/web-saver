@@ -90,7 +90,10 @@ final class MediaDl {
                             try { emit(new JSONObject().put("state", "item").put("i", 0).put("n", 1).put("name", nm).put("got", got).put("total", total).put("pct", total > 0 ? (double) got / total : -1)); } catch (Throwable x) { /* ignore */ }
                         }
                     });
-                    JSONObject it = Lib.get(a).add(t, name, m == null || m.isEmpty() ? mime : m, url, name, null);
+                    /* 伺服器在下載時才給真正的檔名（例如信箱附件）：用它，中文不亂碼 */
+                    String fn = name, rcd = Fetcher.lastCd.get();
+                    if (rcd != null && rcd.toLowerCase().contains("filename")) fn = Util.dlName(url, rcd, m == null || m.isEmpty() ? mime : m);
+                    JSONObject it = Lib.get(a).add(t, fn, m == null || m.isEmpty() ? mime : m, url, fn, null);
                     emit(new JSONObject().put("state", "done").put("ok", 1).put("fail", 0).put("items", new JSONArray().put(it)));
                     MainActivity.emit("lib", "");
                 } catch (Throwable e) {
@@ -141,7 +144,7 @@ final class MediaDl {
             String kind = it.optString("kind", "image");
             String ref = it.optString("referer", page);
             String base = it.optString("name", "");
-            if (base.isEmpty()) base = Util.safeName(Uri.parse(url).getLastPathSegment() == null ? "media" : Uri.parse(url).getLastPathSegment());
+            if (base.isEmpty()) base = Util.safeName(Uri.parse(url).getLastPathSegment() == null ? "media" : Util.fixEnc(Uri.parse(url).getLastPathSegment()));
             base = Util.safeName(base);
             final String shown = base;
             try {

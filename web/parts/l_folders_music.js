@@ -319,7 +319,7 @@ Music.drawPlayer = function(){
   tbtn('search', '找歌詞', function(){ delete it.lrcOff; if(isApp) NAT.call('libMeta', it.id, JSON.stringify({lrcOff: false})); lyricsSearchSheet(it, function(){ self.drawPlayer(); }); });
   if(isApp && typeof songFix === 'function' && !it.ytm && !String(it.artist || '').trim()) tbtn('user', '找歌手', async function(){
     toast('到 YouTube Music 比對歌名和長度…');
-    try{ var r = await songFix(it, {artist: true, lrc: true, listen: !!AICFG.gkey}); toast(r.artist ? '歌手：' + r.artist + (r.how === 'listen' ? '（聽歌辨識）' : '') : (r.note || '沒有找到吻合的歌'), !r.artist); }catch(e){ toast(String(e.message || e), true); }
+    try{ var r = await songFix(it, {artist: true, lrc: true, listen: !!AICFG.gkey}); toast(r.artist ? '歌手：' + r.artist + (r.how === 'listen' ? '（聽歌辨識）' : r.how === 'cover' ? '（封面相符）' : '') : (r.note || '沒有找到吻合的歌'), !r.artist); }catch(e){ toast(String(e.message || e), true); }
     self.drawPlayer(); self.mini();
   });
   if(Lyrics.of(it)) tbtn('trash', '移除歌詞', async function(){
