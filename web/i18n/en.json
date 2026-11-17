@@ -2152,5 +2152,12 @@
 "已調小": "turned down ",
 "原音量": "original volume",
 "。已量好": ". Measured ",
-"個無法量測": " couldn't be measured"
+"個無法量測": " couldn't be measured",
+"網頁診斷": "Page diagnostics",
+"網頁有東西沒顯示時，請截圖或按「複製」傳給 Claude": "When something on a page doesn't show, take a screenshot or tap \"Copy\" and send it to Claude",
+"耳機斷線時暫停": "Pause when headphones disconnect",
+"藍牙耳機斷線、拔掉耳機時自動暫停，避免聲音突然從手機喇叭放出來（音樂庫、離線影片、YouTube、YouTube Music、瀏覽器網頁都適用）": "Pauses automatically when Bluetooth headphones disconnect or headphones are unplugged, so sound doesn't suddenly come out of the phone speaker (music library, offline videos, YouTube, YouTube Music and web pages)",
+"耳機已中斷連線，已暫停播放": "Headphones disconnected — playback paused",
+"到 YouTube Music 比對歌名和長度…": "Matching the title and length on YouTube Music…",
+"沒有找到吻合的歌": "No matching song found"
 }

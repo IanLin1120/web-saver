@@ -267,7 +267,10 @@ if('mediaSession' in navigator){
     if(el !== Music.el && !el.isConnected) return;
     try{ var p = el.play(); if(p && p.catch) p.catch(function(){}); }catch(e){}
   };
-  setTimeout(function(){ if(NAT.has('autoResume')) NAT.call('autoResume', !(CFG.yt && CFG.yt.resume === false)); }, 1500);
+  setTimeout(function(){
+    if(NAT.has('autoResume')) NAT.call('autoResume', !(CFG.yt && CFG.yt.resume === false));
+    if(NAT.has('btPause')) NAT.call('btPause', !(CFG.yt && CFG.yt.btPause === false));
+  }, 1500);
 })();
 Music.el.addEventListener('timeupdate', function(){
   var t = Music.el.currentTime, d = Music.el.duration || 0;
@@ -367,3 +370,12 @@ function renderMusicHead(box, L){
     h('button', {class: 'btn pri sm', html: '<svg class="i sm fill" viewBox="0 0 24 24">' + IC.play + '</svg>播放', disabled: !L.length, onclick: function(){ Music.shuffle = false; Music.playList(L, 0); Music.openPlayer(); }}),
     h('button', {class: 'btn sm', text: '隨機', disabled: !L.length, onclick: function(){ Music.shuffle = true; lsSet('ws.mShuffle', true); Music.playList(L, Math.floor(Math.random() * L.length)); Music.openPlayer(); }})));
 }
+
+/* 藍牙耳機斷線、拔掉耳機：App 介面裡正在播的全部暫停（音樂庫、離線影片、AI 摘要） */
+on('noisy', function(){
+  window.__wsCmdT = Date.now() + 15000;
+  try{ if(Music.el && !Music.el.paused) Music.el.pause(); }catch(e){}
+  [].forEach.call(document.querySelectorAll('video,audio'), function(m){ try{ if(!m.paused) m.pause(); }catch(e){} });
+  [].forEach.call(document.querySelectorAll('iframe'), function(f){ try{ f.contentWindow.postMessage(JSON.stringify({event: 'command', func: 'pauseVideo', args: []}), '*'); }catch(e){} });
+  if(typeof toast === 'function') toast('耳機已中斷連線，已暫停播放');
+});

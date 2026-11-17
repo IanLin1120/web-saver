@@ -40,6 +40,11 @@ final class Incog {
         } catch (Throwable t) { return false; }
     }
 
+    /** 無痕分頁也要允許第三方 Cookie（Outlook 信件圖片、嵌入的登入框需要），要設在無痕設定檔自己的 Cookie 管理員上 */
+    static void allowThirdParty(WebView w) {
+        try { Object p = profile(); ((CookieManager) p.getClass().getMethod("getCookieManager").invoke(p)).setAcceptThirdPartyCookies(w, true); } catch (Throwable t) { /* ignore */ }
+    }
+
     /** 無痕設定檔自己的 Cookie（沒有就用一般的） */
     static CookieManager cookies() {
         if (active) {

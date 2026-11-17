@@ -331,6 +331,7 @@ final class Browser {
         Fetcher.UA = s.getUserAgentString();
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(w, true);
+        if (profIncog) Incog.allowThirdParty(w);
         w.setBackgroundColor(Color.WHITE);
         if (!isPopup) w.addJavascriptInterface(new PageBridge(this), "WSPage");
         w.setWebViewClient(new Client(isPopup));
@@ -367,6 +368,7 @@ final class Browser {
                 return new WebResourceResponse("text/plain", "utf-8", 204, "No Content", h0, new ByteArrayInputStream(new byte[0]));
             }
             if (ads && !r.isForMainFrame() && !AdBlock.allowed(curHost) && AdBlock.match(host)) {
+                noteFail("擋廣告 " + u);
                 AdBlock.blockedPage.incrementAndGet();
                 AdBlock.blockedTotal.incrementAndGet();
                 Map<String, String> h = new HashMap<>();
@@ -409,6 +411,7 @@ final class Browser {
         }
 
         @Override public void onPageStarted(WebView v, String url, Bitmap fav) {
+            if (!isPopup) synchronized (fails) { fails.clear(); }
             if (isPopup && ytOpenApp(url, true)) { v.stopLoading(); return; }
             if (isPopup) {
                 /* 新視窗直接開 YouTube（例如 IG 個人檔案的連結）：不開視窗，直接切到 YouTube 分頁 */
@@ -461,6 +464,7 @@ final class Browser {
         }
 
         @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
+            if (!isPopup && !r.isForMainFrame()) { try { noteFail("錯誤 " + e.getErrorCode() + " " + e.getDescription() + " " + r.getUrl()); } catch (Throwable t) { /* ignore */ } }
             if (isPopup || !r.isForMainFrame()) return;
             if (httpFallback(v, r.getUrl().toString(), false)) return;
             String desc = String.valueOf(e.getDescription());
@@ -469,6 +473,7 @@ final class Browser {
 
         /* 網址沒打 http:// 或 https:// 時 App 會先試 https；伺服器的 https 壞掉（5xx）或連不上時，自動改用 http 再試一次 */
         @Override public void onReceivedHttpError(WebView v, WebResourceRequest r, android.webkit.WebResourceResponse resp) {
+            if (!isPopup && !r.isForMainFrame() && resp != null) noteFail("HTTP " + resp.getStatusCode() + " " + r.getUrl());
             if (isPopup || !r.isForMainFrame() || resp == null || resp.getStatusCode() < 500) return;
             httpFallback(v, r.getUrl().toString(), true);
         }
@@ -1117,6 +1122,12 @@ final class Browser {
     }
 
     /* ---------- 媒體偵測 ---------- */
+    /** 網頁診斷：這一頁載入失敗或被擋掉的資源（圖片、腳本…），給「網頁診斷」看是什麼沒載入 */
+    final java.util.ArrayDeque<String> fails = new java.util.ArrayDeque<>();
+    void noteFail(String what) {
+        synchronized (fails) { if (fails.size() >= 60) fails.pollFirst(); fails.addLast(what.length() > 220 ? what.substring(0, 220) + "…" : what); }
+    }
+
     private void noteMedia(String url, Map<String, String> headers) {
         if (!MEDIA_RE.matcher(url).find()) return;
         /* IG／FB 這類分段讀取同一個檔案（bytestart／byteend）：去掉位置參數，當成同一個完整檔案 */

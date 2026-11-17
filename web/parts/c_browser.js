@@ -740,6 +740,7 @@ function openToolsMenu(){
   b('download', '擷取網頁', function(){ openCapture(); }, {dis: !page});
   b('copy', '複製網址', function(){ copyText(BR.url); }, {dis: !page});
   b('share', '分享', function(){ if(isApp) NAT.call('share', BR.title || '', BR.url); else copyText(BR.url); }, {dis: !page});
+  b('info', '網頁診斷', function(){ if(isApp && NAT.has('pageDiag')){ toast('檢查中…'); NAT.call('pageDiag'); } }, {dis: !page || !isApp});
   var s = openSheet({title: '功能', icon: 'grid', body: grid});
 }
 $('bMore').addEventListener('click', openToolsMenu);
@@ -820,3 +821,11 @@ async function openBmTrash(after){
   draw();
 }
 on('secChanged', function(){ try{ renderStart(); }catch(e){} });
+
+/* 網頁診斷的結果：網頁有東西沒顯示（例如信件圖片）時，截圖傳給 Claude 找原因 */
+on('pageDiag', function(d){
+  if(!d || !d.text) return;
+  var ta = h('textarea', {readOnly: true, class: 'sel-text', style: {width: '100%', minHeight: '50vh', font: '11px/1.4 ui-monospace,monospace'}}); ta.value = d.text;
+  openSheet({title: '網頁診斷', icon: 'info', body: h('div', null, h('div', {class: 'sub', style: {marginBottom: '8px'}, text: '網頁有東西沒顯示時，請截圖或按「複製」傳給 Claude'}), ta,
+    h('div', {class: 'btn-row'}, h('button', {class: 'btn pri sm', html: icon('copy', 'sm') + '複製', onclick: function(){ copyText(d.text); }})))});
+});

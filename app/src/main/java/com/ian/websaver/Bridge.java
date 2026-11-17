@@ -223,6 +223,40 @@ public class Bridge {
     /** 離線音樂／影片被其他 App 打斷（不是你按的暫停） */
     @JavascriptInterface public void mediaInt(String x) { Resume.interrupted(a, a.ui); }
     @JavascriptInterface public void mediaMark() { Resume.mark(); }
+    /** 網頁診斷：目前分頁的網址、模式、無痕、廣告過濾，加上這頁沒載入成功的資源；再請網頁回報圖片載入情形。結果用事件 pageDiag 回報 */
+    @JavascriptInterface public void pageDiag() {
+        ui(new Runnable() { @Override public void run() {
+            final Browser b = a.br;
+            if (b == null) return;
+            final StringBuilder sb = new StringBuilder();
+            sb.append("網址 ").append(b.curUrl).append('\n');
+            sb.append("版面 ").append(b.mode).append("・文字 ").append(b.textZoom).append("%・無痕 ").append(b.incog ? (b.profIncog ? "獨立" : "舊式") : "否").append('\n');
+            sb.append("廣告過濾 ").append(b.ads ? (AdBlock.allowed(b.curHost) ? "這個網站不過濾" : "開") : "關").append("・本頁已擋 ").append(AdBlock.blockedPage.get()).append('\n');
+            try { sb.append("WebView ").append(android.webkit.WebView.getCurrentWebViewPackage() != null ? android.webkit.WebView.getCurrentWebViewPackage().versionName : "?").append('\n'); } catch (Throwable t) { /* ignore */ }
+            sb.append("UA ").append(b.wv.getSettings().getUserAgentString()).append('\n');
+            synchronized (b.fails) {
+                sb.append("--- 沒載入成功的資源（").append(b.fails.size()).append("）---\n");
+                for (String f : b.fails) sb.append(f).append('\n');
+            }
+            String js = "(function(){var o={all:0,ok:0,bad:0,wait:0,lazy:0,hid:0,list:[]};function scan(d,depth){if(!d||depth>3)return;var im=d.images||[];for(var i=0;i<im.length;i++){var g=im[i];o.all++;var r=g.getBoundingClientRect();var cs=null;try{cs=(d.defaultView||window).getComputedStyle(g)}catch(e){}" +
+                "if(g.loading==='lazy')o.lazy++;if(cs&&(cs.display==='none'||cs.visibility==='hidden'))o.hid++;if(!g.complete)o.wait++;else if(g.naturalWidth>0)o.ok++;else{o.bad++;if(o.list.length<25)o.list.push((g.currentSrc||g.src||g.getAttribute('data-src')||'(沒有網址)').slice(0,200))}}" +
+                "var fr=d.querySelectorAll('iframe');for(var j=0;j<fr.length;j++){try{scan(fr[j].contentDocument,depth+1)}catch(e){o.cross=(o.cross||0)+1}}}scan(document,0);return JSON.stringify(o)})()";
+            b.wv.evaluateJavascript(js, new android.webkit.ValueCallback<String>() { @Override public void onReceiveValue(String v) {
+                String r = v;
+                try { r = new org.json.JSONTokener(v).nextValue().toString(); } catch (Throwable t) { /* ignore */ }
+                try {
+                    org.json.JSONObject o = new org.json.JSONObject(r);
+                    sb.append("--- 圖片 ---\n共 ").append(o.optInt("all")).append(" 張：成功 ").append(o.optInt("ok")).append("、失敗 ").append(o.optInt("bad")).append("、還在載入 ").append(o.optInt("wait"))
+                      .append("、延後載入 ").append(o.optInt("lazy")).append("、被隱藏 ").append(o.optInt("hid")).append("、跨網域框架 ").append(o.optInt("cross")).append('\n');
+                    org.json.JSONArray l = o.optJSONArray("list");
+                    if (l != null) for (int i = 0; i < l.length(); i++) sb.append("失敗 ").append(l.optString(i)).append('\n');
+                } catch (Throwable t) { sb.append("（讀不到網頁內的圖片資訊）\n"); }
+                try { MainActivity.emit("pageDiag", new org.json.JSONObject().put("text", sb.toString()).toString()); } catch (Throwable t) { /* ignore */ }
+            } });
+        } });
+    }
+
+    @JavascriptInterface public void btPause(boolean on) { a.prefs.edit().putBoolean("btPause", on).apply(); }
     @JavascriptInterface public void autoResume(boolean on) { a.prefs.edit().putBoolean("autoResume", on).apply(); }
 
     @JavascriptInterface public String ytSniff(String vid) { return YtSniff.get(vid); }

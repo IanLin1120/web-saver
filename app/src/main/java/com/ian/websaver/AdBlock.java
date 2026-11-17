@@ -42,6 +42,8 @@ final class AdBlock {
         }
         css = sb.toString();
         Set<String> w = new HashSet<>();
+        /* 網頁版信箱不擋：信件裡的圖片、追蹤連結常常來自行銷公司的網域，擋了就看不到圖片 */
+        for (String m : new String[]{"mail.google.com", "outlook.live.com", "outlook.office.com", "outlook.office365.com", "outlook.com", "mail.yahoo.com", "mail.proton.me", "mail.yahoo.co.jp", "mail.naver.com", "mail.qq.com", "mail.163.com", "icloud.com"}) w.add(m);
         if (whitelist != null) for (String line : whitelist.split("[\\r\\n,\\s]+")) { String s = line.trim().toLowerCase(); if (!s.isEmpty()) w.add(s); }
         allow = w;
     }

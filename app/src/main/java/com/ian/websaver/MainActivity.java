@@ -50,6 +50,11 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences("ws", MODE_PRIVATE);
         /* 上次沒有先離開無痕就關掉 App：一開啟就把無痕留下的記錄、登入狀態清掉（不影響一般瀏覽） */
         Incog.wipeLeftover();
+        /* 藍牙耳機斷線、拔掉耳機：系統會發出「聲音要從喇叭出來了」的通知，收到就全部暫停 */
+        try {
+            android.content.IntentFilter nf = new android.content.IntentFilter(android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+            if (Build.VERSION.SDK_INT >= 33) registerReceiver(noisy, nf, 0x2 /* RECEIVER_EXPORTED：系統廣播 */); else registerReceiver(noisy, nf);
+        } catch (Throwable t) { /* ignore */ }
         Window w = getWindow();
         w.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         String bar = prefs.getString("barColor", "#efe5d3");
@@ -694,7 +699,34 @@ public class MainActivity extends Activity {
         });
     }
 
+    /** 藍牙耳機斷線或拔掉耳機 → 所有正在播的聲音都暫停（音樂庫、離線影片、YouTube、YouTube Music、瀏覽器網頁、AI 摘要） */
+    final android.content.BroadcastReceiver noisy = new android.content.BroadcastReceiver() {
+        @Override public void onReceive(android.content.Context c, Intent i) {
+            if (!android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(i.getAction())) return;
+            if (!prefs.getBoolean("btPause", true)) return;
+            pauseAllMedia();
+        }
+    };
+
+    void pauseAllMedia() {
+        Resume.hold(15000);
+        runOnUiThread(new Runnable() { @Override public void run() {
+            /* 網頁（包含網頁裡嵌入的影片框架，同網域的也一起停） */
+            String js = "(function(){function p(d){try{[].forEach.call(d.querySelectorAll('video,audio'),function(m){try{m.pause()}catch(e){}});[].forEach.call(d.querySelectorAll('iframe'),function(f){try{p(f.contentDocument)}catch(e){}})}catch(e){}}p(document);try{window.__wsMuCmd&&__wsMuCmd('pause','')}catch(e){}})()";
+            java.util.List<Browser> all = new java.util.ArrayList<>(tabs);
+            for (Browser b : ytAll()) if (!all.contains(b)) all.add(b);
+            if (normalTabs != null) for (Browser b : normalTabs) if (!all.contains(b)) all.add(b);
+            if (bgBr != null && !all.contains(bgBr)) all.add(bgBr);
+            for (Browser b : all) { try { if (b != null && b.wv != null) b.wv.evaluateJavascript(js, null); } catch (Throwable t) { /* ignore */ } }
+            /* App 介面：音樂庫、離線影片、AI 摘要的播放器 */
+            emit("noisy", "{}");
+            try { AiPlayer.pause(); } catch (Throwable t) { /* ignore */ }
+            Resume.hold(15000);
+        } });
+    }
+
     @Override protected void onDestroy() {
+        try { unregisterReceiver(noisy); } catch (Throwable t) { /* ignore */ }
         if (cur == this) cur = null;
         if (!isChangingConfigurations()) Lock.session = false;
         WifiServer.stop();

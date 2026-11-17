@@ -16,6 +16,9 @@ final class Resume {
     /** App 自己或你下的播放／暫停指令：之後 2.5 秒內的暫停都當作你按的 */
     static void mark() { lastCmd = System.currentTimeMillis(); stop(); }
 
+    /** 接下來 ms 毫秒內的暫停都當作你按的（藍牙斷線暫停後不要被自動接回去） */
+    static void hold(long ms) { lastCmd = System.currentTimeMillis() + Math.max(0, ms - 2500); stop(); }
+
     static void stop() {
         if (task != null) { Util.MAIN.removeCallbacks(task); task = null; }
     }
