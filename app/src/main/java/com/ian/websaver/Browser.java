@@ -315,6 +315,7 @@ final class Browser {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
+        s.setGeolocationEnabled(true);
         s.setSupportMultipleWindows(true);
         s.setJavaScriptCanOpenWindowsAutomatically(true);
         s.setBuiltInZoomControls(true);
@@ -551,7 +552,13 @@ final class Browser {
 
         @Override public void onPermissionRequest(PermissionRequest r) { r.deny(); }
 
-        @Override public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback cb) { cb.invoke(origin, false, false); }
+        /* 網頁要用目前位置：先問你（可以記住），允許後 App 再跟手機要位置權限 */
+        @Override public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback cb) {
+            if (ytTab) { cb.invoke(origin, false, false); return; }
+            Geo.ask(a, origin, cb, incog);
+        }
+
+        @Override public void onGeolocationPermissionsHidePrompt() { Geo.hide(null); }
     }
 
     /* ---------- 網頁用程式產生的檔案（blob:／data: 連結）：請頁面把內容分段交給 App 存進檔案庫 ---------- */

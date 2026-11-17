@@ -256,6 +256,21 @@ public class Bridge {
         } });
     }
 
+    /** 網頁要位置的詢問：你的回答 */
+    @JavascriptInterface public void geoAnswer(final String id, final boolean allow, final boolean remember) {
+        ui(new Runnable() { @Override public void run() { Geo.answer(a, id, allow, remember); } });
+    }
+    @JavascriptInterface public void geoOn(boolean on) { a.prefs.edit().putBoolean("geoOn", on).apply(); }
+    @JavascriptInterface public String geoList() { return Geo.list(a); }
+    @JavascriptInterface public void geoForget(String origin) { Geo.forget(a, origin); }
+    @JavascriptInterface public boolean geoPerm() { return Geo.hasPerm(a); }
+    /** 打開手機的定位設定 */
+    @JavascriptInterface public void geoSettings() {
+        ui(new Runnable() { @Override public void run() {
+            try { a.startActivity(new android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS)); } catch (Throwable t) { /* ignore */ }
+        } });
+    }
+
     @JavascriptInterface public void btPause(boolean on) { a.prefs.edit().putBoolean("btPause", on).apply(); }
     @JavascriptInterface public void autoResume(boolean on) { a.prefs.edit().putBoolean("autoResume", on).apply(); }
 

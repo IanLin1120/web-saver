@@ -468,6 +468,17 @@ function renderStart(){
     h('div', {class: 'fav', html: icon('history')}), h('span', {text: '辨識紀錄'}), h('small', {class: 'sub', text: (typeof LSNH !== 'undefined' ? LSNH.items.length : 0) + ' 首'})));
   tiles.appendChild(h('div', {class: 'tile' + (INCOG.on ? ' on' : ''), onclick: function(){ setIncog(!INCOG.on); setTimeout(renderStart, 300); }},
     h('div', {class: 'fav', html: icon('incog')}), h('span', {text: INCOG.on ? '離開無痕' : '無痕模式'}), h('small', {class: 'sub', text: INCOG.on ? '離開時全部刪除' : '不保留記錄'})));
+  /* 關閉全部分頁：問一次再關（無痕時只關無痕的分頁） */
+  (function(){
+    var n = isApp ? (tabList().length || 1) : 1;
+    tiles.appendChild(h('div', {class: 'tile', onclick: async function(){
+      buzz(10);
+      if(!isApp) return;
+      var cnt = tabList().length || 1;
+      if(cnt > 1 && !(await confirmDlg('關閉全部分頁？', '目前開著 ' + cnt + ' 個分頁' + (INCOG.on ? '（無痕）' : '') + '，全部關掉後回到首頁。', '全部關閉', true))) return;
+      buzz(16); NAT.call('tabCloseAll'); BR.loaded = false; BR.url = ''; goHome(); setTimeout(tabCount, 120); setTimeout(renderStart, 200); toast('已關閉全部分頁');
+    }}, h('div', {class: 'fav', html: icon('x')}), h('span', {text: '關閉分頁'}), h('small', {class: 'sub', text: '全部 ' + n + ' 個'})));
+  })();
   sects.appendChild(h('div', {class: 'sect-h'}, h('span', {text: '⭐ 收藏'}), h('button', {text: '管理收藏夾', onclick: function(){ manageFolders(renderStart); }})));
   sects.appendChild(tiles);
   sp.appendChild(sects);
@@ -829,3 +840,47 @@ on('pageDiag', function(d){
   openSheet({title: '網頁診斷', icon: 'info', body: h('div', null, h('div', {class: 'sub', style: {marginBottom: '8px'}, text: '網頁有東西沒顯示時，請截圖或按「複製」傳給 Claude'}), ta,
     h('div', {class: 'btn-row'}, h('button', {class: 'btn pri sm', html: icon('copy', 'sm') + '複製', onclick: function(){ copyText(d.text); }})))});
 });
+
+/* ============================================================
+   網站定位：網頁要用你的目前位置時先問你（允許／只有這次／不允許），可以記住
+   ============================================================ */
+var GEO = {sheets: {}};
+function geoHost(o){ try{ return new URL(o).hostname.replace(/^www\./, ''); }catch(e){ return String(o || ''); } }
+on('geoAsk', function(d){
+  if(!d || !d.id) return;
+  var host = geoHost(d.origin), answered = false;
+  var remember = h('input', {type: 'checkbox'}); remember.checked = !d.incog;
+  var ans = function(allow, rem){ if(answered) return; answered = true; buzz(allow ? 14 : 10); NAT.call('geoAnswer', d.id, allow, rem && !d.incog); s.close(); };
+  var body = h('div', null,
+    h('div', {class: 'geoAsk'}, h('div', {class: 'geoIc', html: icon('pin')}), h('div', null, h('b', {text: host}), h('div', {class: 'sub', text: '想要使用你的目前位置'}))),
+    h('div', {class: 'sub', style: {margin: '10px 2px 12px', lineHeight: '1.6'}, text: '網站會拿到你現在的位置（例如用來找附近的店、在地圖上定位）。不確定這個網站是什麼就選「不允許」。' + (d.incog ? '（無痕模式：離開無痕就會忘記）' : '')}),
+    d.incog ? null : h('label', {class: 'lab'}, h('span', {text: '記住這個網站的選擇'}), h('span', {class: 'sw'}, remember, h('span'))),
+    h('div', {class: 'btn-row', style: {marginTop: '12px'}},
+      h('button', {class: 'btn', onclick: function(){ ans(false, remember.checked); }}, '不允許'),
+      h('button', {class: 'btn pri', html: icon('pin', 'sm') + '允許', onclick: function(){ ans(true, remember.checked); }})));
+  var s = openSheet({title: '網站要使用位置', icon: 'pin', body: body, onClose: function(){ if(!answered){ answered = true; NAT.call('geoAnswer', d.id, false, false); } }});
+  GEO.sheets[d.id] = s;
+  paintIcons(body);
+});
+on('geoHide', function(d){ var s = d && GEO.sheets[d.id]; if(s){ delete GEO.sheets[d.id]; try{ s.close(); }catch(e){} } });
+on('geoDenied', function(){ toast('手機沒有給 App 位置權限，網站拿不到位置。可以到手機的「設定 → 應用程式 → Terra 瀏覽器 → 權限 → 位置」開啟', true); });
+on('geoOff', function(){ toast('手機的定位沒有開，網站可能拿不到位置', true, ['開啟定位', function(){ NAT.call('geoSettings'); }]); });
+function openGeoSites(){
+  var list = h('div'), s = openSheet({title: '網站定位', icon: 'pin', body: list, buzz: true});
+  function draw(){
+    var o = {}; try{ o = JSON.parse(NAT.call('geoList') || '{}'); }catch(e){}
+    list.textContent = '';
+    var ks = Object.keys(o).sort();
+    list.appendChild(h('div', {class: 'sub', style: {margin: '0 2px 10px'}, text: NAT.call('geoPerm') ? '手機已允許 App 使用位置。' : '手機還沒允許 App 使用位置，第一次有網站要用時會問你。'}));
+    if(!ks.length){ list.appendChild(h('div', {class: 'empty', text: '還沒有記住任何網站'})); return; }
+    ks.forEach(function(k){
+      list.appendChild(h('div', {class: 'setRow'}, h('span', {class: 'ic', html: icon(o[k] === 'allow' ? 'pin' : 'x')}),
+        h('div', {class: 'grow'}, h('b', {text: geoHost(k)}), h('div', {class: 'sub', text: o[k] === 'allow' ? '允許' : '不允許'})),
+        h('button', {class: 'btn sm', text: '移除', onclick: function(){ NAT.call('geoForget', k); toast('已移除，下次會再問你'); draw(); }})));
+    });
+    list.appendChild(h('button', {class: 'btn', style: {width: '100%', marginTop: '10px'}, text: '全部清除', onclick: function(){ NAT.call('geoForget', ''); toast('已清除，之後每個網站都會再問你'); draw(); }}));
+    paintIcons(list);
+  }
+  draw();
+}
+setTimeout(function(){ if(isApp && NAT.has('geoOn')) NAT.call('geoOn', CFG.geo !== false); }, 1500);

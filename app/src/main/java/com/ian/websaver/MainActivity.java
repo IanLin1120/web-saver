@@ -275,6 +275,7 @@ public class MainActivity extends Activity {
     /** 離開無痕：關掉所有無痕分頁、刪掉無痕設定檔，回到原本的一般分頁 */
     void exitIncog() {
         if (normalTabs == null) return;
+        Geo.clearSession();
         boolean vis = br != null && br.shown;
         java.util.List<Browser> inc = new java.util.ArrayList<>(tabs);
         tabs.clear();
@@ -652,6 +653,7 @@ public class MainActivity extends Activity {
 
     @Override public void onRequestPermissionsResult(int req, String[] perms, int[] results) {
         super.onRequestPermissionsResult(req, perms, results);
+        if (req == Geo.REQ) Geo.onPerm(this);
         emit("perm", "");
     }
 
