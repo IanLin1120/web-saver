@@ -229,7 +229,11 @@ public class MainActivity extends Activity {
 
     Browser newTab() {
         Browser old = br;
-        Browser b = new Browser(this);
+        /* 無痕中開的新分頁也要在無痕設定檔裡（新聞分頁例外，用新聞自己的） */
+        boolean ni = Browser.nextIncog;
+        if (!Browser.nextNews && old != null && old.profIncog) Browser.nextIncog = true;
+        Browser b;
+        try { b = new Browser(this); } finally { Browser.nextIncog = ni; }
         root.removeView(b.wv);
         root.addView(b.wv, root.indexOfChild(old.wv) + 1, new FrameLayout.LayoutParams((FrameLayout.LayoutParams) old.wv.getLayoutParams()));
         b.incog = old.incog;
@@ -309,6 +313,8 @@ public class MainActivity extends Activity {
     void closeTab(int id) {
         Browser b = tabById(id);
         if (b == null) return;
+        /* 最後一個分頁是新聞分頁：換成一個一般分頁再關掉它（不然之後一般瀏覽會跑到新聞的設定檔裡） */
+        if (tabs.size() == 1 && b.news) { newTab(); }
         if (tabs.size() == 1) { b.pauseMedia(); b.wv.loadUrl("about:blank"); b.wv.clearHistory(); b.emitState(); return; }
         int i = tabs.indexOf(b);
         if (b == br) switchTab(tabs.get(i > 0 ? i - 1 : 1).tabId);

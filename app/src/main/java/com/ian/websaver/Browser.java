@@ -309,7 +309,8 @@ final class Browser {
     private WebView makeWebView(final boolean isPopup) {
         final WebView w = new KeepWebView(a, !isPopup && (ytTab || hiddenBr));
         /* 無痕分頁（和它開出來的彈出視窗）：掛到獨立的無痕設定檔，跟一般瀏覽的帳號、Cookie 完全分開 */
-        if ("br".equals(tag) && (profIncog || nextIncog)) { profIncog = Incog.apply(w); }
+        if ("br".equals(tag) && (news || nextNews)) { news = true; if (Incog.supported()) profNews = Incog.applyNamed(w, Incog.NEWS); }
+        else if ("br".equals(tag) && (profIncog || nextIncog)) { profIncog = Incog.apply(w); }
         WebSettings s = w.getSettings();
         noXrw(s);
         s.setJavaScriptEnabled(true);
@@ -333,6 +334,7 @@ final class Browser {
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(w, true);
         if (profIncog) Incog.allowThirdParty(w);
+        if (profNews) Incog.allowThirdPartyNamed(w, Incog.NEWS);
         w.setBackgroundColor(Color.WHITE);
         if (!isPopup) w.addJavascriptInterface(new PageBridge(this), "WSPage");
         w.setWebViewClient(new Client(isPopup));
@@ -753,6 +755,9 @@ final class Browser {
     volatile boolean incog = false;
     /** 這個分頁是用獨立的無痕設定檔建立的 */
     boolean profIncog = false;
+    /** 新聞分頁：從「新聞」打開的文章，用獨立的新聞設定檔，瀏覽記錄另外記 */
+    boolean news = false, profNews = false;
+    static boolean nextNews = false;
     /** 下一個建立的瀏覽分頁要用無痕設定檔 */
     static boolean nextIncog = false;
 
@@ -855,6 +860,7 @@ final class Browser {
             o.put("secure", curUrl.startsWith("https:"));
             o.put("fs", fs);
             o.put("tab", tabId);
+            o.put("news", news);
             if ("yt".equals(tag) && a.yt != this) return;   /* 背景的那一個 YouTube／Music 不回報，免得畫面被切過去 */
             if (!hiddenBr && !bgTab()) MainActivity.emit("yt".equals(tag) ? "ytbr" : "br", o.toString());
         } catch (Throwable t) { /* ignore */ }

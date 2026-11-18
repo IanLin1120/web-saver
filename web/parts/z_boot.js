@@ -12,6 +12,9 @@ window.onNativeBack = function(){
   if(Sheets.stack.length){ Sheets.stack[Sheets.stack.length - 1].close(); return true; }
   if(typeof Office !== 'undefined' && Office.back && Office.back()) return true;
   if(Viewer.isOpen()){ Viewer.close(); return true; }
+  if(typeof NEWS !== 'undefined' && NEWS.el && !NEWS.el.classList.contains('hide')){ newsHide(); return true; }
+  /* 新聞分頁退到第一頁再按返回：回到新聞列表 */
+  if(curView === 'browse' && typeof NEWS !== 'undefined' && NEWS.isNewsTab && !BR.back && BR.loaded && !BR.home){ newsShow(); return true; }
   if(LV.selMode){ LV.selMode = false; LV.sel.clear(); renderLib(); return true; }
   if(BR.zap){ $('bZap').click(); return true; }
   if(!$('urlPop').classList.contains('hide')){ urlPop(false); return true; }
@@ -62,7 +65,8 @@ document.addEventListener('keydown', function(e){
   /* 網頁版：網址列帶 ?url= 時直接開啟（可做成「分享到」書籤） */
   var qp = new URLSearchParams(location.search).get('url');
   if(qp) navigate(qp);
-  var v = lsGet('ws.view', 'browse'); if(v !== 'browse') showView(v);
+  /* 每次打開 App 都從「瀏覽」的首頁開始（分享進來的網址除外） */
+  if(!qp){ showView('browse'); if(typeof goHome === 'function') goHome(); }
   $('bView').innerHTML = icon(CFG.lib.view === 'grid' ? 'list' : 'grid');
   Upd.boot();
   YT.loadCfg();

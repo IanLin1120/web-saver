@@ -26,7 +26,8 @@ var Hist = {
   }
 };
 on('br', function(d){
-  if(!d || !d.url) return;
+  /* 新聞分頁的瀏覽不寫進一般瀏覽記錄（新聞有自己的閱讀記錄） */
+  if(!d || !d.url || d.news) return;
   if(d.url !== Hist._lastBr){ Hist._lastBr = d.url; Hist.add(d.url, d.title, 'br'); }
   else if(d.title) Hist.title(d.url, d.title);
 });

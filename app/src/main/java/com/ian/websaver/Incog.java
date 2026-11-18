@@ -31,6 +31,27 @@ final class Incog {
         return st.getClass().getMethod("getOrCreateProfile", String.class).invoke(st, NAME);
     }
 
+    /** 新聞專用的設定檔：跟一般瀏覽分開（Cookie、網站資料各自一份），不會被「清除 Cookie」影響，也不會被刪掉 */
+    static final String NEWS = "terra_news";
+
+    /** 新建的 WebView 掛到指定名稱的設定檔（不存在就建立） */
+    static boolean applyNamed(WebView w, String name) {
+        try {
+            Object st = store();
+            st.getClass().getMethod("getOrCreateProfile", String.class).invoke(st, name);
+            Class.forName("androidx.webkit.WebViewCompat").getMethod("setProfile", WebView.class, String.class).invoke(null, w, name);
+            return true;
+        } catch (Throwable t) { return false; }
+    }
+
+    static void allowThirdPartyNamed(WebView w, String name) {
+        try {
+            Object st = store();
+            Object p = st.getClass().getMethod("getOrCreateProfile", String.class).invoke(st, name);
+            ((CookieManager) p.getClass().getMethod("getCookieManager").invoke(p)).setAcceptThirdPartyCookies(w, true);
+        } catch (Throwable t) { /* ignore */ }
+    }
+
     /** 新建的 WebView（還沒載入任何網頁之前）掛到無痕設定檔 */
     static boolean apply(WebView w) {
         try {

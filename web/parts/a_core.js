@@ -12,7 +12,7 @@ function qsa(s, r){ return Array.prototype.slice.call((r || document).querySelec
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); }
 /* 重要資料（上鎖設定、資料夾、收藏、分類、垃圾桶、設定）以 App 自己的檔案為準，瀏覽器儲存空間只是副本：
    就算網站資料被清掉，鎖和資料夾也不會不見 */
-var LS_CRIT = {'ws.sec': 1, 'ws.lf': 1, 'ws.bm': 1, 'ws.area': 1, 'ws.trash': 1, 'ws.cfg': 1, 'ws.aiFolders': 1, 'ws.cloud': 1, 'ws.fav': 1, 'ws.lsnHist': 1};
+var LS_CRIT = {'ws.sec': 1, 'ws.lf': 1, 'ws.bm': 1, 'ws.area': 1, 'ws.trash': 1, 'ws.cfg': 1, 'ws.aiFolders': 1, 'ws.cloud': 1, 'ws.fav': 1, 'ws.lsnHist': 1, 'ws.newsFav': 1, 'ws.newsHist': 1, 'ws.newsHistOff': 1};
 function lsKv(){ var b = window.WSB; return b && typeof b.kvGet === 'function' ? b : null; }
 function lsGet(k, d){
   try{
@@ -82,6 +82,7 @@ var IC = {
   back: '<path d="M15 5l-7 7 7 7"/>',
   fwd: '<path d="M9 5l7 7-7 7"/>',
   star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
+  starOn: '<path fill="currentColor" d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
   books: '<path d="M4 19V5a2 2 0 0 1 2-2h12v14H6a2 2 0 0 0-2 2zm0 0a2 2 0 0 0 2 2h12"/><path d="M9 7h6"/>',
   scissors: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.6 7.6L20 18M8.6 16.4L20 6"/>',
   phone: '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
@@ -89,6 +90,7 @@ var IC = {
   book: '<path d="M2.5 5.5c3-1.5 6.5-1.5 9.5.5 3-2 6.5-2 9.5-.5v14c-3-1.5-6.5-1.5-9.5.5-3-2-6.5-2-9.5-.5z"/><path d="M12 6v14"/>',
   film: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>',
   download: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/>',
+  news: '<path d="M5 4.5h11a1.5 1.5 0 0 1 1.5 1.5v12.5a1.5 1.5 0 0 0 3 0V9h-3"/><path d="M5 4.5A1.5 1.5 0 0 0 3.5 6v12a2 2 0 0 0 2 2h14.5"/><path d="M7 8.5h7M7 12h7M7 15.5h4"/>',
   pin: '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',

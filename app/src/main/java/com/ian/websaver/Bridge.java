@@ -503,10 +503,13 @@ public class Bridge {
     /* ---------- 多分頁 ---------- */
     @JavascriptInterface public String tabsList() {
         JSONArray out = new JSONArray();
-        try { for (Browser b : a.tabs) out.put(new JSONObject().put("id", b.tabId).put("url", b.curUrl == null ? "" : b.curUrl).put("title", b.curTitle == null ? "" : b.curTitle).put("cur", b == a.br)); } catch (Throwable t) { /* ignore */ }
+        try { for (Browser b : a.tabs) out.put(new JSONObject().put("id", b.tabId).put("url", b.curUrl == null ? "" : b.curUrl).put("title", b.curTitle == null ? "" : b.curTitle).put("cur", b == a.br).put("news", b.news)); } catch (Throwable t) { /* ignore */ }
         return out.toString();
     }
     @JavascriptInterface public void tabNew(final String url) { ui(new Runnable() { @Override public void run() { Browser b = a.newTab(); if (url != null && !url.isEmpty()) b.load(url); } }); }
+    /** 用新聞分頁打開文章（獨立的新聞設定檔；關閉全部分頁時一起關） */
+    @JavascriptInterface public void tabNewNews(final String url) { ui(new Runnable() { @Override public void run() { Browser.nextNews = true; Browser b; try { b = a.newTab(); } finally { Browser.nextNews = false; } b.news = true; if (url != null && !url.isEmpty()) b.load(url); } }); }
+    @JavascriptInterface public boolean newsSeparate() { return Incog.supported(); }
     @JavascriptInterface public void tabSwitch(final int id) { ui(new Runnable() { @Override public void run() { a.switchTab(id); } }); }
     @JavascriptInterface public void tabClose(final int id) { ui(new Runnable() { @Override public void run() { a.closeTab(id); MainActivity.emit("tabs", ""); } }); }
     @JavascriptInterface public void tabCloseAll() {

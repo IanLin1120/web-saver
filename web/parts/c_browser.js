@@ -479,6 +479,9 @@ function renderStart(){
       buzz(16); NAT.call('tabCloseAll'); BR.loaded = false; BR.url = ''; goHome(); setTimeout(tabCount, 120); setTimeout(renderStart, 200); toast('已關閉全部分頁');
     }}, h('div', {class: 'fav', html: icon('x')}), h('span', {text: '關閉分頁'}), h('small', {class: 'sub', text: '全部 ' + n + ' 個'})));
   })();
+  /* 第三排：新聞（Google 今日新聞，依類別、日期，可收藏） */
+  tiles.appendChild(h('div', {class: 'tile', style: {gridColumnStart: 1}, onclick: function(){ buzz(10); if(typeof newsShow === 'function') newsShow(); }},
+    h('div', {class: 'fav', html: icon('news')}), h('span', {text: '新聞'}), h('small', {class: 'sub', text: typeof NEWS !== 'undefined' && NEWS.fav.length ? '收藏 ' + NEWS.fav.length + ' 則' : '今日焦點'})));
   sects.appendChild(h('div', {class: 'sect-h'}, h('span', {text: '⭐ 收藏'}), h('button', {text: '管理收藏夾', onclick: function(){ manageFolders(renderStart); }})));
   sects.appendChild(tiles);
   sp.appendChild(sects);
