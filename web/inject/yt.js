@@ -1117,7 +1117,7 @@
 (function () {
   'use strict';
   if (!/^music\./.test(location.hostname)) return;
-  var VER = 23;
+  var VER = 24;
   if (window.__wsMu === VER) return;
   if (window.__wsMuT) clearInterval(window.__wsMuT);
   window.__wsMu = VER;
@@ -1259,7 +1259,8 @@
     'html.wsMuOwn ytmusic-app-layout:not([player-ui-state*="OPEN"]):not([player-ui-state*="FULL"]):not([player-page-open]) ytmusic-player#player{opacity:0!important;pointer-events:none!important}',
     'html.wsMuOwn #wsMuX{display:none!important}',
     'html.wsMuOff ytmusic-player-bar,html.wsMuOff #player-bar-background{visibility:hidden!important;pointer-events:none!important}',
-    'html.wsMuOff ytmusic-app-layout{--ytmusic-player-bar-height:0px!important}'
+    'html.wsMuOff ytmusic-app-layout{--ytmusic-player-bar-height:0px!important}',
+    '.wsMuBlk{pointer-events:none!important}'
   ].join('\n');
   function addCss() {
     var p = document.head || document.documentElement; if (!p) return;
@@ -1538,7 +1539,7 @@
       var info = ['VER ' + VER + ' app ' + (window.__wsCfg && window.__wsCfg.ver || '') + '  url ' + location.pathname + location.search.slice(0, 30), 'hidden=' + document.hidden + ' vis=' + document.visibilityState, 'html.class=' + document.documentElement.className,
         'layout: ' + at, 'playerPage: ' + (r0 ? Math.round(r0.top) + ',' + Math.round(r0.height) + ' vis=' + getComputedStyle(pp).visibility + ' disp=' + getComputedStyle(pp).display : '無'),
         'pageOpen=' + pageOpen() + ' contentShown=' + contentShown(), 'toggleBtn=' + !!q('.toggle-player-page-button') + ' chevron=' + !!chevron(),
-        'center=' + (function () { var e = document.elementFromPoint(innerWidth / 2, innerHeight / 2); return e ? e.tagName + '#' + e.id + '.' + String(e.className).slice(0, 40) : 'null'; })(),
+        'stack(center)=' + stackAt(innerWidth / 2, innerHeight / 2), 'stack(40%)=' + stackAt(innerWidth / 2, innerHeight * 0.4), 'blk=' + qa('.wsMuBlk').map(desc).join(' | '), 'center=' + (function () { var e = document.elementFromPoint(innerWidth / 2, innerHeight / 2); return e ? e.tagName + '#' + e.id + '.' + String(e.className).slice(0, 40) : 'null'; })(),
         'video: ' + (v0 ? 'paused=' + v0.paused + ' t=' + Math.round(v0.currentTime) + ' src=' + !!v0.src : '無'), 'rows=' + qa('ytmusic-responsive-list-item-renderer').length + ' cards=' + qa('ytmusic-two-row-item-renderer').length + ' queue=' + qa('ytmusic-player-queue-item').length,
         'card: ' + (function () { try { var c = q('ytmusic-two-row-item-renderer'); if (!c) return '無'; var im = q('img', c), ov = q('ytmusic-item-thumbnail-overlay-renderer', c), bg = ov && q('#background', ov);
           return 'img=' + (im ? (im.complete ? 'ok' : 'loading') + ' ' + im.naturalWidth + ' op=' + getComputedStyle(im).opacity + ' src=' + String(im.getAttribute('src') || '').slice(0, 40) : '無') + ' | ov=' + (ov ? getComputedStyle(ov).backgroundColor + ' op=' + getComputedStyle(ov).opacity : '無') + ' | bg=' + (bg ? getComputedStyle(bg).backgroundColor + ' ' + getComputedStyle(bg).backgroundImage.slice(0, 40) : '無') + ' | mine=' + !!q('img.wsMuImg', c) + ' | kids=' + Array.prototype.map.call((q('ytmusic-thumbnail-renderer, .image-wrapper', c) || c).children, function (x) { return x.tagName.toLowerCase() + (x.id ? '#' + x.id : ''); }).join(','); } catch (e) { return 'err ' + e.message; } })(),
@@ -1705,11 +1706,52 @@
   }
   /* YouTube Music 用觸控手勢處理點擊（常常不會產生 click 事件），所以改用手指放開的那一刻判斷「點了一下」 */
   var pd = null;
-  function onDown(e) { pd = {x: e.clientX, y: e.clientY, t: Date.now(), tg: e.target}; }
+  /* 看不見卻擋住手指的東西（透明的遮罩、卡住沒收起來的透明播放頁…）：整頁點了都沒反應的元兇。
+     找出來讓它不吃觸控，這一下點擊直接轉給底下真正的按鈕／歌曲 */
+  function desc(el) { if (!el || !el.tagName) return String(el); var cs = getComputedStyle(el); return el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.') : '') + ' op=' + cs.opacity + ' pe=' + cs.pointerEvents; }
+  function stackAt(x, y) { try { return Array.prototype.slice.call(document.elementsFromPoint(x, y), 0, 4).map(desc).join(' > '); } catch (e) { return 'err'; } }
+  function blockerAt(x, y) {
+    var top = document.elementFromPoint(x, y);
+    if (!top || top === document.documentElement || top === document.body || reallyVisible(top)) return null;
+    if (top.closest('ytmusic-responsive-list-item-renderer, ytmusic-two-row-item-renderer, ytmusic-nav-bar, ytmusic-search-box, ytmusic-chip-cloud-chip-renderer, tp-yt-paper-icon-button, yt-icon-button, button')) return null;
+    var n = top, pick = null;
+    for (var g = 0; n && n.nodeType === 1 && n !== document.body && g < 25; n = n.parentElement, g++) { if (+getComputedStyle(n).opacity < 0.05) pick = n; }
+    pick = pick || top;
+    if (pick === document.body || pick === document.documentElement || /^ytmusic-app$/i.test(pick.tagName)) return null;
+    var r = pick.getBoundingClientRect();
+    return (r.width >= innerWidth * 0.5 && r.height >= innerHeight * 0.2) ? pick : null;
+  }
+  function unblockStale() { qa('.wsMuBlk').forEach(function (el) { if (reallyVisible(el)) el.classList.remove('wsMuBlk'); }); }
+  function tapPoint(x, y) {
+    var tgt = document.elementFromPoint(x, y); if (!tgt) return;
+    synth = true;
+    try {
+      var o = {bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, screenX: x, screenY: y, view: window, button: 0, buttons: 1, pointerId: 1, pointerType: 'touch', isPrimary: true};
+      try { var t = new Touch({identifier: Date.now(), target: tgt, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x + scrollX, pageY: y + scrollY}); tgt.dispatchEvent(new TouchEvent('touchstart', {bubbles: true, cancelable: true, composed: true, touches: [t], targetTouches: [t], changedTouches: [t]})); tgt.dispatchEvent(new TouchEvent('touchend', {bubbles: true, cancelable: true, composed: true, touches: [], targetTouches: [], changedTouches: [t]})); } catch (x1) {}
+      tgt.dispatchEvent(new PointerEvent('pointerdown', o)); tgt.dispatchEvent(new MouseEvent('mousedown', o));
+      o.buttons = 0;
+      tgt.dispatchEvent(new PointerEvent('pointerup', o)); tgt.dispatchEvent(new MouseEvent('mouseup', o)); tgt.dispatchEvent(new MouseEvent('click', o));
+      if (tgt.tagName === 'INPUT' && tgt.focus) tgt.focus();
+    } catch (x2) { try { tgt.click(); } catch (x3) {} }
+    synth = false;
+    return tgt;
+  }
+  function onDown(e) {
+    if (synth) return;
+    pd = {x: e.clientX, y: e.clientY, t: Date.now(), tg: e.target};
+    try {
+      unblockStale();
+      var b = blockerAt(e.clientX, e.clientY), k = 0;
+      while (b && k++ < 4) { b.classList.add('wsMuBlk'); dlog('blocker ' + desc(b)); pd.heal = true; b = blockerAt(e.clientX, e.clientY); }
+      if (pd.heal) pd.tg = document.elementFromPoint(e.clientX, e.clientY) || pd.tg;
+    } catch (x) {}
+  }
   function onUp(e) {
     if (!pd || synth) return;
     var d = pd; pd = null;
     if (Math.abs(e.clientX - d.x) > 12 || Math.abs(e.clientY - d.y) > 12 || Date.now() - d.t > 700) return;
+    dlog('tap ' + Math.round(d.x) + ',' + Math.round(d.y) + ' ' + stackAt(d.x, d.y).slice(0, 160));
+    if (d.heal) { var tg = tapPoint(d.x, d.y); if (tg) d.tg = tg; }
     onTap({target: d.tg, preventDefault: function () {}, stopPropagation: function () {}, stopImmediatePropagation: function () {}});
   }
   /* 搜尋結果頁按搜尋框右邊的 ✕：直接回 YouTube Music 首頁（正在打字時的 ✕ 維持原本的清除文字） */
