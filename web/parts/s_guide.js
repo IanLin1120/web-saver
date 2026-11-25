@@ -200,7 +200,7 @@ function gScene(spec){
   scr.style.width = W + 'px'; scr.style.height = H + 'px';
   scr.style.backgroundColor = bs.backgroundColor; scr.style.backgroundImage = bs.backgroundImage;
   scr.style.fontSize = bs.fontSize; scr.style.color = bs.color; scr.style.lineHeight = bs.lineHeight;
-  var fing = h('i', {class: 'gFinger'});
+  var fing = h('i', {class: 'gFinger', html: '<b></b>'});
   win.appendChild(scr);
   var sc = {win: win, scr: scr, fing: fing, spec: spec, W: W, H: H, cropH: cropH, top: top, vis: false};
   gBuild(sc);

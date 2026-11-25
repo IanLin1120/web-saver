@@ -1041,18 +1041,17 @@ html[lang]:not([lang^="zh"]) #nav button i{font-size:11px;font-weight:700}
 .gScr.fade{opacity:0}
 .gScr *{animation-play-state:running}
 .gScr input{pointer-events:none}
-.gFinger{position:absolute;left:0;top:0;width:44px;height:44px;border-radius:50%;z-index:1000;pointer-events:none;opacity:0;
-  background:radial-gradient(circle,rgba(255,255,255,.98) 0 28%,rgba(255,255,255,.62) 55%,rgba(255,255,255,.18) 72%,transparent 74%);
-  box-shadow:0 6px 16px rgba(0,0,0,.28);transition:transform .58s cubic-bezier(.45,.05,.2,1),opacity .3s,scale .14s;scale:1}
-.gFinger::after{content:'';position:absolute;inset:7px;border-radius:50%;border:2px solid rgba(40,30,20,.35)}
+.gFinger{position:absolute;left:0;top:0;width:44px;height:44px;z-index:1000;pointer-events:none;opacity:0;transition:transform .58s cubic-bezier(.45,.05,.2,1),opacity .3s;will-change:transform}
+.gFinger b{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.98) 0 28%,rgba(255,255,255,.62) 55%,rgba(255,255,255,.18) 72%,transparent 74%);box-shadow:0 6px 16px rgba(0,0,0,.28);transition:transform .14s ease}
+.gFinger b::after{content:'';position:absolute;inset:7px;border-radius:50%;border:2px solid rgba(40,30,20,.35)}
 .gFinger.show{opacity:1}
-.gFinger.down{scale:.8}
+.gFinger.down b{transform:scale(.8)}
 .gRip{position:absolute;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;z-index:999;pointer-events:none;background:color-mix(in srgb,var(--accent) 50%,transparent);animation:gRip .6s ease-out forwards}
 .gRip.long{animation-duration:1s;background:color-mix(in srgb,var(--accent) 38%,transparent)}
 @keyframes gRip{from{transform:scale(.3);opacity:.85}to{transform:scale(4.2);opacity:0}}
-.gSpot{animation:gSpot 1s ease-in-out infinite;position:relative;z-index:2}
+.gSpot{animation:gSpot 1s ease-in-out infinite}
 @keyframes gSpot{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 0%,transparent),0 0 0 0 transparent}50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 28%,transparent),0 0 22px 2px color-mix(in srgb,var(--accent) 40%,transparent)}}
-.gPress{scale:.93;filter:brightness(.95);transition:scale .12s,filter .12s}
+.gPress{filter:brightness(.93);transition:filter .12s}
 .gFlash{animation:gFlash 1.1s ease}
 @keyframes gFlash{0%{background:color-mix(in srgb,var(--accent) 22%,transparent)}100%{background:transparent}}
 /* 重點、權限、常見問題 */

@@ -171,10 +171,20 @@ function folderMenu(f, redraw){
 var Music = {el: new Audio(), queue: [], idx: -1, shuffle: lsGet('ws.mShuffle', false), repeat: lsGet('ws.mRepeat', 'all'), sheet: null};
 Music.el.preload = 'auto';
 Music.cur = function(){ return this.queue[this.idx] || null; };
+/* 隨機播放：真正打亂（Fisher–Yates，之前用 sort 亂數排序會偏向原本順序）；
+   播放中切換隨機／依序會立刻重排佇列（之前只改了開關，佇列還是原本順序）；整輪播完重新洗牌 */
+function shuffled(a){ a = a.slice(); for(var i = a.length - 1; i > 0; i--){ var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 Music.playList = async function(items, start){
-  this.queue = items.slice(); this.idx = Math.max(0, start || 0);
-  if(this.shuffle){ var first = this.queue.splice(this.idx, 1)[0]; this.queue.sort(function(){ return Math.random() - .5; }); this.queue.unshift(first); this.idx = 0; }
+  this.orig = items.slice(); this.queue = items.slice(); this.idx = Math.max(0, Math.min(this.queue.length - 1, start || 0));
+  if(this.shuffle){ var first = this.queue[this.idx]; this.queue = [first].concat(shuffled(this.queue.filter(function(x, i){ return i !== Music.idx; }))); this.idx = 0; }
   await this.load(true);
+};
+Music.setShuffle = function(on){
+  this.shuffle = !!on; lsSet('ws.mShuffle', this.shuffle);
+  var cur = this.cur(); if(!cur) return;
+  var base = (this.orig && this.orig.length === this.queue.length) ? this.orig : this.queue.slice();
+  if(this.shuffle){ this.queue = [cur].concat(shuffled(base.filter(function(x){ return x.id !== cur.id; }))); this.idx = 0; }
+  else { this.queue = base.slice(); this.idx = Math.max(0, this.queue.findIndex(function(x){ return x.id === cur.id; })); }
 };
 Music.playItem = function(it, list){
   /* 從檔案庫的某個資料夾點歌：播放佇列只放那個資料夾裡的歌（照畫面上的順序），不是整個音樂庫 */
@@ -202,7 +212,7 @@ Music.next = function(auto){
   if(!this.queue.length) return;
   if(auto && this.repeat === 'one'){ this.el.currentTime = 0; this.el.play(); return; }
   if(this.idx < this.queue.length - 1) this.idx++;
-  else if(this.repeat === 'all' || !auto) this.idx = 0;
+  else if(this.repeat === 'all' || !auto){ if(this.shuffle && this.queue.length > 2){ var last = this.queue[this.idx]; var nq = shuffled(this.queue); if(nq[0] === last){ nq.push(nq.shift()); } this.queue = nq; } this.idx = 0; }
   else { this.el.pause(); this.mini(); return; }
   this.load(true);
 };
@@ -342,7 +352,7 @@ Music.drawPlayer = function(){
   body.appendChild(h('div', {style: {margin: '14px 6px 0'}}, prog, h('div', {class: 'row', style: {justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)'}}, h('span', {id: 'mpT1', text: fmtDur(this.el.currentTime)}), h('span', {id: 'mpT2', text: fmtDur(this.el.duration || it.dur || 0)}))));
   var big = function(svg, fn, on, size){ return h('button', {class: 'ib' + (on ? ' on' : ''), html: svg, style: size ? {width: size, height: size} : null, onclick: fn}); };
   body.appendChild(h('div', {class: 'row', style: {justifyContent: 'center', gap: '14px', margin: '6px 0 14px'}},
-    big('<svg class="i" viewBox="0 0 24 24"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>', function(){ self.shuffle = !self.shuffle; lsSet('ws.mShuffle', self.shuffle); toast(self.shuffle ? '隨機播放' : '依序播放'); self.drawPlayer(); }, this.shuffle),
+    big('<svg class="i" viewBox="0 0 24 24"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>', function(){ self.setShuffle(!self.shuffle); toast(self.shuffle ? '隨機播放' : '依序播放'); self.drawPlayer(); }, this.shuffle),
     big(icon('back', 'lg'), function(){ self.prev(); }),
     h('button', {class: 'btn pri', style: {width: '64px', height: '64px', borderRadius: '50%', padding: 0}, html: '<svg class="i fill lg" viewBox="0 0 24 24">' + (playing ? '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>' : IC.play) + '</svg>', onclick: function(){ self.toggle(); }}),
     big(icon('fwd', 'lg'), function(){ self.next(); }),
@@ -367,7 +377,7 @@ function renderMusicHead(box, L){
   box.appendChild(h('div', {class: 'card glass', style: {display: 'flex', alignItems: 'center', gap: '12px'}},
     h('div', {class: 'fav', html: icon('audio', 'lg'), style: {width: '58px', height: '58px', background: 'linear-gradient(140deg,var(--c-audio),var(--accent))', color: '#fff'}}),
     h('div', {class: 'grow'}, h('b', {text: '音樂庫', style: {fontSize: '17px'}}), h('div', {class: 'sub', text: L.length + ' 首' + (total ? '・' + fmtDur(total) : '')})),
-    h('button', {class: 'btn pri sm', html: '<svg class="i sm fill" viewBox="0 0 24 24">' + IC.play + '</svg>播放', disabled: !L.length, onclick: function(){ Music.shuffle = false; Music.playList(L, 0); Music.openPlayer(); }}),
+    h('button', {class: 'btn pri sm', html: '<svg class="i sm fill" viewBox="0 0 24 24">' + IC.play + '</svg>播放', disabled: !L.length, onclick: function(){ Music.shuffle = false; lsSet('ws.mShuffle', false); Music.playList(L, 0); Music.openPlayer(); }}),
     h('button', {class: 'btn sm', text: '隨機', disabled: !L.length, onclick: function(){ Music.shuffle = true; lsSet('ws.mShuffle', true); Music.playList(L, Math.floor(Math.random() * L.length)); Music.openPlayer(); }})));
 }
 
