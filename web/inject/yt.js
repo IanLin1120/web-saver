@@ -1117,7 +1117,7 @@
 (function () {
   'use strict';
   if (!/^music\./.test(location.hostname)) return;
-  var VER = 24;
+  var VER = 25;
   if (window.__wsMu === VER) return;
   if (window.__wsMuT) clearInterval(window.__wsMuT);
   window.__wsMu = VER;
@@ -1539,7 +1539,7 @@
       var info = ['VER ' + VER + ' app ' + (window.__wsCfg && window.__wsCfg.ver || '') + '  url ' + location.pathname + location.search.slice(0, 30), 'hidden=' + document.hidden + ' vis=' + document.visibilityState, 'html.class=' + document.documentElement.className,
         'layout: ' + at, 'playerPage: ' + (r0 ? Math.round(r0.top) + ',' + Math.round(r0.height) + ' vis=' + getComputedStyle(pp).visibility + ' disp=' + getComputedStyle(pp).display : '無'),
         'pageOpen=' + pageOpen() + ' contentShown=' + contentShown(), 'toggleBtn=' + !!q('.toggle-player-page-button') + ' chevron=' + !!chevron(),
-        'stack(center)=' + stackAt(innerWidth / 2, innerHeight / 2), 'stack(40%)=' + stackAt(innerWidth / 2, innerHeight * 0.4), 'blk=' + qa('.wsMuBlk').map(desc).join(' | '), 'center=' + (function () { var e = document.elementFromPoint(innerWidth / 2, innerHeight / 2); return e ? e.tagName + '#' + e.id + '.' + String(e.className).slice(0, 40) : 'null'; })(),
+        'stack(center)=' + stackAt(innerWidth / 2, innerHeight / 2), 'stack(40%)=' + stackAt(innerWidth / 2, innerHeight * 0.4), 'blk=' + qa('.wsMuBlk').map(desc).join(' | '), 'inert=' + qa('[inert]').map(function (x) { return x.tagName.toLowerCase(); }).join(','), 'dialogs=' + dialogsInfo(), 'center=' + (function () { var e = document.elementFromPoint(innerWidth / 2, innerHeight / 2); return e ? e.tagName + '#' + e.id + '.' + String(e.className).slice(0, 40) : 'null'; })(),
         'video: ' + (v0 ? 'paused=' + v0.paused + ' t=' + Math.round(v0.currentTime) + ' src=' + !!v0.src : '無'), 'rows=' + qa('ytmusic-responsive-list-item-renderer').length + ' cards=' + qa('ytmusic-two-row-item-renderer').length + ' queue=' + qa('ytmusic-player-queue-item').length,
         'card: ' + (function () { try { var c = q('ytmusic-two-row-item-renderer'); if (!c) return '無'; var im = q('img', c), ov = q('ytmusic-item-thumbnail-overlay-renderer', c), bg = ov && q('#background', ov);
           return 'img=' + (im ? (im.complete ? 'ok' : 'loading') + ' ' + im.naturalWidth + ' op=' + getComputedStyle(im).opacity + ' src=' + String(im.getAttribute('src') || '').slice(0, 40) : '無') + ' | ov=' + (ov ? getComputedStyle(ov).backgroundColor + ' op=' + getComputedStyle(ov).opacity : '無') + ' | bg=' + (bg ? getComputedStyle(bg).backgroundColor + ' ' + getComputedStyle(bg).backgroundImage.slice(0, 40) : '無') + ' | mine=' + !!q('img.wsMuImg', c) + ' | kids=' + Array.prototype.map.call((q('ytmusic-thumbnail-renderer, .image-wrapper', c) || c).children, function (x) { return x.tagName.toLowerCase() + (x.id ? '#' + x.id : ''); }).join(','); } catch (e) { return 'err ' + e.message; } })(),
@@ -1740,6 +1740,7 @@
     if (synth) return;
     pd = {x: e.clientX, y: e.clientY, t: Date.now(), tg: e.target};
     try {
+      if (document.querySelector('[inert]') && !shownDialog()) { fixInert(true); pd.heal = true; }
       unblockStale();
       var b = blockerAt(e.clientX, e.clientY), k = 0;
       while (b && k++ < 4) { b.classList.add('wsMuBlk'); dlog('blocker ' + desc(b)); pd.heal = true; b = blockerAt(e.clientX, e.clientY); }
@@ -1840,8 +1841,41 @@
       if (v && v.src && v.paused) { tapAt = Date.now(); var pb = q('ytmusic-player-bar #play-pause-button, #play-pause-button'); if (n % 2 && pb) click(pb); else { try { v.play(); } catch (e) {} } }
     }, 500);
   })();
+  /* YouTube Music 開了「對話框」（推銷 Premium、條款通知…）時，會把整頁設成 inert（不能點，但還能捲）。
+     如果那個對話框其實看不到（被我們藏掉的推銷、或卡住沒關），整頁就永遠點不動：先試著按它的關閉鈕，再解除 inert */
+  function dialogsInfo() {
+    return qa('tp-yt-paper-dialog, ytmusic-dialog, [role="dialog"], [role="alertdialog"], dialog, ytmusic-popup-container > *').map(function (d) {
+      var r = d.getBoundingClientRect(); return d.tagName.toLowerCase() + (d.id ? '#' + d.id : '') + ' ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' vis=' + reallyVisible(d) + ' open=' + (d.hasAttribute('opened') || d.open || '') + ' [' + qa('*', d).slice(0, 40).map(function (x) { return x.tagName.toLowerCase(); }).filter(function (t) { return /renderer$/.test(t); }).slice(0, 3).join(',') + ']';
+    }).join(' | ');
+  }
+  function shownDialog() {
+    var ds = qa('tp-yt-paper-dialog, ytmusic-dialog, [role="dialog"], [role="alertdialog"], dialog[open]');
+    for (var i = 0; i < ds.length; i++) { var d = ds[i], r = d.getBoundingClientRect(); if (r.width > 60 && r.height > 40 && r.bottom > 0 && r.top < innerHeight && reallyVisible(d) && !d.closest('.wsMuHide')) return d; }
+    return null;
+  }
+  var inertSince = 0;
+  function fixInert(now) {
+    var els = qa('[inert]'); if (!els.length) { inertSince = 0; return; }
+    if (shownDialog()) { inertSince = 0; return; }   /* 真的有看得到的對話框：讓使用者自己按 */
+    if (!inertSince) inertSince = Date.now();
+    if (!now && Date.now() - inertSince < 600) return;
+    /* 看不到的對話框：按它的關閉／不用了（讓 YouTube Music 自己收好） */
+    qa('tp-yt-paper-dialog, ytmusic-dialog, [role="dialog"], ytmusic-popup-container > *').forEach(function (d) {
+      if (reallyVisible(d) && d.getBoundingClientRect().height > 40) return;
+      var b = qa('button, tp-yt-paper-button, yt-button-renderer, [role="button"]', d).filter(function (x) { return /不用了|關閉|关闭|略過|跳過|稍後|以後再說|不，謝謝|No thanks|Not now|Dismiss|Close|Skip|Later|닫기|나중에|閉じる|後で/i.test((x.getAttribute('aria-label') || '') + ' ' + (x.textContent || '')); })[0];
+      if (b) { dlog('dismiss hidden dialog ' + d.tagName.toLowerCase()); click(b); }
+      if (d.close && d.open) try { d.close(); } catch (x) {}
+    });
+    els.forEach(function (el) { el.removeAttribute('inert'); try { el.inert = false; } catch (x) {} });
+    dlog('removed inert x' + els.length + ' dialogs: ' + dialogsInfo().slice(0, 200));
+  }
+  if (!window.__wsMuInertObs && window.MutationObserver) {
+    window.__wsMuInertObs = new MutationObserver(function () { setTimeout(function () { try { fixInert(false); } catch (e) {} }, 650); });
+    window.__wsMuInertObs.observe(document.documentElement, {subtree: true, attributes: true, attributeFilter: ['inert']});
+  }
   function tick() {
     var o = own();
+    try { fixInert(false); } catch (e) {}
     try { noSwipe(); } catch (e) {}
     try { fixThumbs(); } catch (e) {}
     document.documentElement.classList.toggle('wsMuOwn', o);
