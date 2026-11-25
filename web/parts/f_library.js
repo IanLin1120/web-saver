@@ -130,9 +130,12 @@ var Lib = {
     else {
       var ext = (it.name.match(/\.[a-z0-9]+$/i) || [''])[0];
       it.name = name.replace(/[\\\/:*?"<>|]/g, '_'); if(ext && it.name.toLowerCase().slice(-ext.length) !== ext.toLowerCase()) it.name += ext;
+      if(it.title) it.title = it.name.replace(/\.[a-z0-9]+$/i, '');
       await IDB.tx(['meta'], 'readwrite', function(t){ t.objectStore('meta').put(it); });
     }
     await this.refresh();
+    /* 正在播放／佇列裡的這首也換成新名稱 */
+    try{ if(typeof Music !== 'undefined' && Music.queue){ var nw = this.byId(it.id); if(nw){ Music.queue.forEach(function(q, i){ if(q && q.id === it.id) Music.queue[i] = nw; }); if(Music.cur() && Music.cur().id === it.id){ Music.mini(); if(Music.sheet && Music.drawPlayer) Music.drawPlayer(); if(Music.sysMeta) Music.sysMeta(); } } } }catch(e){}
   },
   stats: async function(){
     if(isApp) return NAT.json('libStats') || {};
@@ -511,7 +514,7 @@ async function renameItems(picked){
   if(!picked.length) return;
   if(picked.length === 1){
     var it = picked[0];
-    var n = await promptDlg('重新命名', it.name.replace(/\.[a-z0-9]+$/i, ''));
+    var n = await promptDlg('重新命名', it.cat === 'audio' ? songTitle(it) : (it.title && it.cat === 'html' ? it.title : it.name.replace(/\.[a-z0-9]+$/i, '')));
     if(n){ await Lib.rename(it, n); LV.sel.clear(); LV.selMode = false; renderLib(); toast('已重新命名'); }
     return;
   }
@@ -698,9 +701,13 @@ async function openTrash(){
   draw();
 }
 
-/* ---------- 從手機匯入檔案：可多選，依副檔名自動分到各類別（放在類別的最外層，之後再自己移到資料夾） ---------- */
+/* ---------- 從手機匯入檔案：可多選，依副檔名自動分到各類別；
+   正在某個資料夾裡按「＋」：同類別的檔案直接放進這個資料夾（其他類別的放到各自類別的最外層） ---------- */
+var libImportTo = null;
 $('bLibAdd').addEventListener('click', function(){
   buzz(8);
+  var cat = CFG.lib.cat, fid = (LV.open && cat && cat !== 'all' && !LV.q) ? (LV.folder[cat] || '') : '';
+  libImportTo = fid && LF.get(fid) ? {cat: cat, fid: fid} : null;
   if(isApp && NAT.has('pickFiles')){ NAT.call('pickFiles'); return; }
   var inp = h('input', {type: 'file', multiple: true, style: {display: 'none'}});
   inp.onchange = async function(){
@@ -717,7 +724,14 @@ on('picked', async function(d){
   if(d.cancel) return;
   await Lib.refresh(); renderLib(); if(typeof renderStor === 'function') renderStor();
   var items = (d.items || []).map(function(x){ return Lib.byId(x.id) || x; });
-  if(items.length){
+  var into = libImportTo, intoN = 0; libImportTo = null;
+  if(into && items.length && LF.get(into.fid)){
+    var ids = items.filter(function(it){ return areaOf(it) === into.cat; }).map(function(it){ return it.id; });
+    if(ids.length){ LF.setItems(ids, into.fid); intoN = ids.length; renderLib(); }
+  }
+  if(intoN && intoN === items.length){
+    toast('✓ 已匯入 ' + intoN + ' 個檔案到「' + LF.get(into.fid).name + '」');
+  } else if(items.length){
     var cnt = {};
     items.forEach(function(it){ var a = areaOf(it); cnt[a] = (cnt[a] || 0) + 1; });
     var parts = Object.keys(cnt).map(function(k){ return areaName(k) + ' ' + cnt[k]; });

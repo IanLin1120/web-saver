@@ -162,7 +162,9 @@ final class Lib {
         String old = o.optString("name"), ext = Util.extOf(old);
         String nn = Util.safeName(name);
         if (!ext.isEmpty() && !nn.toLowerCase().endsWith("." + ext)) nn = nn + "." + ext;
-        try { o.put("name", nn); } catch (Throwable t) { return false; }
+        /* 顯示名稱（標題）也一起改：音樂、網頁的卡片顯示的是標題，只改檔名的話畫面上看起來沒變 */
+        String base = nn.contains(".") && !ext.isEmpty() ? nn.substring(0, nn.length() - ext.length() - 1) : nn;
+        try { o.put("name", nn); if (o.has("title")) o.put("title", base); } catch (Throwable t) { return false; }
         save();
         return true;
     }

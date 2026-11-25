@@ -1,230 +1,502 @@
 /* ============================================================
-   軟體使用說明書：設定頁最上面可以隨時打開；第一次使用 App 時自動顯示，滑到最下面按確認才開始使用
+   軟體使用說明書（第 2 版）：每一段都有「會動的示意畫面」——用 App 自己的介面元件與樣式畫出來，
+   長得跟真的一樣；手指會示範要按哪裡、按了會發生什麼。文字只留重點。
+   示意畫面裡的歌名、網站、新聞都是虛構的範例。
+   設定頁最上面可以隨時打開；第一次使用 App 時自動顯示，滑到最下面按確認才開始使用。
    ============================================================ */
 var GUIDE_VER = 1;
-/* 示意圖：用 App 自己的圖示和配色畫的小畫面，標出要按的地方（.gHit = 重點） */
-function gI(n, sz){ return icon(n, sz || 'sm'); }
-function gNav(on){
-  var T = [['globe', '瀏覽'], ['video', 'YouTube'], ['sparkle', 'AI 摘要'], ['folder', '檔案庫'], ['gear', '設定']];
-  return '<div class="gFig"><div class="gNav">' + T.map(function(t, i){ return '<span class="' + (i === on ? 'on' : '') + '">' + gI(t[0]) + '<i>' + t[1] + '</i></span>'; }).join('') + '</div><em>App 最下面的五個分頁' + (on != null && on >= 0 ? '，點「' + T[on][1] + '」' : '') + '</em></div>';
+var GUIDE = [];            /* 舊版說明書的整段翻譯介面（u_i18n）：新版不用 */
+
+/* ---------- 翻譯：說明書有內建的英、日、韓、簡中語言包；其他語言用介面翻譯字典 ---------- */
+function T(s){
+  if(typeof I18N === 'undefined' || !I18N.on()) return s;
+  var G = window.I18N_GPACK && I18N_GPACK[I18N.lang];
+  if(G && !Array.isArray(G) && G[s] != null) return G[s];
+  return (I18N.dict && I18N.dict[s]) || s;
 }
-function gBar(items, cap){ return '<div class="gFig"><div class="gBar">' + items.map(function(x){ return typeof x === 'string' ? x : '<span class="gB' + (x.hit ? ' gHit' : '') + (x.wide ? ' wide' : '') + '">' + (x.ic ? gI(x.ic) : '') + (x.t ? '<i>' + x.t + '</i>' : '') + (x.n ? '<u>' + x.n + '</u>' : '') + '</span>'; }).join('') + '</div><em>' + cap + '</em></div>'; }
-function gRows(rows, cap){ return '<div class="gFig"><div class="gRows">' + rows.map(function(r){ return '<div class="gRow' + (r.hit ? ' gHit' : '') + '">' + gI(r.ic) + '<span><b>' + r.t + '</b>' + (r.s ? '<small>' + r.s + '</small>' : '') + '</span>' + (r.n ? '<u>' + r.n + '</u>' : '<s>›</s>') + '</div>'; }).join('') + '</div><em>' + cap + '</em></div>'; }
-function gMini(title, sub, cap){ return '<div class="gFig"><div class="gMini"><span class="gArt">' + gI('audio') + '</span><span class="gT"><b>' + title + '</b><small>' + sub + '</small></span>' + gI('pause') + gI('fwd') + '<span class="gHit gX">' + gI('x') + '</span></div><em>' + cap + '</em></div>'; }
-var G_FIG = {
-  intro: function(){ return gNav(-1); },
-  perm: function(){ return '<div class="gFig"><div class="gDlg"><b>要允許「Terra 瀏覽器」傳送通知嗎？</b><div><span>不允許</span><span class="gHit">允許</span></div></div><em>手機跳出這種詢問時，選「允許」</em></div>'; },
-  browse: function(){ return gBar([{ic: 'back'}, {ic: 'home'}, {ic: 'search', hit: 1, n: '1'}, {ic: 'download', n: '2'}, {ic: 'play', n: '3'}, {ic: 'grid', n: '4'}], '① 搜尋：展開網址框，可以複製網址、重新整理、輸入文字搜尋　② 懸浮下載鈕開關　③ 內建播放器開關　④ 功能選單'); },
-  yt: function(){ return gNav(1) + '<div class="gFig"><div class="gStage"><span class="gPlay">' + gI('play', '') + '</span><span class="gFab gHit" style="position:absolute;right:14px;bottom:14px;top:auto;width:36px;height:36px;border-radius:10px;background:rgba(0,0,0,.45);color:#fff">' + gI('download') + '</span></div><em>看影片時，點一下畫面，播放器控制列上的「⬇」就是下載</em></div>'; },
-  music: function(){ return gBar([{ic: 'back'}, {ic: 'home'}, {ic: 'reload'}, '<span class="gSeg"><i>' + gI('video') + '</i><i class="on gHit">' + gI('audio') + '</i><i>' + gI('star') + '</i><u>1</u></span>', {ic: 'more'}], '① 切到音符就是 YouTube Music，星星是收藏（YouTube 影片、YouTube Music 歌曲）') +
-    gMini('歌名', '歌手（有同步歌詞時顯示正在唱的那句）', '播放時下方的小播放列：點一下打開播放面板，最右邊 ✕ 停止播放'); },
-  ai: function(){ return gBar([{ic: 'back'}, {t: 'AI 摘要', wide: 1}, {t: '● Gemini', hit: 1, n: '1'}, {ic: 'more'}], '① 在「AI 摘要」分頁，點右上角顯示 AI 名稱的按鈕，打開「AI 設定」') +
-    '<div class="gFig"><div class="gForm"><label>AI 引擎</label><div class="gSeg2"><i>Claude</i><i class="on">Gemini</i></div><label>Gemini API 金鑰</label><div class="gInp gHit">AIzaSy･･････････････<u>2</u></div></div><em>② 引擎選「Gemini」，把複製的金鑰貼到這一格</em></div>'; },
-  lib: function(){ return gBar([{ic: 'reload', n: '1'}, {ic: 'plus', hit: 1, n: '2'}, {t: '搜尋檔名、網址', wide: 1}, {ic: 'sort'}, {ic: 'check', n: '3'}], '① 重新整理　② 匯入手機裡的檔案　③ 多選（也可以長按檔案）'); },
-  watch: function(){ return gRows([{ic: 'film', t: '圖片與影片下載', s: '設定頁裡的這一區'}, {ic: 'download', t: '其他 App 下載自動搬回', s: 'Snaptube、Quetta 等下載完自動搬進檔案庫', hit: 1, n: '1'}], '① 設定 → 圖片與影片下載 → 其他 App 下載自動搬回') +
-    '<div class="gFig"><div class="gFlow"><span>' + gI('video') + '<i>YouTube<br>下載面板</i></span><b>→</b><span>' + gI('download') + '<i>交給其他<br>App 下載</i></span><b>→</b><span class="gHit">' + gI('folder') + '<i>自動搬回<br>檔案庫</i></span></div><em>設定好之後的流程</em></div>'; },
-  lock: function(){ return gRows([{ic: 'lock', t: '密碼鎖與指紋', s: '設定 → 隱私與安全', hit: 1}], '在這裡設定 6 位數解鎖密碼') + '<div class="gFig"><div class="gPin"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div><em>解鎖時輸入 6 位數，或用指紋</em></div>'; },
-  relay: function(){ return '<div class="gFig"><div class="gFlow"><span>' + gI('folder') + '<i>你的手機<br>加密</i></span><b>→</b><span class="gHit">' + gI('globe') + '<i>中繼站<br>GitHub／公用</i></span><b>→</b><span>' + gI('download') + '<i>對方用瀏覽器<br>解密下載</i></span></div><em>兩邊不用在同一個網路</em></div>' +
-    '<div class="gFig"><div class="gBar"><span class="gB"><i>同一個網路</i></span><span class="gB gHit"><i>GitHub 中繼</i><u>1</u></span><span class="gB gHit"><i>公用中繼</i><u>2</u></span></div><em>傳檔面板最上面選要用哪一種</em></div>'; },
-  upd: function(){ return gRows([{ic: 'reload', t: '版本與更新', s: '檢查新版本、分享 App 下載連結', hit: 1}], '設定 → 版本與更新'); }
+
+/* ---------- 把 App 樣式表裡「#id」的規則複製一份給示意畫面用（示意畫面用 data-gid，不會跟真的元件搶 id） ---------- */
+function gMirrorCss(){
+  if(gMirrorCss.done) return; gMirrorCss.done = true;
+  var out = [];
+  function split(sel){ var r = [], d = 0, cur = ''; for(var i = 0; i < sel.length; i++){ var c = sel[i]; if(c === '(') d++; else if(c === ')') d--; if(c === ',' && !d){ r.push(cur); cur = ''; } else cur += c; } r.push(cur); return r; }
+  function conv(rules){
+    var txt = '';
+    for(var i = 0; i < rules.length; i++){
+      var r = rules[i];
+      if(r.selectorText != null){
+        if(r.selectorText.indexOf('#') < 0) continue;
+        var parts = split(r.selectorText).filter(function(p){ return p.indexOf('#') >= 0; }).map(function(p){ return p.replace(/#([A-Za-z_][\w-]*)/g, '[data-gid="$1"]'); });
+        if(parts.length) txt += parts.join(',') + '{' + r.style.cssText + '}\n';
+      } else if(r.cssRules && r.media){
+        var inner = conv(r.cssRules); if(inner) txt += '@media ' + r.media.mediaText + '{' + inner + '}\n';
+      }
+    }
+    return txt;
+  }
+  for(var s = 0; s < document.styleSheets.length; s++){ try{ out.push(conv(document.styleSheets[s].cssRules)); }catch(e){} }
+  var st = document.createElement('style'); st.id = 'gMirror'; st.textContent = out.join(''); document.head.appendChild(st);
+}
+
+/* ---------- 示意畫面的小零件（用 App 真正的 class，所以外觀一模一樣） ---------- */
+function gIc(n, sm){ return '<span data-ic="' + n + '"' + (sm ? ' data-sm="1"' : '') + '></span>'; }
+function gE(s){ return esc(T(s)); }
+function gNavH(on){
+  var T5 = [['browse', 'globe', '瀏覽'], ['yt', 'ytplay', 'YouTube'], ['ai', 'sparkle', 'AI 摘要'], ['lib', 'folder', '檔案庫'], ['set', 'gear', '設定']];
+  return '<div data-gid="dock"><div data-gid="dockCards" style="display:contents"></div><nav data-gid="nav" class="glass">' + T5.map(function(t){ return '<button data-v="' + t[0] + '"' + (t[0] === on ? ' class="on"' : '') + '>' + gIc(t[1]) + '<i>' + gE(t[2]) + '</i></button>'; }).join('') + '</nav></div>';
+}
+function gLayer(){ return '<div data-gid="sheets"></div><div class="toast" data-gid="toast"><span data-gid="toastT"></span></div>'; }
+function gBrTop(o){
+  o = o || {};
+  return '<div data-gid="brTop" class="glass"><div class="urlrow">' +
+    '<button class="ib" data-gid="bBack" data-g="back" disabled>' + gIc('back') + '</button><button class="ib" data-gid="bFwd" disabled>' + gIc('fwd') + '</button>' +
+    '<button class="ib' + (o.home ? ' on' : '') + '" data-gid="bHome" data-g="home">' + gIc('home') + '</button><button class="ib" data-gid="bTabs" data-g="tabs"><span data-gid="tabN">' + (o.tabs || 1) + '</span></button>' +
+    '<button class="ib" data-gid="bSearch" data-g="search">' + gIc('search') + '</button><button class="ib tgl on" data-g="fabT">' + gIc('download') + '</button>' +
+    '<button class="ib tgl on" data-g="vpT">' + gIc('play') + '</button><button class="ib" data-g="more">' + gIc('grid') + '</button></div>' +
+    (o.url ? '<div data-gid="urlPop"><div class="upRow"><span class="lock" data-gid="urlLock">' + gIc('lock', 1) + '</span><div data-gid="urlShow" class="grow">' + esc(o.url) + '</div><button class="chip" data-gid="urlCopy">' + gIc('copy', 1) + gE('複製') + '</button><button class="ib" data-gid="urlAct">' + gIc('reload', 1) + '</button></div></div>' : '') +
+    '<div data-gid="brBar"><i></i></div></div>';
+}
+function gTile(ic, t, sub, g, extra){ return '<div class="tile' + (extra || '') + '"' + (g ? ' data-g="' + g + '"' : '') + '><div class="fav">' + gIc(ic) + '</div><span>' + gE(t) + '</span><small class="sub">' + gE(sub) + '</small></div>'; }
+function gStart(o){
+  o = o || {};
+  return '<div data-gid="startPage">' + (o.noHero ? '' :
+    '<div class="hero"><div class="mark markImg">' + (document.querySelector('.hero .mark') ? document.querySelector('.hero .mark').innerHTML.replace(/id="ti/g, 'id="gti').replace(/url\(#ti/g, 'url(#gti') : '') + '</div><h1>' + gE('Terra 瀏覽器') + '</h1><p>Terra Browser</p></div>') +
+    '<div class="searchBig glass"><span class="sbIc">' + gIc('search', 1) + '</span><input type="search" readonly tabindex="-1" data-g="in" placeholder="' + gE('貼上網址或輸入關鍵字') + '"><button class="btn pri sm" data-g="go">' + gIc('search', 1) + gE('搜尋') + '</button></div>' +
+    '<div class="sects"><div class="sect-h"><span>⭐ ' + gE('收藏') + '</span><button>' + gE('管理收藏夾') + '</button></div><div class="tiles">' +
+    gTile('books', '我的收藏', '12 個') + gTile('history', '瀏覽記錄', '86 筆') + gTile('qr', '掃 QR Code', '網址／收檔') +
+    '<div class="tile" style="grid-column-start:1" data-g="listen"><div class="fav">' + gIc('listen') + '</div><span>' + gE('聽歌辨識') + '</span><small class="sub">' + gE('找出歌名') + '</small></div>' +
+    gTile('clock', '辨識紀錄', '8 首', 'lhist') + gTile('incog', '無痕模式', '不保留記錄', 'incog') + gTile('x', '關閉分頁', '全部 3 個', 'closeAll') +
+    '<div class="tile" style="grid-column-start:1" data-g="news"><div class="fav">' + gIc('news') + '</div><span>' + gE('新聞') + '</span><small class="sub">' + gE('今日焦點') + '</small></div>' +
+    '</div></div></div>';
+}
+function gView(id, inner, cls){ return '<section class="view on' + (cls ? ' ' + cls : '') + '" data-gid="' + id + '">' + inner + '</section>'; }
+function gSheetH(title, ic, body, o){
+  o = o || {};
+  return '<div class="sheetWrap"><div class="sheetBg"></div><div class="sheet' + (o.tall ? ' tall' : '') + '"><div class="grab"><i></i></div><div class="sh-head"><h3>' + (ic ? gIc(ic) : '') + '<span class="ell">' + gE(title) + '</span></h3><button class="ib">' + gIc('x') + '</button></div><div class="sh-body">' + body + '</div>' + (o.foot ? '<div class="sh-foot">' + o.foot + '</div>' : '') + '</div></div>';
+}
+function gDlgH(title, inner, acts){
+  return '<div class="sheetWrap"><div class="sheetBg"></div><div class="dlg"><h3>' + gE(title) + '</h3>' + (inner || '') + '<div class="acts">' + acts.map(function(a){ return '<button class="btn ' + (a[1] || '') + '" data-g="' + (a[2] || '') + '">' + gE(a[0]) + '</button>'; }).join('') + '</div></div></div>';
+}
+function gMiniH(title, sub, art){
+  return '<div class="dockCard glass" data-g="mini" style="padding:6px 8px;position:relative;overflow:hidden"><div class="lrow" style="padding:0;border:0;background:none;flex:1;min-width:0">' +
+    '<div class="th" style="width:40px;height:40px;border-radius:10px;background:' + (art || 'var(--c-audio)') + ';color:#fff">' + gIc('audio') + '</div><div class="t"><b>' + gE(title) + '</b><div class="sub ell" data-g="lyr">' + gE(sub) + '</div></div></div>' +
+    '<button class="ib"><svg class="i fill" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button><button class="ib">' + gIc('fwd') + '</button><button class="ib" data-g="stop">' + gIc('x', 1) + '</button>' +
+    '<div data-g="bar" style="position:absolute;left:0;bottom:0;height:3px;background:var(--accent);width:22%;transition:width 3s linear"></div></div>';
+}
+function gSetCard(h3ic, h3, rows){
+  return '<div class="card glass"><h3>' + gIc(h3ic) + gE(h3) + '</h3>' + rows.map(function(r){ return '<div class="setRow" data-g="' + (r[3] || '') + '"><span class="ic">' + gIc(r[0]) + '</span><div class="grow"><b>' + gE(r[1]) + '</b><div class="sub">' + gE(r[2]) + '</div></div><span class="chev">›</span></div>'; }).join('') + '</div>';
+}
+function gLrow(title, sub, color, g, ic){
+  return '<div class="lrow" data-g="' + (g || '') + '"><div class="th" style="background:linear-gradient(140deg,color-mix(in srgb,' + color + ' 30%,var(--surface-2)),var(--surface-2));color:' + color + '"><span class="big">' + gIc(ic || 'audio') + '</span></div><div class="t"><b>' + gE(title) + '</b><div class="sub">' + gE(sub) + '</div></div><span class="ck">' + gIc('check') + '</span></div>';
+}
+function gFtile(emo, name, sub, g){ return '<div class="ftile" data-g="' + (g || '') + '"><span class="fi">' + emo + '</span><div class="t"><b>' + gE(name) + '</b><div class="sub">' + gE(sub) + '</div></div><button class="ib">' + gIc('more') + '</button></div>'; }
+
+/* ---------- 動畫引擎：手指移過去 → 按下（漣漪）→ 畫面跟著變；做完一輪停一下再重播 ---------- */
+var GS = {list: [], io: null};
+function gSleep(sc, ms){
+  return new Promise(function(res){
+    var left = ms;
+    (function tick(){
+      if(!sc.win.isConnected){ res(false); return; }
+      if(sc.vis){ left -= 100; if(left <= 0){ res(true); return; } }
+      setTimeout(tick, 100);
+    })();
+  });
+}
+function gQ(sc, sel){ return typeof sel === 'function' ? sel(sc.scr) : sc.scr.querySelector(sel); }
+function gPos(sc, el){
+  var r = el.getBoundingClientRect(), b = sc.scr.getBoundingClientRect(), s = sc.s || 1;
+  return {x: (r.left - b.left + r.width / 2) / s, y: (r.top - b.top + r.height / 2) / s};
+}
+async function gMove(sc, el){
+  var p = gPos(sc, el), f = sc.fing;
+  f.classList.add('show');
+  f.style.transform = 'translate(' + (p.x - 22) + 'px,' + (p.y - 22) + 'px)';
+  return gSleep(sc, 620);
+}
+function gRipple(sc, el, long){
+  var p = gPos(sc, el), r = document.createElement('i');
+  r.className = 'gRip' + (long ? ' long' : ''); r.style.left = p.x + 'px'; r.style.top = p.y + 'px';
+  sc.scr.appendChild(r); setTimeout(function(){ r.remove(); }, 900);
+}
+function gOpen(sc, html){
+  var host = sc.scr.querySelector('[data-gid="sheets"]');
+  var t = document.createElement('div'); t.innerHTML = html; var w = t.firstChild;
+  host.appendChild(w); paintIcons(w); void w.offsetWidth; w.classList.add('on');
+  return w;
+}
+function gClose(sc){ var w = sc.scr.querySelectorAll('[data-gid="sheets"] .sheetWrap'); w.forEach(function(x){ x.classList.remove('on'); setTimeout(function(){ x.remove(); }, 320); }); }
+function gToast(sc, msg){
+  var t = sc.scr.querySelector('[data-gid="toast"]'); if(!t) return;
+  t.querySelector('span').textContent = T(msg); t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(function(){ t.classList.remove('show'); }, 2000);
+}
+async function gStep(sc, st){
+  var k = st[0];
+  if(k === 'wait') return gSleep(sc, st[1]);
+  if(k === 'do'){ st[1](sc.scr, sc); return gSleep(sc, st[2] || 300); }
+  var el = gQ(sc, st[1]); if(!el) return gSleep(sc, 200);
+  if(k === 'spot'){ el.classList.add('gSpot'); await gSleep(sc, st[2] || 1100); el.classList.remove('gSpot'); return; }
+  if(!(await gMove(sc, el))) return;
+  if(k === 'tap' || k === 'type'){
+    el.classList.add('gSpot'); await gSleep(sc, 260);
+    sc.fing.classList.add('down'); el.classList.add('gPress'); gRipple(sc, el);
+    await gSleep(sc, 160);
+    sc.fing.classList.remove('down'); el.classList.remove('gPress'); el.classList.remove('gSpot');
+    if(k === 'type'){
+      var inp = el.tagName === 'INPUT' ? el : el.querySelector('input'), txt = T(st[2]);
+      if(st[3]) inp.value = '';
+      for(var i = 0; i < txt.length; i++){ inp.value += txt[i]; if(!(await gSleep(sc, 75))) return; }
+      if(st[4]) st[4](sc.scr, el);
+      return gSleep(sc, 450);
+    }
+    if(st[2]) st[2](sc.scr, el, sc);
+    return gSleep(sc, st[3] || 700);
+  }
+  if(k === 'hold'){
+    el.classList.add('gSpot'); sc.fing.classList.add('down'); el.classList.add('gPress'); gRipple(sc, el, true);
+    await gSleep(sc, 750);
+    sc.fing.classList.remove('down'); el.classList.remove('gPress'); el.classList.remove('gSpot');
+    if(st[2]) st[2](sc.scr, el, sc);
+    return gSleep(sc, st[3] || 700);
+  }
+}
+function gBuild(sc){
+  sc.scr.innerHTML = sc.spec.html() + gLayer();
+  sc.scr.appendChild(sc.fing); sc.fing.className = 'gFinger';
+  sc.fing.style.transform = 'translate(' + (sc.W * .78) + 'px,' + (sc.top + sc.cropH + 40) + 'px)';
+  paintIcons(sc.scr);
+  if(sc.spec.init) sc.spec.init(sc.scr, sc);
+}
+async function gRun(sc){
+  if(sc.running) return; sc.running = true;
+  if(sc.spec.init) try{ sc.spec.init(sc.scr, sc); }catch(e){}
+  var once = typeof CFG !== 'undefined' && CFG.motion === false;
+  while(sc.win.isConnected){
+    if(!(await gSleep(sc, 700))) break;
+    var steps = sc.spec.steps || [];
+    for(var i = 0; i < steps.length; i++){ if(!sc.win.isConnected) break; await gStep(sc, steps[i]); }
+    sc.fing.classList.remove('show');
+    if(!(await gSleep(sc, 2200))) break;
+    if(once) break;
+    sc.scr.classList.add('fade'); await gSleep(sc, 260);
+    gBuild(sc); sc.scr.classList.remove('fade');
+  }
+  sc.running = false;
+}
+function gFit(sc){
+  var w = sc.win.clientWidth || 300, s = w / sc.W; sc.s = s;
+  sc.win.style.height = Math.round(sc.cropH * s) + 'px';
+  sc.scr.style.transform = 'translateY(' + (-sc.top * s) + 'px) scale(' + s + ')';
+}
+/* spec: {h: 顯示的高度（真實畫面 px）, top: 從畫面哪裡開始（數字或 'bottom'）, html(), init(scr), steps[], cap} */
+function gScene(spec){
+  gMirrorCss();
+  var W = Math.max(320, Math.min(480, window.innerWidth || 360)), H = Math.max(560, window.innerHeight || 760);
+  var cropH = Math.min(spec.h || 420, H), top = spec.top === 'bottom' ? H - cropH : (spec.top || 0);
+  var win = h('div', {class: 'gWin', 'data-i18n-skip': ''});
+  var scr = h('div', {class: 'gScr' + (spec.cls ? ' ' + spec.cls : '')});
+  var bs = getComputedStyle(document.body);
+  scr.style.width = W + 'px'; scr.style.height = H + 'px';
+  scr.style.backgroundColor = bs.backgroundColor; scr.style.backgroundImage = bs.backgroundImage;
+  scr.style.fontSize = bs.fontSize; scr.style.color = bs.color; scr.style.lineHeight = bs.lineHeight;
+  var fing = h('i', {class: 'gFinger'});
+  win.appendChild(scr);
+  var sc = {win: win, scr: scr, fing: fing, spec: spec, W: W, H: H, cropH: cropH, top: top, vis: false};
+  gBuild(sc);
+  var wrap = h('figure', {class: 'gFig2'}, win, spec.cap ? h('figcaption', {text: T(spec.cap), 'data-i18n-skip': ''}) : null);
+  win._sc = sc;
+  setTimeout(function(){ gFit(sc); }, 0);
+  if(window.ResizeObserver) new ResizeObserver(function(){ gFit(sc); }).observe(win);
+  if(!GS.io && window.IntersectionObserver) GS.io = new IntersectionObserver(function(es){ es.forEach(function(e){ var s = e.target._sc; if(!s) return; s.vis = e.isIntersecting; if(s.vis){ gFit(s); gRun(s); } }); }, {threshold: .35});
+  if(GS.io) GS.io.observe(win); else { sc.vis = true; gRun(sc); }
+  return wrap;
+}
+
+/* ---------- 各段的示意畫面 ---------- */
+var G_SCENES = {
+  /* 五個分頁：手指輪流點下方分頁，上面換成那一頁 */
+  tabs: function(){
+    function head(v){
+      if(v === 'browse') return gView('v-browse', gBrTop({home: 1}) + '<div data-gid="brArea">' + gStart({noHero: 1}) + '</div>');
+      if(v === 'yt') return gView('v-yt', gYtTop('') + gYtList());
+      if(v === 'ai') return gView('v-ai', gAiTop() + gAiStart());
+      if(v === 'lib') return gView('v-lib', '<div class="scroll"><div class="page">' + gPt('folder', '檔案庫', '離線網頁、PDF、圖片、影片都在這裡') + gCatBar('audio') + gLibTools() + gMusicCard() + '</div></div>');
+      return gView('v-set', '<div class="scroll"><div class="page">' + gPt('gear', '設定', 'Terra 瀏覽器') + gSetCard('book', '軟體使用說明書', [['info', '打開說明書', '所有功能怎麼用'], ['globe', '語言 Language', '介面與說明書的語言']]) + gSetCard('lock', '隱私與安全', [['lock', '密碼鎖與指紋', '設定 6 位數密碼']]) + '</div></div>');
+    }
+    var order = ['yt', 'ai', 'lib', 'set', 'browse'];
+    function go(v){ return function(scr){ var c = scr.querySelector('.gTabHost'); c.innerHTML = head(v); paintIcons(c); scr.querySelectorAll('[data-gid="nav"] button').forEach(function(b){ b.classList.toggle('on', b.dataset.v === v); }); }; }
+    return {h: 9999, cap: '下方五個分頁，點一下就切換',
+      html: function(){ return '<div class="gTabHost">' + head('browse') + '</div>' + gNavH('browse'); },
+      steps: order.map(function(v){ return ['tap', '[data-gid="nav"] button[data-v="' + v + '"]', go(v), 1300]; })};
+  },
+  /* 權限詢問 */
+  perm: function(){
+    return {h: 420, top: 160, cap: '用到功能時才會詢問',
+      html: function(){ return gView('v-browse', gBrTop({home: 1}) + '<div data-gid="brArea">' + gStart() + '</div>') + gNavH('browse') + '<div class="gSys"><div class="gSysBox"><div class="gSysIc">' + gIc('info') + '</div><b>' + gE('要允許「Terra 瀏覽器」傳送通知嗎？') + '</b><div class="gSysBtn"><span data-g="allow">' + gE('允許') + '</span><span>' + gE('不允許') + '</span></div></div></div>'; },
+      steps: [['wait', 500], ['tap', '[data-g="allow"]', function(scr){ scr.querySelector('.gSys').classList.add('off'); }, 900]]};
+  },
+  /* 首頁搜尋 */
+  search: function(){
+    return {h: 470, cap: '首頁直接輸入網址或關鍵字',
+      html: function(){ return gView('v-browse', gBrTop({home: 1}) + '<div data-gid="brArea">' + gStart() + '</div>') + gNavH('browse'); },
+      steps: [['type', '[data-g="in"]', '週末好去處'], ['tap', '[data-g="go"]', function(scr){ var a = scr.querySelector('[data-gid="brArea"]'); a.innerHTML = gWebPage('週末好去處', 'travel'); paintIcons(a); }, 1200],
+        ['tap', '[data-g="search"]', function(scr){ var top = scr.querySelector('[data-gid="brTop"]'); top.outerHTML = gBrTop({url: 'travel.example.com/weekend'}); paintIcons(scr); }, 1500]]};
+  },
+  /* 功能選單 */
+  menu: function(){
+    var items = [['star', '收藏此頁'], ['books', '收藏清單'], ['history', '瀏覽記錄'], ['incog', '無痕模式'], ['expand', '滿版瀏覽'], ['scissors', '手動清理'], ['phone', '手機版'], ['sliders', '瀏覽設定'], ['sparkle', '翻譯網頁', 'tr'], ['download', '擷取網頁'], ['film', '下載影片'], ['info', '網頁診斷']];
+    return {h: 9999, cap: '右上角「功能選單」',
+      html: function(){ return gView('v-browse', gBrTop({}) + '<div data-gid="brArea" class="page">' + gWebPage('Journal du Matin', 'fr') + '</div>') + gNavH('browse'); },
+      steps: [['tap', '[data-g="more"]', function(scr, el, sc){ gOpen(sc, gSheetH('功能', 'grid', '<div class="qGrid">' + items.map(function(x){ return '<button data-g="' + (x[2] || '') + '">' + gIc(x[0]) + '<span>' + gE(x[1]) + '</span></button>'; }).join('') + '</div>')); }, 1100],
+        ['tap', '[data-g="tr"]', function(scr, el, sc){ gClose(sc); var a = scr.querySelector('[data-gid="brArea"]'); setTimeout(function(){ a.innerHTML = gWebPage('晨間日報', 'zh'); paintIcons(a); gToast(sc, '已翻譯成繁體中文'); }, 500); }, 1800]]};
+  },
+  /* 下載網頁影片／擷取網頁 */
+  fab: function(){
+    function big(ic, color, t, s, g){ return '<button class="fabBig" data-g="' + (g || '') + '"><span class="oi" style="background:' + color + '">' + gIc(ic) + '</span><div class="grow"><b>' + gE(t) + '</b><div class="sub">' + gE(s) + '</div></div></button>'; }
+    return {h: 9999, cap: '右下角的懸浮下載鈕',
+      html: function(){ return gView('v-browse', gBrTop({}) + '<div data-gid="brArea" class="page">' + gWebPage('露營新手指南', 'video') + '</div>') + gNavH('browse') + '<div class="gFab" data-g="fab">' + gIc('download') + '</div>'; },
+      steps: [['tap', '[data-g="fab"]', function(scr, el, sc){ gOpen(sc, gSheetH('下載', 'download', big('film', 'var(--c-video)', '下載這個網頁的影片', '偵測到 2 個媒體・正在播放的影片會排在最前面', 'v') + big('download', 'var(--accent)', '擷取網頁', '存成離線 HTML／PDF') + big('scissors', 'var(--olive)', '手動清理', '點選要移除的區塊（廣告、浮動視窗）'))); }, 1200],
+        ['tap', '[data-g="v"]', function(scr, el, sc){ gClose(sc); setTimeout(function(){ gOpen(sc, gSheetH('下載影片', 'film', gLrow('露營新手指南（1080p）', 'MP4・6:42・86 MB', 'var(--c-video)', 'd1', 'video') + gLrow('營火料理示範（720p）', 'MP4・3:15・31 MB', 'var(--c-video)', '', 'video'))); }, 350); }, 1300],
+        ['tap', '[data-g="d1"]', function(scr, el, sc){ gClose(sc); gToast(sc, '開始下載：露營新手指南'); }, 1500]]};
+  },
+  /* 無痕、關閉分頁 */
+  incog: function(){
+    return {h: 640, top: 0, cap: '首頁的「無痕模式」與「關閉分頁」',
+      html: function(){ return '<div class="gInc">' + gView('v-browse', gBrTop({home: 1, tabs: 3}) + '<div data-gid="brArea">' + gStart() + '</div>') + '</div>' + gNavH('browse'); },
+      init: function(scr){ var s = scr.querySelector('[data-gid="startPage"]'); if(s) s.scrollTop = 150; },
+      steps: [['tap', '[data-g="incog"]', function(scr, el, sc){ scr.querySelector('.gInc').classList.add('incogOn'); el.classList.add('on'); gToast(sc, '已開啟無痕模式'); }, 1500],
+        ['tap', '[data-g="closeAll"]', function(scr, el, sc){ gOpen(sc, gDlgH('關閉全部 3 個分頁？', '', [['關閉', 'dang', 'ok'], ['取消']])); }, 1000],
+        ['tap', '[data-g="ok"]', function(scr, el, sc){ gClose(sc); scr.querySelector('.gInc').classList.remove('incogOn'); var n = scr.querySelector('[data-gid="tabN"]'); if(n) n.textContent = '1'; gToast(sc, '已關閉所有分頁'); }, 1500]]};
+  },
+  /* YouTube／YouTube Music／收藏切換 */
+  yt: function(){
+    return {h: 520, cap: '右上角切換 YouTube、YouTube Music、收藏',
+      html: function(){ return gView('v-yt', gYtTop('') + '<div class="gYtBody">' + gYtList() + '</div>') + gNavH('yt'); },
+      steps: [['tap', '.ytMode .m-mu', function(scr){ scr.querySelector('.ytMode').classList.add('music'); var b = scr.querySelector('.gYtBody'); b.innerHTML = gYtmList(); paintIcons(b); }, 1500],
+        ['tap', '.ytMode .m-fav', function(scr){ var m = scr.querySelector('.ytMode'); m.classList.remove('music'); m.classList.add('favm'); var b = scr.querySelector('.gYtBody'); b.innerHTML = gFavList(); paintIcons(b); }, 1600],
+        ['tap', '.ytMode .m-yt', function(scr){ var m = scr.querySelector('.ytMode'); m.classList.remove('favm'); var b = scr.querySelector('.gYtBody'); b.innerHTML = gYtList(); paintIcons(b); }, 900]]};
+  },
+  /* 迷你播放列 → 播放畫面（同步歌詞） */
+  player: function(){
+    var L = ['清晨的風吹過窗台', '咖啡香慢慢醒來', '沿著河岸走一段路', '把昨天輕輕放下', '陽光落在你肩上'];
+    return {h: 9999, cap: '迷你播放列：點一下打開播放畫面',
+      html: function(){ return gView('v-lib', '<div class="scroll"><div class="page">' + gPt('folder', '檔案庫', '離線網頁、PDF、圖片、影片都在這裡') + gCatBar('audio') + gMusicCard() + '<div class="list">' + gLrow('晨光散步', '海風樂團・MP3・3:10', 'var(--c-audio)') + gLrow('夏夜晚風', '藍莓汽水・MP3・4:02', 'var(--c-audio)') + '</div></div></div>') + gNavH('lib'); },
+      init: function(scr){ var dc = scr.querySelector('[data-gid="dockCards"]'); dc.innerHTML = gMiniH('晨光散步', '清晨的風吹過窗台'); paintIcons(dc); setTimeout(function(){ var b = scr.querySelector('[data-g="bar"]'); if(b) b.style.width = '46%'; }, 300); },
+      steps: [['spot', '[data-g="mini"]', 900], ['tap', '[data-g="mini"]', function(scr, el, sc){
+          var lyr = '<div class="lyrView" style="--lyr-size:19px;--lyr-cur:var(--accent);--lyr-other:var(--text-muted);text-align:center;--lyr-w:800"><div class="lyrPad"></div>' + L.map(function(x, i){ return '<div class="lyrLine' + (i === 0 ? ' on' : '') + '">' + gE(x) + '</div>'; }).join('') + '<div class="lyrPad"></div></div>';
+          gOpen(sc, gSheetH('正在播放', 'audio', '<div><div class="mpStage">' + lyr + '</div><div class="row" style="gap:10px;margin-top:10px"><div class="th" style="width:46px;height:46px;border-radius:12px;flex:none;background:var(--c-audio)"></div><div class="grow"><b class="ell" style="font-size:17px;display:block">' + gE('晨光散步') + '</b><div class="sub ell">' + gE('海風樂團・MP3・7.0 MB') + '</div></div></div>' +
+            '<div class="mpTools"><button class="chip">' + gIc('image', 1) + gE('封面') + '</button><button class="chip">' + gIc('search', 1) + gE('找歌詞') + '</button><button class="chip">' + gIc('type', 1) + gE('樣式') + '</button></div>' +
+            '<div class="row" style="justify-content:center;gap:14px;margin:12px 0 14px"><button class="ib">' + gIc('back') + '</button><button class="btn pri" style="width:64px;height:64px;border-radius:50%;padding:0"><svg class="i fill" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button><button class="ib">' + gIc('fwd') + '</button></div></div>', {tall: true}));
+          var i = 0, iv = setInterval(function(){ if(!scr.isConnected){ clearInterval(iv); return; } var ls = scr.querySelectorAll('.lyrLine'); if(!ls.length){ clearInterval(iv); return; } i = Math.min(i + 1, ls.length - 1); ls.forEach(function(x, k){ x.classList.toggle('on', k === i); x.classList.toggle('past', k < i); }); var v = scr.querySelector('.lyrView'); if(v) v.scrollTo({top: ls[i].offsetTop - v.clientHeight / 2 + 20, behavior: 'smooth'}); if(i >= ls.length - 1) clearInterval(iv); }, 1100);
+        }, 5200]]};
+  },
+  /* 聽歌辨識 */
+  listen: function(){
+    return {h: 9999, cap: '首頁「聽歌辨識」：懸浮按鈕倒數後找出歌名',
+      html: function(){ return gView('v-browse', gBrTop({home: 1}) + '<div data-gid="brArea">' + gStart() + '</div>') + gNavH('browse'); },
+      init: function(scr){ var s = scr.querySelector('[data-gid="startPage"]'); if(s) s.scrollTop = 150; },
+      steps: [['tap', '[data-g="listen"]', function(scr){ var b = document.createElement('div'); b.className = 'gBub'; b.innerHTML = '<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="17"/></svg><b>5</b>'; scr.appendChild(b); var n = 5, iv = setInterval(function(){ n--; if(!b.isConnected || n < 1){ clearInterval(iv); return; } b.querySelector('b').textContent = n; }, 700); }, 4000],
+        ['do', function(scr, sc){ var b = scr.querySelector('.gBub'); if(b) b.remove(); gOpen(sc, gSheetH('辨識結果', 'listen', '<div class="gLsnRes"><div class="gArt2"></div><div><b>' + gE('夏夜晚風') + '</b><div class="sub">' + gE('藍莓汽水・2024') + '</div></div></div><button class="btn pri block" data-g="play">' + gIc('play', 1) + gE('用 YouTube Music 播放') + '</button>')); }, 900],
+        ['tap', '[data-g="play"]', function(scr, el, sc){ gClose(sc); gToast(sc, '已加入辨識紀錄'); }, 1500]]};
+  },
+  /* 新聞 */
+  news: function(){
+    var C = [['焦點', '#a85a32'], ['台灣', '#5d7e45'], ['國際', '#3c6e91'], ['財經', '#b4862a'], ['科技', '#5a5fa8'], ['娛樂', '#b0487a']];
+    var N = {
+      '焦點': [['新型電動巴士今日上路，首批行駛市區五條路線', '晨報新聞', '20 分鐘前'], ['連假出遊人潮湧現，各地景點提早實施交通管制', '日日電視', '1 小時前'], ['氣象專家：本週末鋒面南下，北部轉涼有雨', '天氣通', '2 小時前']],
+      '科技': [['新款摺疊手機開賣，螢幕摺痕幾乎看不到', '科技週報', '35 分鐘前'], ['研究團隊發表省電晶片，續航力提升三成', '未來數位', '3 小時前'], ['雲端相簿推出 AI 自動整理旅行照片', '數位生活', '5 小時前']]
+    };
+    function card(n, i, c, on){ return i === 0 ? '<article class="nwCard hero" style="--nc:' + c + '"><div class="nwHeroTag">' + gE(n.cat) + '・' + gE('最新') + '</div><div class="nwBody"><h3 class="nwTitle">' + gE(n[0]) + '</h3><div class="nwMeta"><span class="nwFav">' + esc(T(n[1]).slice(0, 1)) + '</span><span class="nwSrc">' + gE(n[1]) + '</span><span class="nwDot">・</span><span>' + gE(n[2]) + '</span></div></div><button class="nwStar">' + gIc('star') + '</button></article>'
+      : '<article class="nwCard" style="--nc:' + c + '"><div class="nwBody"><h3 class="nwTitle">' + gE(n[0]) + '</h3><div class="nwMeta"><span class="nwFav">' + esc(T(n[1]).slice(0, 1)) + '</span><span class="nwSrc">' + gE(n[1]) + '</span><span class="nwDot">・</span><span>' + gE(n[2]) + '</span></div></div><button class="nwStar' + (on ? ' on' : '') + '" data-g="star' + i + '">' + gIc(on ? 'starOn' : 'star') + '</button></article>'; }
+    function list(cat){ var c = C.filter(function(x){ return x[0] === cat; })[0][1]; return N[cat].map(function(n, i){ n.cat = cat; return card(n, i, c); }).join(''); }
+    function days(){ var d = new Date(), out = ''; for(var i = 0; i < 5; i++){ var x = new Date(d.getTime() - i * 864e5); out += '<button class="nwDay' + (i ? '' : ' on') + '"><small>' + gE(i === 0 ? '今天' : i === 1 ? '昨天' : '週' + '日一二三四五六'[x.getDay()]) + '</small><b>' + (x.getMonth() + 1) + '/' + x.getDate() + '</b></button>'; } return out; }
+    return {h: 9999, cap: '首頁「新聞」：分類、日期、收藏',
+      html: function(){ return gView('v-browse', '<div data-gid="newsPanel"><div class="nwHead"><button class="ib">' + gIc('back') + '</button><div class="nwTtl"><b>' + gE('新聞') + '</b><span></span></div><button class="ib">' + gIc('reload') + '</button><button class="ib">' + gIc('more') + '</button></div>' +
+        '<div class="nwTabs"><button class="nwTab on" data-g="t1">' + gIc('news', 1) + gE('新聞') + '</button><button class="nwTab" data-g="t2">' + gIc('star', 1) + gE('收藏') + '<i data-g="fn">2</i></button><button class="nwTab">' + gIc('history', 1) + gE('記錄') + '</button></div>' +
+        '<div class="nwDays">' + days() + '</div><div class="nwCats">' + C.map(function(c, i){ return '<button class="nwCat' + (i ? '' : ' on') + '" data-g="c' + c[0] + '" style="--nc:' + c[1] + '">' + gE(c[0]) + '</button>'; }).join('') + '</div><div class="nwList">' + list('焦點') + '</div></div>') + gNavH('browse'); },
+      steps: [['tap', '[data-g="c科技"]', function(scr){ scr.querySelectorAll('.nwCat').forEach(function(b){ b.classList.toggle('on', b.dataset.g === 'c科技'); }); var l = scr.querySelector('.nwList'); l.innerHTML = list('科技'); paintIcons(l); }, 1200],
+        ['tap', '[data-g="star1"]', function(scr, el, sc){ el.classList.add('on'); el.innerHTML = icon('starOn'); var f = scr.querySelector('[data-g="fn"]'); if(f) f.textContent = '3'; gToast(sc, '已收藏'); }, 1300],
+        ['tap', '[data-g="t2"]', function(scr){ scr.querySelectorAll('.nwTab').forEach(function(b){ b.classList.toggle('on', b.dataset.g === 't2'); }); var l = scr.querySelector('.nwList'), d = new Date();
+          var dh = T('今天') + '・' + (d.getMonth() + 1) + ' / ' + d.getDate();
+          l.innerHTML = '<div class="nwGroup" style="--nc:#a85a32"><b>' + gE('焦點') + '</b><span>2</span></div><div class="nwDayHead">' + dh + '</div>' + card(N['焦點'][1], 1, '#a85a32', true) + card(N['焦點'][2], 2, '#a85a32', true) +
+            '<div class="nwGroup" style="--nc:#5a5fa8"><b>' + gE('科技') + '</b><span>1</span></div><div class="nwDayHead">' + dh + '</div>' + card(N['科技'][1], 1, '#5a5fa8', true);
+          var cs = scr.querySelector('.nwCats'), ds = scr.querySelector('.nwDays'); if(ds) ds.style.display = 'none';
+          if(cs) cs.innerHTML = '<button class="nwCat on" style="--nc:var(--accent)">' + gE('全部') + ' <i>3</i></button><button class="nwCat" style="--nc:#a85a32">' + gE('焦點') + ' <i>2</i></button><button class="nwCat" style="--nc:#5a5fa8">' + gE('科技') + ' <i>1</i></button>';
+          paintIcons(l); }, 1600]]};
+  },
+  /* AI 摘要 */
+  ai: function(){
+    return {h: 600, cap: '貼上 YouTube 網址，按「開始」',
+      html: function(){ return gView('v-ai', gAiTop() + gAiStart()) + gNavH('ai'); },
+      steps: [['tap', '[data-g="paste"]', function(scr){ scr.querySelector('.aiIn input').value = 'youtu.be/coffee-101'; }, 900],
+        ['tap', '[data-g="startAi"]', function(scr){ var e = scr.querySelector('.gAiOut'); e.innerHTML = '<div class="card glass"><div class="row" style="gap:12px"><div class="spin"></div><div class="grow"><b>' + gE('十分鐘學會手沖咖啡') + '</b><div class="sub">' + gE('讀取字幕中…') + '</div></div></div></div>';
+          setTimeout(function(){ if(!e.isConnected) return; e.innerHTML = '<div class="card glass gAiSum"><b>' + gE('重點摘要') + '</b><ul><li>' + gE('水溫 90～92°C，粉水比 1:15') + '</li><li>' + gE('先悶蒸 30 秒，再分三次注水') + '</li><li>' + gE('總時間控制在 2 分 30 秒內') + '</li></ul><div class="gChips"><span class="chip">' + gIc('list', 1) + gE('章節') + '</span><span class="chip">' + gIc('type', 1) + gE('逐字稿') + '</span><span class="chip">' + gIc('send', 1) + gE('問 AI') + '</span></div></div>'; paintIcons(e); }, 1600); }, 3600]]};
+  },
+  /* AI 設定（Gemini 金鑰） */
+  aikey: function(){
+    return {h: 9999, cap: 'AI 摘要右上角 → AI 設定',
+      html: function(){ return gView('v-ai', gAiTop() + gAiStart()) + gNavH('ai'); },
+      steps: [['tap', '[data-g="aiset"]', function(scr, el, sc){ gOpen(sc, gSheetH('AI 設定', 'sparkle', '<div class="field"><div class="lbl">' + gE('AI 引擎') + '</div><div class="seg"><button>' + gE('Claude 訂閱') + '</button><button class="on">Gemini</button></div></div><div class="field"><div class="lbl">' + gE('Gemini API 金鑰') + '</div><input type="text" readonly tabindex="-1" data-g="key" placeholder="AIza…" style="width:100%"></div>', {foot: '<button class="btn pri block" data-g="save">' + gE('儲存') + '</button>'})); }, 1000],
+        ['type', '[data-g="key"]', 'AIzaSyD-example-key-0000'], ['tap', '[data-g="save"]', function(scr, el, sc){ gClose(sc); gToast(sc, '已儲存'); }, 1500]]};
+  },
+  /* 檔案庫：分類、資料夾、匯入到資料夾 */
+  lib: function(){
+    return {h: 9999, cap: '進到資料夾按「＋」，檔案直接匯入這個資料夾',
+      html: function(){ return gView('v-lib', '<div class="scroll"><div class="page">' + gCatBar('audio') + gLibTools() + '<div class="gLibBody">' + gFolderView('') + '</div></div></div>') + gNavH('lib'); },
+      steps: [['tap', '[data-g="f旅行"]', function(scr){ var b = scr.querySelector('.gLibBody'); b.innerHTML = gFolderView('旅行'); paintIcons(b); }, 1100],
+        ['tap', '[data-g="add"]', function(scr, el, sc){ gOpen(sc, '<div class="sheetWrap"><div class="sheetBg"></div><div class="gPicker"><b>' + gE('選擇檔案') + '</b>' + ['山間小路.mp3', '海邊日落.mp3'].map(function(n, i){ return '<div class="gPk on">' + gIc('audio', 1) + '<span>' + esc(T(n.replace('.mp3', ''))) + '.mp3</span>' + gIc('check', 1) + '</div>'; }).join('') + '<div class="gPkBtn" data-g="pk">' + gE('選取') + '</div></div></div>'); }, 1100],
+        ['tap', '[data-g="pk"]', function(scr, el, sc){ gClose(sc); var l = scr.querySelector('.gLibBody .list'); l.insertAdjacentHTML('afterbegin', gLrow('山間小路', '溪谷樂隊・MP3・3:48', 'var(--c-audio)') + gLrow('海邊日落', '溪谷樂隊・MP3・4:20', 'var(--c-audio)')); paintIcons(l); gToast(sc, '✓ 已匯入 2 個檔案到「旅行」'); }, 1800]]};
+  },
+  /* 選取、改名 */
+  rename: function(){
+    return {h: 9999, cap: '長按檔案 → 選取，再按「重新命名」',
+      html: function(){ return gView('v-lib', '<div class="scroll"><div class="page">' + gCatBar('audio') + '<div data-gid="selBar" class="selBar glass hide"></div>' + gLibTools() + '<div class="gLibBody">' + gFolderView('') + '</div></div></div>') + gNavH('lib'); },
+      steps: [['hold', '[data-g="r1"]', function(scr){ el1(scr).classList.add('on'); scr.querySelector('[data-gid="libTools"]').classList.add('hide'); var sb = scr.querySelector('[data-gid="selBar"]'); sb.classList.remove('hide');
+          sb.innerHTML = '<button class="ib">' + gIc('x') + '</button><b>' + gE('已選 1 個') + '</b><button class="ib">' + gIc('checks') + '</button><button class="ib">' + gIc('layers') + '</button><button class="ib">' + gIc('folder') + '</button><button class="ib" data-g="ren">' + gIc('edit') + '</button><button class="ib">' + gIc('share') + '</button><button class="ib" style="color:var(--danger)">' + gIc('trash') + '</button>'; paintIcons(sb); }, 900],
+        ['tap', '[data-g="ren"]', function(scr, el, sc){ gOpen(sc, gDlgH('重新命名', '<input type="text" readonly tabindex="-1" data-g="nm" value="' + gE('Track 01') + '" style="width:100%;margin-top:6px">', [['確定', 'pri', 'ok'], ['取消']])); }, 900],
+        ['type', '[data-g="nm"]', '晨光散步', true], ['tap', '[data-g="ok"]', function(scr, el, sc){ gClose(sc); var r = el1(scr); r.querySelector('b').textContent = T('晨光散步'); r.classList.remove('on'); scr.querySelector('[data-gid="selBar"]').classList.add('hide'); scr.querySelector('[data-gid="libTools"]').classList.remove('hide'); gToast(sc, '已重新命名'); }, 1600]],
+      init: function(scr){ var r = el1(scr); if(r) r.querySelector('b').textContent = 'Track 01'; }};
+    function el1(scr){ return scr.querySelector('[data-g="r1"]'); }
+  },
+  /* 音樂庫：補齊歌手與歌詞 */
+  music: function(){
+    return {h: 9999, cap: '音樂庫：自動補齊歌手與歌詞',
+      html: function(){ return gView('v-lib', '<div class="scroll"><div class="page">' + gCatBar('audio') + gMusicCard() + '<button class="btn ghost sm fixBtn" data-g="fix">' + gIc('pdf', 1) + gE('補齊歌手與歌詞') + '<span class="c">' + gE('缺歌手 2・缺歌詞 2') + '</span></button><div class="list gML">' + gLrow('晨光散步', 'MP3・3:10', 'var(--c-audio)', 'm1') + gLrow('夏夜晚風', 'MP3・4:02', 'var(--c-audio)', 'm2') + '</div></div></div>') + gNavH('lib'); },
+      steps: [['tap', '[data-g="fix"]', function(scr){ [['m1', '海風樂團・MP3・3:10・歌詞'], ['m2', '藍莓汽水・MP3・4:02・歌詞']].forEach(function(x, i){ setTimeout(function(){ var r = scr.querySelector('[data-g="' + x[0] + '"]'); if(!r) return; r.querySelector('.sub').textContent = T(x[1]); r.classList.add('gFlash'); }, 600 + i * 700); }); setTimeout(function(){ var c = scr.querySelector('[data-g="fix"] .c'); if(c) c.textContent = T('缺歌手 0・缺歌詞 0'); }, 2100); }, 2600],
+        ['tap', '[data-g="playAll"]', function(scr){ var dc = scr.querySelector('[data-gid="dockCards"]'); dc.innerHTML = gMiniH('晨光散步', '海風樂團'); paintIcons(dc); setTimeout(function(){ var b = scr.querySelector('[data-g="bar"]'); if(b) b.style.width = '40%'; }, 200); }, 1800]]};
+  },
+  /* 密碼鎖 */
+  lock: function(){
+    function dots(n){ var s = ''; for(var i = 0; i < 6; i++) s += '<i class="' + (i < n ? 'on' : '') + '"></i>'; return s; }
+    return {h: 9999, cap: '設定 → 隱私與安全 → 密碼鎖與指紋',
+      html: function(){ return gView('v-set', '<div class="scroll"><div class="page">' + gPt('gear', '設定', 'Terra 瀏覽器') + gSetCard('shield', '隱私與安全', [['lock', '密碼鎖與指紋', '設定密碼，把帳號密碼、檔案庫的分類或資料夾鎖起來', 'lk']]) + gSetCard('palette', '外觀', [['palette', '主題與配色', '跟隨系統・大地棕']]) + '</div></div>') + gNavH('set'); },
+      steps: [['tap', '[data-g="lk"]', function(scr, el, sc){ gOpen(sc, gSheetH('設定解鎖密碼', 'key', '<div class="pinBox"><div class="pinLock">' + gIc('key') + '</div><div class="pinDots">' + dots(0) + '</div><div class="pinMsg">' + gE('至少 6 位數字') + '</div><div class="pinKeys">' + ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'].map(function(k){ return '<button class="pinKey' + (k ? '' : ' ghost') + '" data-g="k' + k + '">' + (k === 'del' ? gIc('back') : k) + '</button>'; }).join('') + '</div></div>')); }, 900]]
+        .concat(['2', '5', '8', '0', '1', '4'].map(function(k, i){ return ['tap', '[data-g="k' + k + '"]', function(scr){ var d = scr.querySelector('.pinDots'); if(d) d.innerHTML = dots(i + 1); }, 180]; }))
+        .concat([['do', function(scr, sc){ gClose(sc); gToast(sc, '🔒 密碼鎖已開啟'); }, 1500]])};
+  },
+  /* 其他 App 下載自動搬回 */
+  watch: function(){
+    return {h: 9999, cap: '其他 App 下載完，自動搬進檔案庫',
+      html: function(){ return gView('v-set', '<div class="scroll"><div class="page">' + gPt('gear', '設定', 'Terra 瀏覽器') + gSetCard('film', '圖片與影片下載', [['download', '其他 App 下載自動搬回', 'Snaptube 等 App 下載完自動搬進檔案庫', 'w'], ['folder', '下載資料夾', '已加入 1 個資料夾']]) + '</div></div>') + gNavH('set'); },
+      steps: [['tap', '[data-g="w"]', function(scr, el, sc){ gOpen(sc, gSheetH('其他 App 下載自動搬回', 'download', '<label class="lab"><span>' + gE('自動搬回') + '<span class="sub">' + gE('下載完成後自動搬進檔案庫') + '</span></span><span class="sw"><input type="checkbox" data-g="sw"><span></span></span></label>' + gLrow('Download/Snaptube', '影片、音樂', 'var(--c-video)', '', 'folder') + '<button class="btn block" style="margin-top:10px">' + gIc('plus', 1) + gE('加入下載資料夾') + '</button>')); }, 1000],
+        ['tap', '.sw', function(scr){ var c = scr.querySelector('[data-g="sw"]'); if(c) c.checked = true; }, 900], ['do', function(scr, sc){ gClose(sc); gToast(sc, '✓ 已搬回 1 個檔案：露營新手指南.mp4'); }, 1600]]};
+  },
+  /* 傳檔 */
+  relay: function(){
+    return {cap: '傳檔：手機加密 → 中繼站 → 對方用瀏覽器下載',
+      html: function(){ return '<div class="gFlowS" style="bottom:auto;height:250px"><div class="gNode">' + gIc('phone') + '<b>' + gE('你的手機') + '</b><small>' + gE('加密') + '</small></div><div class="gLine"><i class="gPkt">' + gIc('lock', 1) + '</i></div><div class="gNode">' + gIc('cloud') + '<b>' + gE('中繼站') + '</b><small>GitHub／' + gE('公用') + '</small></div><div class="gLine"><i class="gPkt d2">' + gIc('lock', 1) + '</i></div><div class="gNode">' + gIc('pc') + '<b>' + gE('對方的裝置') + '</b><small>' + gE('解密下載') + '</small></div></div>'; },
+      h: 250, steps: [['wait', 3200]]};
+  },
+  /* 更新 */
+  upd: function(){
+    return {h: 9999, cap: '設定 → 版本與更新',
+      html: function(){ return gView('v-set', '<div class="scroll"><div class="page">' + gPt('gear', '設定', 'Terra 瀏覽器') + gSetCard('update', '版本與更新', [['reload', '檢查更新', T('目前版本') + ' v' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '2'), 'chk'], ['download', '下載 APK 到手機', '可選最新版或任一舊版本'], ['share', '分享這個 App', '傳下載網址給朋友']]) + '</div></div>') + gNavH('set'); },
+      steps: [['tap', '[data-g="chk"]', function(scr, el, sc){ gToast(sc, '已經是最新版本'); }, 1600]]};
+  }
 };
-var GUIDE = [
-  {ic: 'info', fig: 'intro', t: '這套 App 可以做什麼', open: true, html:
-    '<p>「Terra 瀏覽器」把常用的幾件事放在同一個 App，下面五個分頁各管一件事：</p>' +
-    '<ul>' +
-    '<li><b>瀏覽</b>：內建瀏覽器，擋廣告，可以把整個網頁存成離線檔、下載網頁裡的圖片和影片。</li>' +
-    '<li><b>YouTube</b>：沒有廣告的 YouTube 和 YouTube Music，可以背景播放、下載影片和音樂。</li>' +
-    '<li><b>AI 摘要</b>：把 YouTube 影片交給 AI，整理出逐字稿、摘要、章節，還能針對影片內容發問。</li>' +
-    '<li><b>檔案庫</b>：所有存下來的東西都在這裡，可以播放影片和音樂、看 PDF 和圖片、開啟並編輯 Word／Excel／PPT／文字檔。</li>' +
-    '<li><b>設定</b>：外觀、擋廣告、密碼鎖、下載、更新，以及這份說明書。</li>' +
-    '</ul>' +
-    '<p class="gTip">下面每一段點一下標題就能展開。之後想再看，到「設定」最上面的「軟體使用說明書」。</p>'},
+/* 共用的頁面片段 */
+function gPt(ic, t, sub){ return '<h2 class="pt"><span class="logo">' + gIc(ic) + '</span><span>' + gE(t) + '<small>' + gE(sub) + '</small></span></h2>'; }
+function gYtTop(mode){
+  return '<div data-gid="ytTop" class="glass"><button class="ib" disabled>' + gIc('back') + '</button><button class="ib">' + gIc('home') + '</button><button class="ib">' + gIc('reload') + '</button><button class="ib">' + gIc('grid') + '</button><div class="ytTitle"></div>' +
+    '<button class="ytMode' + (mode ? ' ' + mode : '') + '"><span class="m-yt">' + gIc('ytplay') + '</span><span class="m-mu">' + gIc('audio') + '</span><span class="m-fav">' + gIc('star') + '</span></button></div>';
+}
+function gYtList(){
+  var V = [['十分鐘學會手沖咖啡', '慢活咖啡館・12 萬次觀看', '#8a5a3c', '10:24'], ['城市夜景縮時攝影', '光影旅人・8.6 萬次觀看', '#3c5a8a', '4:51']];
+  return '<div class="gYt">' + V.map(function(v){ return '<div class="gYtV"><div class="gYtTh" style="background:linear-gradient(135deg,' + v[2] + ',#1d140e)"><span>' + v[3] + '</span></div><div class="gYtM"><i style="background:' + v[2] + '"></i><div><b>' + gE(v[0]) + '</b><small>' + gE(v[1]) + '</small></div></div></div>'; }).join('') + '</div>';
+}
+function gYtmList(){
+  var S = [['夏夜晚風', '藍莓汽水', '#c71585'], ['晨光散步', '海風樂團', '#d4813a'], ['雨後的街', '小鎮青年', '#3c6e91'], ['星空下的約定', '月光合唱團', '#5a5fa8']];
+  return '<div class="gYtm"><b class="gYtmH">' + gE('為你推薦') + '</b>' + S.map(function(s){ return '<div class="gYtmR"><i style="background:linear-gradient(135deg,' + s[2] + ',#2a1a22)"></i><div><b>' + gE(s[0]) + '</b><small>' + gE(s[1]) + '</small></div>' + gIc('more', 1) + '</div>'; }).join('') + '</div>';
+}
+function gFavList(){
+  return '<div class="gYtm"><b class="gYtmH">' + gE('總收藏數：5 部／12 首') + '</b>' + [['📁', '咖啡教學', '3 部'], ['📁', '健身', '2 部'], ['🎵', '開車聽', '12 首']].map(function(f){ return '<div class="gYtmR"><span class="gFolderE">' + f[0] + '</span><div><b>' + gE(f[1]) + '</b><small>' + gE(f[2]) + '</small></div>' + gIc('more', 1) + '</div>'; }).join('') + '</div>';
+}
+function gAiTop(){ return '<div class="aiTop glass"><span class="aiLogo">' + gIc('sparkle') + '</span><div class="aiTitle"><b>' + gE('AI 摘要') + '</b><small>' + gE('貼上 YouTube 網址，產生摘要、章節與問答') + '</small></div><button class="aiEng ok" data-gid="aiEng"><i></i><span>Gemini</span></button><button class="ib" data-g="aiset">' + gIc('sliders') + '</button></div>'; }
+function gAiStart(){ return '<div class="scroll aiStart"><div class="page"><div class="card glass aiHero"><div class="aiHeroT">' + gIc('sparkle') + '<b>' + gE('YouTube 影片 AI 洞察') + '</b></div><div class="sub">' + gE('在 YouTube App 按「分享」→「AI 摘要（Terra 瀏覽器）」就會自動分析；也可以在這裡貼上網址。') + '</div><div class="aiIn"><input type="url" readonly tabindex="-1" placeholder="' + gE('貼上 YouTube 影片網址…') + '"><button class="ib" data-g="paste">' + gIc('copy') + '</button><button class="btn pri" data-g="startAi">' + gIc('sparkle', 1) + gE('開始') + '</button></div></div><div class="gAiOut"></div></div></div>'; }
+function gCatBar(on){
+  var C = [['html', 'html', '網頁', 6], ['pdf', 'pdf', 'PDF', 3], ['video', 'video', '影片', 9], ['audio', 'audio', '音樂庫', 24], ['image', 'image', '圖片', 15]];
+  return '<div class="catBar" data-gid="catBar">' + C.map(function(c){ return '<button class="fchip' + (c[0] === on ? ' on' : '') + '">' + gIc(c[1], 1) + gE(c[2]) + ' <span class="c">' + c[3] + '</span></button>'; }).join('') + '</div>';
+}
+function gLibTools(){ return '<div class="libTools" data-gid="libTools"><div class="srch">' + gIc('search', 1) + '<input type="search" readonly tabindex="-1" placeholder="' + gE('搜尋檔名、網址…') + '"></div><div class="libBtns"><button class="ib">' + gIc('reload') + '</button><button class="ib" data-g="add">' + gIc('plus') + '</button><button class="ib">' + gIc('sort') + '</button><button class="ib">' + gIc('list') + '</button><button class="ib">' + gIc('lock') + '</button><button class="ib">' + gIc('check') + '</button></div></div>'; }
+function gMusicCard(){ return '<div class="card glass" style="display:flex;align-items:center;gap:12px"><div class="fav" style="width:58px;height:58px;background:linear-gradient(140deg,var(--c-audio),var(--accent));color:#fff">' + gIc('audio') + '</div><div class="grow"><b style="font-size:17px">' + gE('音樂庫') + '</b><div class="sub">' + gE('24 首・1:28:40') + '</div></div><button class="btn pri sm" data-g="playAll">' + gIc('play', 1) + gE('播放') + '</button><button class="btn sm">' + gE('隨機') + '</button></div>'; }
+function gFolderView(cur){
+  var crumbs = '<div class="crumbs"><button class="crumb' + (cur ? '' : ' on') + '">' + gIc('audio', 1) + gE('音樂庫') + '</button>' + (cur ? '<button class="crumb on">📁 ' + gE(cur) + '</button>' : '') + '</div>';
+  var head = '<div class="folderHead">' + crumbs + '<button class="ib">' + gIc('sort') + '</button><button class="btn sm">' + gIc('plus', 1) + gE('資料夾') + '</button></div>';
+  if(cur) return head + '<div class="list">' + gLrow('林間清晨', '溪谷樂隊・MP3・3:36', 'var(--c-audio)') + '</div>';
+  return head + '<div class="fgrid">' + gFtile('📁', '華語', '12 個檔案') + gFtile('📁', '英文歌', '6 個檔案') + gFtile('📁', '旅行', '1 個檔案', 'f旅行') + gFtile('📁', '工作', '3 個檔案') + '</div><div class="list">' + gLrow('Track 01', 'MP3・3:10・7.0 MB', 'var(--c-audio)', 'r1') + gLrow('夏夜晚風', '藍莓汽水・MP3・4:02', 'var(--c-audio)') + '</div>';
+}
+function gWebPage(title, kind){
+  var body = {
+    travel: ['海邊步道一日遊', '山城老街散策', '湖畔露營地推薦'],
+    fr: ['La météo de demain sera ensoleillée.', 'Le nouveau musée ouvre ce week-end.', 'Les marchés de Noël commencent.'],
+    zh: ['明天天氣晴朗。', '新博物館本週末開幕。', '聖誕市集即將登場。'],
+    video: ['新手必備的五樣裝備', '選擇營地的小技巧', '晚上保暖的方法']
+  }[kind] || [];
+  return '<div class="gWeb"><div class="gWebHd"><i></i><b>' + esc(kind === 'fr' ? title : T(title)) + '</b></div>' + (kind === 'video' ? '<div class="gWebVid"><span>' + gIc('play') + '</span><u></u></div>' : '<div class="gWebImg ' + kind + '"></div>') + body.map(function(t){ return '<p><b>' + esc(kind === 'fr' ? t : T(t)) + '</b><span></span><span class="s"></span></p>'; }).join('') + '</div>';
+}
 
-  {ic: 'shield', fig: 'perm', t: '第一次使用：會問你的權限', open: true, html:
-    '<p>用到某個功能時，手機才會跳出詢問，選「允許」就好。不用的功能可以不允許，其他功能不受影響。</p>' +
-    '<table class="gTbl">' +
-    '<tr><th>權限</th><th>用在哪裡</th></tr>' +
-    '<tr><td>通知</td><td>下載進度、下載完成、背景播放音樂時的播放控制。<b>建議允許</b>，不然關掉螢幕後下載和音樂可能會停。</td></tr>' +
-    '<tr><td>安裝未知的應用程式</td><td>App 自己更新到新版本時需要（「設定 → 版本與更新」）。</td></tr>' +
-    '<tr><td>麥克風</td><td>聽歌辨識要聽「周圍的聲音」時才需要；辨識 App 裡正在播的影片或音樂不需要。</td></tr>' +
-    '<tr><td>顯示在其他應用程式上層</td><td>「懸浮聽歌」的 ♫ 按鈕要浮在其他 App 上時需要。</td></tr>' +
-    '<tr><td>相機</td><td>「掃 QR Code」，以及「入侵者拍照」（有人連續輸錯 3 次解鎖密碼時拍一張）。</td></tr>' +
-    '<tr><td>螢幕錄製、勿擾模式</td><td>用螢幕錄影錄下抓不到的影片時需要；每次開始錄影系統會再問一次。</td></tr>' +
-    '<tr><td>資料夾存取</td><td>「其他 App 下載自動搬回」要你自己選一次那個 App 的下載資料夾。</td></tr>' +
-    '<tr><td>位置</td><td>網頁要用你的目前位置（找附近的店、地圖）時才需要，App 會先問你允不允許那個網站。</td></tr>' +
-    '<tr><td>指紋</td><td>用指紋代替輸入解鎖密碼。</td></tr>' +
-    '</table>' +
-    '<p class="gTip">省電設定：有些手機會把背景的 App 關掉。如果關螢幕後音樂或下載會中斷，請到手機的「設定 → 應用程式 → Terra 瀏覽器 → 電池」選「不限制」。</p>'},
-
-  {ic: 'globe', fig: 'browse', t: '瀏覽：上網、存網頁、下載圖片影片', html:
-    '<p><b>翻譯網頁（AI）</b>：看外文網頁時，右上角功能選單 →「翻譯網頁」，App 會用 Gemini 把整頁文字翻成你的介面語言（預設繁體中文），版面不變。往下捲出現新內容時再按一次可以「翻譯新載入的內容」，也可以「顯示原文」。要先設定 Gemini 金鑰（見「AI 摘要」）。</p>' +
-    '<p><b>http／https 自動切換</b>：網頁打不開時（連不上或伺服器錯誤），App 會自動換另一種再試一次：https 壞掉的網站改用 http，只有 https 能用的網站改用 https。</p>' +
-    '<p><b>掃 QR Code</b>：首頁「瀏覽記錄」旁邊的「掃 QR Code」。用相機掃（可以拉桿放大縮小、有多顆後鏡頭時按「換鏡頭」切換，也可以從相片選、開手電筒），掃到網址就直接用 App 打開；掃到別人用這套 App 分享的傳檔 QR Code，會直接把檔案收進檔案庫。第一次會問相機權限。</p>' +
-    '<p>按上方的「搜尋」（放大鏡）會展開網址框：第一行是目前的網址，可以「複製」或重新整理；下面輸入網址或關鍵字再按「搜尋」就能上網，廣告會自動擋掉。旁邊兩個按鈕是「懸浮下載鈕」和「內建播放器」的開關，點一下打開、再點一下關閉（亮起來＝開著）。右上角的「功能選單」（格子圖示）裡有這些功能：</p>' +
-    '<ul>' +
-    '<li><b>擷取網頁</b>：把整個網頁連同圖片存成一個離線檔，放進檔案庫的「網頁」，沒網路也能看；也可以存成 PDF（一般 PDF，或適合長條漫畫的無縫長圖 PDF）。</li>' +
-    '<li><b>下載影片</b>：自動偵測這一頁的圖片和影片，可以選格式和畫質下載。抓不到的影片，可以改用「錄製」：在背景錄，或滿版播放後用手機螢幕錄影（會自動開勿擾，播完自動停）。</li>' +
-    '<li><b>收藏此頁／收藏清單</b>：把常去的網站加到「我的收藏」，可以分收藏夾。</li>' +
-    '<li><b>瀏覽記錄</b>、<b>無痕模式</b>（獨立的分頁和登入帳號，Cookie 不跟一般瀏覽共用，離開時記錄和帳號全部刪除；沒有先離開無痕就把 App 滑掉，下次打開 App 也會自動清掉；首頁第二排也有按鈕）、<b>滿版瀏覽</b>。每次打開 App 都會從瀏覽首頁開始。</li>' +
-    '<li><b>多分頁</b>：網址列旁顯示數字的按鈕，可以開新分頁、切換或關閉分頁；首頁第二排「關閉分頁」可以一次關掉全部分頁（無痕時只關無痕的）。<b>版面</b>：功能選單裡切換「手機版／電腦版／閱讀模式」，閱讀模式只顯示文章文字。</li>' +
-    '<li><b>新聞</b>：首頁第三排的「新聞」。打開就是 Google 今日新聞，可以依「焦點、台灣、國際、財經、科技、娛樂、體育、科學、健康」分類看，上方可以切換最近 7 天的日期。每則新聞右邊的 ☆ 可以收藏；「收藏」會自動依類別、再依日期分好，每天最上面列出日期。點新聞會用獨立的「新聞分頁」打開（Cookie、網站資料跟一般瀏覽分開，不寫進一般瀏覽記錄），文章退到第一頁再按返回就回到新聞列表；「關閉分頁」時新聞分頁也一起關。「記錄」是新聞自己的閱讀記錄，可以單獨清除，也可以關掉不記錄；收藏和記錄都不會被清除 Cookie 刪掉。</li>' +
-    '<li><b>網頁診斷</b>：功能選單最後一個。網頁上有東西沒顯示（例如 Gmail、Outlook 信件裡的圖片）時按它，會列出沒載入成功的圖片和原因，可以「複製」或截圖傳給開發者查原因。網頁版信箱（Gmail、Outlook 等）不會被擋廣告，信件圖片不會被誤擋。</li>' +
-    '<li><b>網站定位</b>：網頁要用你的目前位置（找附近的店、地圖定位）時，App 會先問「這個網站可以使用你的位置嗎？」，可以選允許或不允許並記住；第一次允許時手機會再問一次位置權限。記住的網站在「設定 → 網站定位 → 已記住的網站」修改；無痕模式只記到離開無痕為止。</li>' +
-    '<li><b>手動清理</b>：點掉網頁上擋不掉的廣告或不想看到的區塊。</li>' +
-    '<li><b>懸浮下載鈕</b>：開關網頁上那顆可以拖曳的「⬇」按鈕。按鈕不見時，關掉再開一次就會回到畫面右側。</li>' +
-    '<li><b>內建播放器</b>：開著時，點網頁上的影片會改用 App 內建的播放器播放（跟檔案庫的影片播放器一樣：雙擊快轉、長按 2 倍速、手勢拖曳、字幕、鎖定畫面），橫式影片全螢幕會轉橫向，直式影片保持直向。播放器的「⋮」可以下載影片，或「改回網頁裡播放」。有保護的影片會自動改回網頁播放。網頁上正在播的影片（例如 IG 自動播放的），右上角會出現「▶ 內建播放器」小按鈕，點了就改用內建播放器；影像和聲音分開的網站也會一起播。嵌在網頁裡的別的網站播放器也能接手；前面有廣告時不會接手，等正片開始播放就自動從頭改用內建播放器。IG 這類一直自動播放的，點一下正在播的影片就會切過去。播放器「⋮」→「下載這部影片」會打開跟懸浮下載鈕一樣的「媒體下載」，可以選畫質、格式和檔名；檔名選「網頁標題」時會自動去掉「免費線上看、網站名」，並加上偵測到的集數（例如「再婚皇后 第05集」）。</li>' +
-    '</ul>' +
-    '<p><b>記住帳號密碼</b>：登入網站時，下方會問要不要儲存密碼，下次自動填入。第一次儲存前要先設定 6 位數的解鎖密碼。</p>' +
-    '<p class="gTip">在瀏覽器點到 YouTube 或 YouTube Music 的連結，會自動交給「YouTube」分頁打開。</p>'},
-
-  {ic: 'video', fig: 'yt', t: 'YouTube：無廣告、背景播放、下載', html:
-    '<ol>' +
-    '<li>點下方的「YouTube」分頁，就是沒有廣告的 YouTube。可以登入自己的 Google 帳號看訂閱內容。</li>' +
-    '<li><b>背景播放</b>：切到別的 App 或關螢幕，聲音會繼續播；回到主畫面時會變成小視窗（子母畫面）。子母畫面只在 YouTube 看影片、或在「瀏覽」分頁看網頁影片時才會出現，聽 YouTube Music 不會。</li>' +
-    '<li><b>被打斷後自動繼續</b>：在其他 App 時，別的 App 一出聲（看影片、語音訊息）音樂就會被系統暫停；等手機安靜 3 秒後會自動接著播。YouTube、YouTube Music、音樂庫、離線影片都適用；你自己按的暫停不會被接回去。<br>・<b>耳機斷線時暫停</b>：藍牙耳機斷線、或拔掉有線耳機時，所有正在播的聲音（音樂庫、離線影片、YouTube、YouTube Music、瀏覽器網頁、AI 摘要）都會自動暫停，不會突然從手機喇叭放出來。兩個都在「YouTube 播放器設定」裡可以關掉。</li>' +
-    '<li><b>下載</b>：點一下影片，播放器控制列上有「⬇」下載按鈕，按下去選畫質，或只下載音樂（MP3）。看 <b>Shorts</b> 時，下載按鈕在畫面右上角、放大鏡的右邊。下載好的檔案在檔案庫。（YouTube 這一頁不再顯示懸浮下載按鈕；一般網頁的「瀏覽」分頁仍然有。）</li>' +
-    '<li><b>交給其他下載 App</b>：下載面板裡也可以把影片交給 Snaptube 等 App 下載，下載完會自動搬回檔案庫（見「其他 App 下載自動搬回」）。</li>' +
-    '<li><b>聽歌辨識</b>：瀏覽分頁首頁第二排的「聽歌辨識」。按一下會出現一顆浮在畫面上的 ♫ 按鈕（詳見下面的「懸浮聽歌」），點它選要聽「手機內的聲音」還是「麥克風」，聽 10 秒後告訴你歌名（影片不會暫停）。</li>' +
-    '<li><b>收藏影片</b>：播放器下方全螢幕按鈕左邊的 ★（「⋮ 更多」裡也有），會自動放進以創作者命名的資料夾；YouTube Music 播放面板「歌詞」左邊的「收藏」則放進以歌手命名的資料夾。上方切換鈕的第三個（★）可以看收藏：上面切換 YouTube 影片／YouTube Music，母資料夾可以改名、裡面可以新增子資料夾，影片和資料夾都能用「⋯」移到別的收藏夾。</li>' +
-    '<li><b>靜音</b>：「⋮ 更多」裡可以切換靜音。影片被 YouTube 自動改成靜音（例如從 YouTube Music 切回來）時會自動開回聲音；左上角出現「點一下開聲音」時按它也可以。</li>' +
-    '<li><b>懸浮聽歌</b>：首頁的「聽歌辨識」，或上方工具列的功能選單（四格圖示）→「懸浮聽歌（在其他 App 上用）」。第一次要允許「顯示在其他應用程式上層」，以及擷取手機播放的聲音（系統會問一次，按「開始」）。開啟後 ♫ 按鈕會浮在畫面邊緣，留在 App 裡、切到任何 App 或回到桌面都在：點一下就聽手機正在播的聲音 10 秒（按鈕上有倒數），結果顯示在懸浮卡片上，可以按「▶ 播放」直接到 YouTube Music 播這首，或到「YouTube Music」「YouTube」搜尋、「複製」。選手機內的聲音卻沒聽到（或那個 App 不允許擷取）時，卡片上可以按「改用麥克風」。點 ♫ 會跳出兩個選項：<b>手機內的聲音</b>（影片、音樂 App 正在播的）或<b>麥克風</b>（外面喇叭、店裡播的），選了就開始聽 10 秒；按鈕紅色是在聽手機、綠色是在聽麥克風。聽的時候<b>再點一下就取消</b>；按鈕可以拖曳，<b>長按就會關閉</b>（震兩下）。也可以把它加到手機通知欄的<b>快速設定</b>：下拉通知欄 → 編輯開關 → 把「聽歌辨識」拖進去，之後按一下就開啟並開始聽。開著時狀態列會出現錄製／投放的提示，是系統規定的。</li>' +
-    '<li>上方工具列的功能選單（四格圖示）可以調整播放器設定：預設畫質、播放速度、自動跳過贊助片段、背景播放、被打斷後自動繼續、耳機斷線時暫停等。</li>' +
-    '</ol>'},
-
-  {ic: 'audio', fig: 'music', t: 'YouTube Music：聽音樂、歌詞、聽歌辨識', html:
-    '<ol>' +
-    '<li>在 YouTube 分頁上方，有一個「影片／音符」的切換鈕，切到音符就是 YouTube Music。</li>' +
-    '<li>點任何一首歌就會播放，並打開播放面板：封面、進度條、上一首／下一首、隨機、循環、播放佇列。歌名右邊的「⬇」可以把這首歌下載下來。</li>' +
-    '<li><b>歌詞</b>：播放面板按「歌詞」。App 會自動找會跟著唱的同步歌詞，找不到就顯示 YouTube Music 內建的歌詞；也可以按「找歌詞」自己挑。</li>' +
-    '<li>把面板關掉後，下方會留一條小播放列，可以暫停、下一首，最右邊的 ✕ 是停止播放。</li>' +
-    '<li><b>聽歌辨識</b>：瀏覽分頁首頁第二排的「聽歌辨識」按鈕，會開啟懸浮的 ♫ 按鈕；點 ♫ 選「手機內的聲音」或「麥克風」，聽 10 秒後辨識出歌名，聽的時候再點一下可以取消。<br>・<b>辨識紀錄</b>：「聽歌辨識」右邊的按鈕。每次辨識的結果依時間排列，可以用上方的「中文／英文／日文／韓文」篩選；點一筆就切到 YouTube Music 播放那首歌，「⋮」可以搜尋、複製、改語言分類或刪除。<br>這個功能要先設定 Gemini 金鑰（見「AI 摘要」）。</li>' +
-    '<li>手機的通知列和快速面板也會顯示正在播的歌，可以直接在那裡控制。</li>' +
-    '</ol>'},
-
-  {ic: 'sparkle', fig: 'ai', t: 'AI 摘要：影片逐字稿、摘要、章節、發問（要申請金鑰）', html:
-    '<p>把 YouTube 影片交給 AI 看，幫你整理重點。<b>要先申請一組免費的 Gemini 金鑰（API Key）</b>，只要做一次：</p>' +
-    '<ol>' +
-    '<li>用瀏覽器打開 <b>aistudio.google.com</b>，登入你的 Google 帳號。</li>' +
-    '<li>點「Get API key」（取得 API 金鑰）→「Create API key」（建立金鑰）。</li>' +
-    '<li>畫面會出現一長串英文和數字，按「複製」。</li>' +
-    '<li>回到這個 App，點下方「AI 摘要」分頁，再點右上角顯示 AI 名稱的按鈕，打開「AI 設定」。</li>' +
-    '<li>AI 引擎選「Gemini」，把剛剛複製的金鑰貼到「Gemini API 金鑰」欄位。</li>' +
-    '</ol>' +
-    '<p>設定好之後的用法：</p>' +
-    '<ul>' +
-    '<li>在「AI 摘要」貼上 YouTube 網址，或在 YouTube App／這個 App 的 YouTube 分頁按「分享」→ 選「AI 摘要（Terra 瀏覽器）」。</li>' +
-    '<li>AI 會產生逐字稿、摘要、章節；「對話」可以針對影片內容發問，回答會一邊產生一邊顯示。用 Gemini 時，問到影片以外的事（查證、比較、客觀分析）會自動上網查，回答下方列出來源；提到的影片時間點（例如「05:11 ~ 05:57」）點一下就跳過去。Google 搜尋的免費額度用完時會改成只根據影片回答。沒有字幕的影片，AI 會直接看影片聽寫。</li>' +
-    '<li>分析可以在背景進行（可以關螢幕或切到別的 App），完成會通知，點通知會直接打開那部影片；分析過的影片會依頻道分資料夾保存。</li>' +
-    '<li><b>檢查未完成</b>：「分析過的影片」標題右邊的按鈕。會找出沒有逐字稿、或沒有摘要與章節的影片，可以選「在手機上補齊」（照順序一部一部重新執行；把 App 從最近使用清單滑掉會中斷），或「交給 GitHub 雲端補齊」。</li>' +
-    '<li><b>GitHub 雲端執行</b>：右上角「⋮」→「GitHub 雲端執行」。貼上一個勾了 <b>repo</b> 和 <b>workflow</b> 權限的 GitHub 權杖（取得方式和「跨網路傳檔」一樣，只是權限要勾這兩項），App 會在你的 GitHub 自動建立私人倉庫 terra-ai-cloud，並把 Gemini 金鑰加密存進去。之後交給雲端的影片，手機關螢幕、App 完全關掉也會繼續跑，下次打開 App 自動取回結果。連接後，每次按「AI 摘要」都會讓你選「在手機上分析」或「交給 GitHub 雲端分析」。</li>' +
-    '<li><b>佔用空間</b>：AI 摘要首頁上方顯示所有逐字稿與摘要共佔多少空間；每部影片右邊的「⋮」可以看這部佔多少。逐字稿和摘要全部保留在手機裡，不會自動刪除。</li>' +
-    '</ul>' +
-    '<p class="gTip">金鑰只存在你的手機裡。Gemini 免費額度每天有上限，用完隔天會恢復；模型清單裡標「需付費」的不要選就不會被收費。「AI 設定」裡也可以改用 Claude（需要自己的 Claude 訂閱或 API 金鑰），不設定也沒關係。</p>'},
-
-  {ic: 'folder', fig: 'lib', t: '檔案庫：播放、閱讀、編輯、整理', html:
-    '<ul>' +
-    '<li><b>分類</b>：檔案依種類自動分到網頁、PDF、圖片、影片、音樂庫、Word、Excel、APK、EXE…等分類。按分類列最右邊的「分類」可以改名、排序、新增自己的分類；自己新增的分類可以指定副檔名（例如 apk），之後那種檔案會自動收進去。要把檔案換到別的分類：長按選取 → 工具列的「移到其他分類」（三層方塊圖示）；旁邊的資料夾圖示是在<b>同一個分類裡面</b>搬到資料夾。</li>' +
-    '<li><b>分類</b>：影片、音樂庫、網頁、圖片、PDF、Word、Excel、PPT、文字檔、字幕、壓縮檔。點上方的分類就會打開。</li>' +
-    '<li><b>匯入手機裡的檔案</b>：按「＋」，可以一次選很多個，App 會依副檔名自動分到對的分類。</li>' +
-    '<li><b>音樂庫</b>：離線音樂播放器，有播放清單、隨機、循環、同步歌詞。播放時會自動把每首歌調成差不多的音量（設定裡的「音量一致」）；簡體歌詞會顯示成繁體。上方的「補齊歌手與歌詞」會到 YouTube Music 比對歌名、長度和封面（檔名後面的「(MP3_320K)」這類標記會先去掉），至少兩項吻合才寫入；找到的是影片時，用上傳的頻道當歌手。</li>' +
-    '<li><b>影片</b>：內建播放器，可以掛字幕（會自動找同名的字幕檔，可以調大小、顏色、位置和時間同步）、調速度、快轉倒退、鎖定畫面；「⋮」裡的「剪輯影片」可以裁掉頭尾（不重新編碼，畫質不變）。播放時跟音樂一樣會自動平衡音量。</li>' +
-    '<li><b>Word／Excel／PPT／文字檔</b>：點開就能看，按「編輯」可以改文字或儲存格再存檔；PPT 可以「投影播放」。啟用巨集的 Excel 可以看巨集程式碼，巨集會完整保留，但手機上不能執行。</li>' +
-    '<li><b>整理</b>：長按檔案可以多選，再移到資料夾、改檔名（可以批次改名）、刪除；選了離線網頁還可以批次轉成 PDF。刪除的檔案會先進垃圾桶。</li>' +
-    '<li><b>重複檔案提醒</b>：新加入的檔案跟已有的檔名一樣或大小一樣時，會問你要都保留、改檔名還是刪除。</li>' +
-    '<li><b>傳到電腦或其他手機</b>：「設定 → 儲存與匯出 → 無線傳到電腦／其他手機」。對方掃畫面上的 QR Code（或輸入網址）就能用瀏覽器下載。兩邊要在同一台分享器底下（Wi-Fi 或網路線都可以）；沒有共同的網路時，打開這支手機的「個人熱點」讓對方連進來，或用 USB 網路共用。對方在完全不同的網路時，改用中繼站（見「跨網路傳檔」）。</li>' +
-    '</ul>'},
-
-  {ic: 'share', fig: 'relay', t: '跨網路傳檔：GitHub 中繼、公用中繼', html:
-    '<p>對方和你不在同一個網路（例如人在別的地方、你只有行動網路）時，檔案可以先經過一台「中繼站」再到對方。有兩種可以選：</p>' +
-    '<table class="gTbl"><tr><th></th><th>GitHub 中繼</th><th>公用中繼</th></tr>' +
-    '<tr><td>檔案經過哪裡</td><td>你自己的 GitHub 帳號</td><td>別人架設的公開中繼站（預設 ppng.io）</td></tr>' +
-    '<tr><td>會不會存下來</td><td>暫存，傳完刪除</td><td>不會，只是即時經過</td></tr>' +
-    '<tr><td>對方什麼時候下載</td><td>隨時（刪除之前）</td><td>要和你同時在線，你的畫面要開著</td></tr>' +
-    '<tr><td>事前準備</td><td>要有 GitHub 帳號和權杖</td><td>不用</td></tr></table>' +
-    '<p>兩種都會先在手機把檔案<b>加密</b>，解密用的金鑰只在你給對方的連結裡，中繼站和其他人都打不開。</p>' +
-    '<p><b>怎麼用</b></p><ol>' +
-    '<li>到<b>檔案庫</b>長按勾選要傳的檔案 → 按「匯出／分享」→「無線傳到電腦／其他手機」。</li>' +
-    '<li>在最上面選「<b>GitHub 中繼</b>」或「<b>公用中繼</b>」。</li>' +
-    '<li>把畫面上的 QR Code 給對方掃，或按「傳給對方」把連結用 LINE 等傳過去。對方用瀏覽器打開就能下載，不用裝 App。</li>' +
-    '<li><b>對方也有這套 App</b>：在「瀏覽」首頁按「<b>掃 QR Code</b>」掃一下（或把連結貼到網址列），檔案會直接下載、解密、存進他的檔案庫。</li></ol>' +
-    '<p><b>GitHub 中繼：第一次要設定權杖</b></p><ol>' +
-    '<li>用瀏覽器登入 <b>github.com</b>（沒有帳號要先免費註冊）。</li>' +
-    '<li>右上角頭像 → <b>Settings</b> → 左邊最下面 <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Tokens (classic)</b>。</li>' +
-    '<li>按 <b>Generate new token (classic)</b>。Note 隨便填（例如「Terra 瀏覽器傳檔」），Expiration 選你要的期限，下面的權限只勾 <b>public_repo</b>。</li>' +
-    '<li>按最下面的 <b>Generate token</b>，複製 <b>ghp_</b> 開頭的那一串（只會顯示這一次）。</li>' +
-    '<li>回到 App 的「GitHub 中繼」分頁貼上，按「儲存並檢查」。App 會在你的 GitHub 自動建立一個叫 <b>web-saver-relay</b> 的公開倉庫當中繼站。</li></ol>' +
-    '<p><b>GitHub 中繼：傳完刪除</b>　對方下載完後，按「<b>對方收到了，刪除暫存</b>」就會把 GitHub 上的暫存刪掉。忘了按也沒關係，60 分鐘後 App 會自動刪（App 要有開）。</p>' +
-    '<div class="gTip">檔案很大（超過 300 MB）時，經過中繼會很慢，建議還是用同一個網路或手機熱點直接傳。公用中繼是別人的免費服務，偶爾可能連不上，連不上時改用 GitHub 中繼。</div>'},
-  {ic: 'download', fig: 'watch', t: '其他 App 下載自動搬回（Snaptube 等）', html:
-    '<p>有些影片用其他下載 App（例如 Snaptube、Quetta）比較好抓。設定一次之後，用它們下載完的影片、音樂、字幕、圖片，以及文件、壓縮檔、安裝檔，都會<b>自動搬進這個 App 的檔案庫</b>，原本的檔案會刪掉，不佔兩份空間。</p>' +
-    '<ol>' +
-    '<li>先在手機裝好那個下載 App，並用它隨便下載一個檔案（這樣它的下載資料夾才會出現）。</li>' +
-    '<li>到「設定 → 圖片與影片下載 → 其他 App 下載自動搬回」。</li>' +
-    '<li>選那個 App，按加入資料夾的按鈕，在跳出的畫面找到它的下載資料夾（通常在「Download」或以 App 名稱命名的資料夾），按「使用這個資料夾」→「允許」。影片和音樂分開放的話，兩個資料夾都要加。</li>' +
-    '<li>之後在 YouTube 的下載面板選「交給 Snaptube 下載」（或其他 App），下載完回到這個 App，檔案就會自動出現在檔案庫。</li>' +
-    '</ol>' +
-    '<p><b>IG、FB、Threads 等貼文</b>：在瀏覽器裡按貼文的「分享」或「複製連結」，會跳出「下載這則貼文」，可以選「用 App 內建下載」（打開貼文、偵測圖片和影片讓你挑選）或交給 Snaptube 等 App 下載（下載完一樣會自動搬回）。在 IG、FB 等 App 裡按分享 → 選「用Terra 瀏覽器下載」也會跳出同一個選單。不想複製連結時也跳出，可以在選單裡勾「複製連結時不要再詢問」。</p>' +
-    '<p class="gTip">App 回到前景時會檢查一次；交給其他 App 下載後的 3 小時內，每 15 秒也會檢查一次。想馬上檢查，按檔案庫的「重新整理」。</p>'},
-
-  {ic: 'lock', fig: 'lock', t: '上鎖與安全', html:
-    '<ul>' +
-    '<li>到「設定 → 隱私與安全 → 密碼鎖與指紋」設定一組 6 位數密碼，可以再開啟指紋解鎖。</li>' +
-    '<li>可以鎖住：已儲存的帳號密碼、檔案庫的整個分類（例如影片）、單一資料夾、我的收藏。檔案庫搜尋框下方的鎖頭按鈕可以直接選要鎖哪些分類，不用切到設定；按鈕上的數字是目前上鎖的分類數。</li>' +
-    '<li>解鎖一次後，直到把 App 關掉前都不用再輸入；也可以按「立即上鎖」。</li>' +
-    '<li>連續輸錯 3 次會用前鏡頭拍照（要允許相機），照片存在上鎖的資料夾。</li>' +
-    '<li>拍照時會先找人臉，以人臉為準自動曝光、對焦再存檔；照片放在上鎖、不能刪除的「圖片 → 入侵者照片」資料夾。</li>' +
-    '<li>連續輸錯 5 次以上要等一段時間才能再試（30 秒起跳，越錯等越久），防止有人一直猜。</li>' +
-    '<li>刪除上鎖的檔案、資料夾、分類、收藏夾或收藏，一定要先輸入密碼或指紋；垃圾桶裡上鎖的東西，解鎖後才會顯示。</li>' +
-    '<li>上鎖設定、資料夾和收藏存在 App 自己的檔案裡，清除 Cookie 或網站資料不會動到。</li>' +
-    '<li>舊版清除 Cookie 清掉的檔案庫資料夾：按檔案庫上方的「找回資料夾」或「設定 → 找回遺失的資料夾與收藏」，會依每個檔案的紀錄重建，並從檔案庫裡的「收藏備份」檔找回收藏。</li>' +
-    '</ul>' +
-    '<p class="gTip">請記住解鎖密碼。密碼只存在這支手機，忘記了沒有人能幫你找回，上鎖的內容就打不開了。</p>'},
-
-  {ic: 'globe', t: '語言 Language：切換介面語言', html:
-    '<p>介面原文是繁體中文。到「設定」最上面的「<b>語言 Language</b>」（說明書最上面也有按鈕）可以換成 English、日本語、한국어、简体中文、Tiếng Việt、ไทย、Bahasa Indonesia、Español、Français、Deutsch 等語言。</p>' +
-    '<ul><li><b>English、日本語、한국어、简体中文</b>：已經內建，選了馬上切換，不需要金鑰也不用等。</li>' +
-    '<li><b>其他語言</b>：第一次選的時候會用 Gemini 把介面和說明書翻譯一次（要先設定 Gemini 金鑰，見「AI 摘要」），大約 1～3 分鐘，畫面上會顯示進度；翻好後存在手機裡，之後不用再翻。</li>' +
-    '<li>要換回來：再到同一個地方選「繁體中文」。</li></ul>' +
-    '<div class="gTip">只翻譯介面文字，不會改你的檔名、歌名、收藏的標題。少數地方（系統通知列的文字、YouTube 播放器上的按鈕提示）目前仍是中文。</div>'},
-  {ic: 'reload', fig: 'upd', t: '更新 App', html:
-    '<ul>' +
-    '<li>到「設定 → 版本與更新」可以檢查新版本，小更新會直接套用，大更新會下載新的安裝檔，按「安裝」即可（第一次要允許「安裝未知的應用程式」）。</li>' +
-    '<li>同一頁可以分享 App 的下載連結給朋友。</li>' +
-    '</ul>'},
-
-  {ic: 'search', t: '常見問題', html:
-    '<ul>' +
-    '<li><b>關螢幕後音樂或下載停了</b>：允許通知，並把這個 App 的電池設定改成「不限制」。</li>' +
-    '<li><b>AI 摘要顯示額度用完</b>：Gemini 免費額度當天用完了，隔天再試，或到「AI 設定」換另一個模型。</li>' +
-    '<li><b>YouTube 影片下載失敗</b>：先重新整理那部影片再試；還是不行，就用下載面板裡的其他 App 下載。</li>' +
-    '<li><b>其他 App 下載的檔案沒有搬回來</b>：確認已經加了正確的下載資料夾，再按檔案庫的「重新整理」。</li>' +
-    '<li><b>找不到某個檔案</b>：在檔案庫上方的搜尋框輸入檔名；也看看是不是在上鎖的分類或垃圾桶裡。</li>' +
-    '<li><b>網頁上的圖片或內容沒顯示</b>（例如 Gmail、Outlook 信件的圖片）：先確認信箱網站本身的「顯示外部圖片」設定沒有關掉；還是不行，右上角功能選單 →「網頁診斷」，把結果複製或截圖傳給開發者。</li><li><b>播放到一半自己停了</b>：多半是其他 App 出聲把播放權搶走；「YouTube 播放器設定」的「被打斷後自動繼續」開著時，手機安靜 3 秒後會自動接著播。藍牙耳機斷線時會刻意暫停，這是「耳機斷線時暫停」。</li>' +
-    '</ul>'}
+/* ---------- 說明書內容：每段＝示意畫面＋2～3 行重點 ---------- */
+var GUIDE2 = [
+  {ic: 'info', t: '五個分頁', scene: 'tabs', open: true, pts: ['瀏覽：上網、存網頁、下載影片', 'YouTube：沒有廣告、背景播放', 'AI 摘要：影片重點一次看', '檔案庫：存下來的東西都在這', '設定：外觀、密碼鎖、更新']},
+  {ic: 'shield', t: '第一次使用：允許權限', scene: 'perm', open: true, pts: ['用到某個功能時，手機才會問', '選「允許」；不用的功能可以不允許'],
+    perms: [['download', '通知', '下載進度、背景播放'], ['mic', '麥克風', '聽周圍的歌'], ['layers', '顯示在上層', '懸浮聽歌按鈕'], ['qr', '相機', '掃 QR Code'], ['globe', '位置', '網站要用位置時'], ['fingerprint', '指紋', '解鎖']],
+    tip: '關螢幕後音樂或下載會停：手機設定 → 應用程式 → Terra 瀏覽器 → 電池 →「不限制」'},
+  {ic: 'globe', t: '上網與搜尋', scene: 'search', pts: ['首頁輸入網址或關鍵字', '上方 🔍 顯示網址，可以複製、重新整理', '每次打開 App 都從首頁開始']},
+  {ic: 'grid', t: '功能選單：翻譯網頁', scene: 'menu', pts: ['右上角 ⊞ 打開功能選單', '「翻譯網頁」：整頁翻成你的語言', '無痕、滿版、手機版／電腦版也在這裡']},
+  {ic: 'download', t: '下載影片、存網頁', scene: 'fab', pts: ['先播放網頁裡的影片', '點右下角懸浮的下載鈕，選要下載的影片', '「擷取網頁」可以存成離線網頁或 PDF']},
+  {ic: 'incog', t: '無痕模式、關閉分頁', scene: 'incog', pts: ['無痕模式：不留瀏覽記錄', '關閉分頁：一次關掉全部（新聞分頁也一起）', '上方數字按鈕可以切換分頁']},
+  {ic: 'ytplay', t: 'YouTube 與 YouTube Music', scene: 'yt', pts: ['▶ YouTube　♫ YouTube Music　☆ 收藏', '沒有廣告，關掉螢幕也能繼續播', '影片上的 ⬇ 可以下載影片、音樂、字幕']},
+  {ic: 'audio', t: '播放畫面與歌詞', scene: 'player', pts: ['播放時下方出現迷你播放列', '點一下打開播放畫面，歌詞會跟著唱', '最右邊 ✕ 停止播放']},
+  {ic: 'listen', t: '聽歌辨識', scene: 'listen', pts: ['首頁「聽歌辨識」，或手機快速設定的磚塊', '可以聽手機播的聲音或周圍的聲音', '倒數時點一下取消、長按關閉']},
+  {ic: 'news', t: '新聞', scene: 'news', pts: ['首頁「新聞」：依分類、日期看', '☆ 收藏，自動依分類和日期整理', '新聞用獨立分頁打開，閱讀記錄可以單獨清除']},
+  {ic: 'sparkle', t: 'AI 摘要', scene: 'ai', pts: ['貼上 YouTube 網址，按「開始」', '或在 YouTube App 分享 →「AI 摘要」', '可以看章節、逐字稿，也能問 AI']},
+  {ic: 'key', t: '設定 AI 金鑰（免費）', scene: 'aikey', pts: ['到 aistudio.google.com 用 Google 帳號登入', '按「Get API key」建立金鑰並複製', 'AI 設定 → 引擎選 Gemini → 貼上金鑰']},
+  {ic: 'folder', t: '檔案庫與資料夾', scene: 'lib', pts: ['上方分類切換：網頁、PDF、影片、音樂庫…', '在資料夾裡按 ＋，匯入的檔案會放進這個資料夾', '其他種類的檔案放到各自分類']},
+  {ic: 'edit', t: '選取、改名、移動', scene: 'rename', pts: ['長按檔案進入選取', '上方工具列：移動、改名、分享、刪除', '改名後歌名、檔名一起更新']},
+  {ic: 'audio', t: '音樂庫', scene: 'music', pts: ['全部播放或隨機播放', '「補齊歌手與歌詞」自動從 YouTube Music 找', '每首歌的音量自動調成一樣大聲']},
+  {ic: 'lock', t: '密碼鎖與指紋', scene: 'lock', pts: ['設定一組 6 位數密碼，也可以用指紋', '可以鎖：帳號密碼、分類、資料夾、收藏', '檔案庫的 🔒 按鈕可以鎖整個分類']},
+  {ic: 'download', t: '其他 App 下載自動搬回', scene: 'watch', pts: ['開啟後選一次那個 App 的下載資料夾', '下載完成會自動搬進檔案庫']},
+  {ic: 'send', t: '傳檔到其他裝置', scene: 'relay', pts: ['檔案庫選檔案 → 分享 → 傳檔', '兩邊不用在同一個網路，對方用瀏覽器就能下載']},
+  {ic: 'update', t: '版本與更新', scene: 'upd', pts: ['開啟 App 時自動更新介面與功能', '大改版才需要下載新的安裝檔']},
+  {ic: 'info', t: '常見問題', faq: [
+    ['音樂或下載關螢幕後停了', '手機設定 → Terra 瀏覽器 → 電池 →「不限制」'],
+    ['播放到一半停了', '其他 App 出聲會搶走播放；安靜 3 秒後會自動接著播'],
+    ['藍牙耳機斷線就暫停', '這是「耳機斷線時暫停」，刻意的'],
+    ['YouTube 影片下載失敗', '更新 App 後再試；也可以交給其他下載 App'],
+    ['網頁圖片沒出現', '功能選單 →「網頁診斷」，把結果傳給開發者'],
+    ['找不到檔案', '檔案庫上方搜尋；也看看上鎖的分類或垃圾桶']]}
 ];
 
+function gSecBody(g){
+  var b = h('div', {class: 'gBody'});
+  if(g.scene && G_SCENES[g.scene]){ try{ b.appendChild(gScene(G_SCENES[g.scene]())); }catch(e){ console.warn('guide scene', g.scene, e); } }
+  if(g.pts) b.appendChild(h('ol', {class: 'gPts', 'data-i18n-skip': '', html: g.pts.map(function(p){ return '<li>' + gE(p) + '</li>'; }).join('')}));
+  if(g.perms) b.appendChild(h('div', {class: 'gPerms', 'data-i18n-skip': '', html: g.perms.map(function(p){ return '<div>' + icon(p[0], 'sm') + '<b>' + gE(p[1]) + '</b><small>' + gE(p[2]) + '</small></div>'; }).join('')}));
+  if(g.faq) b.appendChild(h('div', {class: 'gFaq', 'data-i18n-skip': '', html: g.faq.map(function(q){ return '<div><b>' + gE(q[0]) + '</b><span>' + gE(q[1]) + '</span></div>'; }).join('')}));
+  if(g.tip) b.appendChild(h('div', {class: 'gNote', 'data-i18n-skip': '', html: icon('info', 'sm') + '<span>' + gE(g.tip) + '</span>'}));
+  return b;
+}
 function openGuide(first){
   var body = h('div', {class: 'guide'});
-  body.appendChild(h('p', {class: 'gLead', text: first ? '歡迎使用「Terra 瀏覽器」！開始之前，請花兩分鐘看一下這份說明。滑到最下面按確認，就可以開始使用。' : '這裡整理了 App 的所有功能，以及需要設定的地方。點標題可以展開或收起。'}));
+  body.appendChild(h('p', {class: 'gLead', 'data-i18n-skip': '', text: T(first ? '歡迎使用！每一段都有會動的示範畫面，看一遍就會用。滑到最下面按確認開始使用。' : '點標題展開，示範畫面會自動播放。')}));
   body.appendChild(h('div', {class: 'btn-row', style: {margin: '0 0 10px'}}, h('button', {class: 'btn', 'data-i18n-skip': '', html: icon('globe', 'sm') + '語言 Language：' + (typeof I18N !== 'undefined' ? I18N.label() : '繁體中文'), onclick: function(){ openLang(); }})));
-  GUIDE.forEach(function(g, i){
+  GUIDE2.forEach(function(g, i){
     var d = h('details', {class: 'gSec'});
-    if(g.open || !first && i < 1) d.open = true;
-    d.appendChild(h('summary', {html: '<span class="gIc">' + icon(g.ic) + '</span><b>' + esc(g.t) + '</b><span class="gChev">' + icon('chevR', 'sm') + '</span>'}));
-    var fig = ''; try{ fig = g.fig && G_FIG[g.fig] ? G_FIG[g.fig]() : ''; }catch(e){}
-    /* 說明書內文：其他語言時用整段翻好的版本（不走逐句替換，句子才通順） */
-    var tr = typeof i18nGuideHtml === 'function' ? i18nGuideHtml(i) : g.html;
-    d.appendChild(h('div', {class: 'gBody', html: fig + '<div' + (tr !== g.html ? ' data-i18n-skip' : '') + '>' + tr + '</div>'}));
+    d.appendChild(h('summary', {'data-i18n-skip': '', html: '<span class="gIc">' + icon(g.ic) + '</span><b>' + gE(g.t) + '</b><span class="gChev">' + icon('chevR', 'sm') + '</span>'}));
+    var built = false;
+    function build(){ if(built) return; built = true; d.appendChild(gSecBody(g)); }
+    if(g.open){ d.open = true; build(); }
+    d.addEventListener('toggle', function(){ if(d.open){ build(); buzz(6); } });
     body.appendChild(d);
   });
   var ok = false;
-  var btn = h('button', {class: 'btn pri gOk', html: icon('check', 'sm') + (first ? '我知道了，開始使用' : '關閉說明書'), onclick: function(){ ok = true; lsSet('ws.guideSeen', GUIDE_VER); buzz(12); s.close(); }});
-  body.appendChild(h('div', {class: 'gEnd'}, first ? h('div', {class: 'sub', text: '之後想再看：設定 → 最上面的「軟體使用說明書」'}) : null, btn));
-  var s = openSheet({title: '軟體使用說明書', icon: 'books', body: body, tall: true, cls: 'guideSheet'});
+  var btn = h('button', {class: 'btn pri gOk', html: icon('check', 'sm') + esc(T(first ? '我知道了，開始使用' : '關閉說明書')), 'data-i18n-skip': '', onclick: function(){ ok = true; lsSet('ws.guideSeen', GUIDE_VER); buzz(12); s.close(); }});
+  body.appendChild(h('div', {class: 'gEnd'}, first ? h('div', {class: 'sub', 'data-i18n-skip': '', text: T('之後想再看：設定 → 最上面的「軟體使用說明書」')}) : null, btn));
+  var s = openSheet({title: T('軟體使用說明書'), icon: 'books', body: body, tall: true, cls: 'guideSheet'});
   if(first){
-    /* 第一次：一定要滑到最下面按確認才能關閉 */
     var close0 = s.close;
-    s.close = function(){ if(!ok){ toast('請滑到最下面，按「我知道了，開始使用」'); btn.scrollIntoView({behavior: 'smooth', block: 'center'}); return; } close0(); };
+    s.close = function(){ if(!ok){ toast(T('請滑到最下面，按「我知道了，開始使用」')); btn.scrollIntoView({behavior: 'smooth', block: 'center'}); return; } close0(); };
   }
   paintIcons(body);
   return s;
